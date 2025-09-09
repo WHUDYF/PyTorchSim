@@ -1045,14 +1045,14 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                 compute_index_var = ",".join(partial_zero_var_list)
 
             with self.override_buffer_cse(buffer=self.reductions_suffix):
-                out = ops._load(partial_vec_size, mlir_dtype, sram_var, compute_index_var, partial_tile_shape)
+                out = ops._load(partial_vec_size, mlir_dtype, value, compute_index_var, partial_tile_shape)
                 ops._store(init_vec, value, compute_index_var, partial_tile_shape) # Clear the partial buffer to zero
 
                 # 2 step reduction
                 new_vec_size = 2
-                new_reduced_shape = f"<{new_vec_size}x{mlir_dtype}>"
+                new_reduced_shape = f"vector<{new_vec_size}x{mlir_dtype}>"
                 reduction_type = self.reduction_info[value][0]
-                out = ops.multi_reduction(out, init_vec, partial_vec_size, new_vec_size, reduction_type, partial_vshape, self.reduction_info[value][0], mlir_dtype)
+                out = ops.multi_reduction(out, init_vec2, partial_vec_size, new_vec_size, partial_vshape, reduction_type, mlir_dtype)
 
             out2 = self.cse.generate(self.reductions_suffix, f"vector.shuffle %{out}, %{out} [1, 0] : {new_reduced_shape}, {new_reduced_shape}")
             self.register_var_info(out2, [new_vec_size, mlir_dtype])
@@ -1060,9 +1060,8 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             with self.override_buffer_cse(buffer=self.reductions_suffix):
                 out = reduction_partial_combine_vec(self.reduction_info[value][0], out, out2)
 
-            if self.welford_reduce_out is not None:
-                # NOTE: It not a real welford algorithm... We just used E(X^2) - E(X)^2
-                with self.override_buffer_cse(buffer=self.reductions_suffix):
+                if self.welford_reduce_out is not None:
+                    # NOTE: It not a real welford algorithm... We just used E(X^2) - E(X)^2
                     divider = ops.constant(float(self.reduction_axis_size), "f32")
                     if self.buffer_types[name][1] > 1:
                         divider_vec = ops.broadcast(divider, new_vec_size)
@@ -1081,9 +1080,9 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                         m2 = ops.mul(variance, divider_vec)
                         out = m2
 
-            final_zero_var_list[-1] = f"%{body_index_var}"
-            final_compute_index_var = ",".join(final_zero_var_list)
-            ops._store(out, sram_var, final_compute_index_var, final_tile_shape, buffer_name=name)
+                final_zero_var_list[-1] = f"%{body_index_var}"
+                final_compute_index_var = ",".join(final_zero_var_list)
+                ops._store(out, sram_var, final_compute_index_var, final_tile_shape, buffer_name=name)
 
         # MVOUT Encoding
         # Generate DMA instruction

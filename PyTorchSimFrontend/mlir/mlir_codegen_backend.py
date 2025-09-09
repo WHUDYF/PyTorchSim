@@ -813,12 +813,11 @@ class ExtensionOverrides(common.OpOverrides):
         cond_type = var_info[condition]
         operand_type = var_info[operand1]
         if cond_type[0] < tile_size:
-            condition = ops.broadcast(condition, operand_type[0])
+            condition = ops.broadcast(condition, tile_size)
         elif cond_type[0] > tile_size:
-            operand1 = ops.broadcast(operand1, operand_type[0])
-            operand2 = ops.broadcast(operand2, operand_type[0])
+            operand1 = ops.broadcast(operand1, cond_type[0])
+            operand2 = ops.broadcast(operand2, cond_type[0])
         tile_size, ret_type = var_info[operand1]
-
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
         cond_shape = f"vector<{tile_size}xi1>," if tile_size > 1 else ""
         return f"arith.select %{condition}, %{operand1}, %{operand2} : {cond_shape} {shape}", [tile_size, ret_type]
@@ -1174,10 +1173,6 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             # Todo. If tile_size is not same (i.e., view operation), we can't apply peephole optimization easily
             require_store = self.spad_buffer_dict[str(value)][1] != tile_size
 
-        if compute_vec_size < self.var_info[value][0]:
-            value = self.cse.generate(self.stores, f"vector.extract_strided_slice  %{value} {{offsets = [0], sizes = [{compute_vec_size}], strides = [1]}}: vector<{self.var_info[value][0]}x{self.var_info[value][1]}> to {vshape}")
-            self.register_var_info(value, [compute_vec_size, mlir_dtype])
-
         if require_store:
             # Define scratch pad buffer
             sram_var, sram_index_var = self.get_scratchpad_buffer(dtype, name, local_tile_desc, index)
@@ -1186,6 +1181,11 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             _, operand_type = self.var_info[value]
             if mlir_dtype != operand_type:
                 value = ops.custom_cast(value, mlir_dtype)
+
+            if compute_vec_size < self.var_info[value][0]:
+                value = self.cse.generate(self.stores, f"vector.extract_strided_slice  %{value} {{offsets = [0], sizes = [{compute_vec_size}], strides = [1]}}: vector<{self.var_info[value][0]}x{self.var_info[value][1]}> to {vshape}")
+                self.register_var_info(value, [compute_vec_size, mlir_dtype])
+
             with self.override_buffer_cse(buffer=self.stores):
                 ops._store(value, sram_var, compute_index_var, tile_shape, buffer_name=name)
         else:
