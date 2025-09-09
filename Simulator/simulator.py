@@ -53,7 +53,7 @@ class FunctionalSimulator():
             tensor = arg.cpu().detach()
             buffer_size = tensor.untyped_storage().size()
             buffer = (ctypes.c_char * buffer_size).from_address(tensor.data_ptr())
-            t_arr = np.frombuffer(buffer, dtype=tensor.numpy().dtype, count=buffer_size // tensor.element_size())
+            t_arr = np.frombuffer(buffer, dtype=TORCH_TO_NUMPY[tensor.dtype], count=buffer_size // tensor.element_size())
             t_arr.tofile(data_path)
         else:
             assert(0)

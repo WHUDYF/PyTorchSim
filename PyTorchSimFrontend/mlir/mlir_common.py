@@ -1,5 +1,7 @@
 import dataclasses
 import math
+import contextvars
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Dict
 from typing import List
@@ -68,7 +70,7 @@ DTYPE_TO_C = {
     torch.int8: "int8_t",
     torch.uint8: "uint8_t",
     torch.bool: "uint8_t",
-    torch.bfloat16: "bfloat16",
+    torch.bfloat16: "uint16_t",
 }
 
 MLIR_TO_BIT = {
@@ -588,6 +590,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         self.ranges = None
         self.reduction_depth = None
         self.itervars = None
+        self.itervar_cses = None
         # Code buffer
         self.vector_compute = IndentedBuffer()
         self.reductions_suffix = IndentedBuffer()
@@ -595,11 +598,16 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         # MLIR SSA tracker
         self.var_info = {} # MLIR variable info
         self.buffer_types : dict = None # format: dtype, numel, size, stride
-        self.compute_idx = "compute_idx"
+        # Create compute idx
+        self.compute_idx = self.register_var_cse("compute_idx", 1, "index")
         self.compute_body_loop = LoopLevel(self.compute_idx, 1)
         self.prologue_compute_body_loop = LoopLevel(self.compute_idx, 1)
         self.recodegen = reason # spad overflow, tile size, vlane stride
         self.stop_autotune = False
+
+        # Context var for codegen
+        self.target_buffer_override = contextvars.ContextVar("Handler_compute_override", default=self.compute)
+        self.target_cse_override = contextvars.ContextVar("Handler_cse_override", default=self.cse)
 
     def set_ranges(self, lengths, reduction_lengths):
         if self.call_ranges:
@@ -611,6 +619,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             self.call_ranges = tuple(lengths) + tuple(reduction_lengths)
             self.ranges = [self.rename_indexing(x) for x in self.call_ranges]
             self.itervars = [sympy.Symbol(f"index{n}") for n in range(len(self.ranges))]
+            self.itervar_cses = {str(index) : self.register_var_cse(str(index), 1, "index") for index in self.itervars}
             self.reduction_depth = len(lengths)
         return (
             self.itervars[: self.reduction_depth],
@@ -801,28 +810,6 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         constant_vector = [[int(expr.coeff(var)),None] for var in self.itervars]
         return constant_vector
 
-    def get_constant_vector2(self, expr):
-        # Case 0. symbol ex) index 0
-        # Case 1. inner product form ex) 16 * index0 + 1 * index1
-        # Case 2. Complicated form ex) 16 * index0 + 8 * (index//4) + (index % 4)
-        constant_vector = []
-        if expr.is_symbol:
-            constant_vector.append(tuple([1, expr]))
-            return constant_vector
-
-        for arg in expr.args:
-            if arg.is_symbol:
-                constant_vector.append(tuple([1,arg]))
-                continue
-            if len(arg.args) == 0: #TODO: check this
-                continue
-            if arg.args[0].is_number:
-                constant_vector.append(arg.args)
-            else:
-                constant_vector.append([1, arg])
-
-        return constant_vector
-
     def find_node_by_name(self, name):
         if name in V.graph.graph_inputs:
             return V.graph.graph_inputs[name]
@@ -836,6 +823,11 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
 
     def roundup_vectorlane(self, size, amp=1):
         return ((size + self.vector_lane - 1) // self.vector_lane) * self.vector_lane * amp
+
+    def register_var_cse(self, name, size, dtype):
+        var = self.create_cse_var(name, ValueRanges.unknown())
+        self.register_var_info(var, [size, dtype])
+        return var
 
     def register_var_info(self, var, var_info):
         self.var_info[var] = var_info
@@ -854,6 +846,21 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         }
         return sympy_subs(index, replacements)
 
+    @contextmanager
+    def override_buffer_cse(self, *, buffer=None, cse=None):
+        target_buffer = target_cse = None
+        try:
+            if buffer is not None:
+                target_buffer = self.target_buffer_override.set(buffer)
+            if cse is not None:
+                target_cse = self.target_cse_override.set(cse)
+            yield self
+        finally:
+            if target_cse is not None:
+                self.target_cse_override.reset(target_cse)
+            if target_buffer is not None:
+                self.target_buffer_override.reset(target_buffer)
+
     def __enter__(self):
         class CSEProxy:
             self.name = "CSEProxy"
@@ -861,16 +868,22 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             @staticmethod
             def __getattr__(name: str) -> Callable[..., common.CSEVariable]:  # type: ignore[misc]
                 def inner(*args, **kwargs):
-                    code, ret_info = getattr(parent_handler, name)(*args, var_info=self.var_info)
-                    csevar = self.cse.generate(
-                        self.compute,
-                        code,
-                        bounds=ValueRanges.unknown(),
-                        assignment=(ret_info[0] is not None)
-                    )
-                    if ret_info[0] is not None:
-                        self.register_var_info(csevar, ret_info)
-                        csevar.update_on_args(name, args, kwargs)
+                    code, ret_info = getattr(parent_handler, name)(*args, var_info=self.var_info, **kwargs)
+                    target_buffer = self.target_buffer_override.get()
+                    target_cse = self.target_cse_override.get()
+                    if isinstance(code, common.DeferredLine):
+                        target_buffer.writeline(code)
+                        return None
+                    else:
+                        csevar = target_cse.generate(
+                            target_buffer,
+                            code,
+                            bounds=ValueRanges.unknown(),
+                            assignment=(ret_info[0] is not None)
+                        )
+                        if ret_info[0] is not None:
+                            self.register_var_info(csevar, ret_info)
+                            csevar.update_on_args(name, args, kwargs)
                     return csevar
 
                 return inner
