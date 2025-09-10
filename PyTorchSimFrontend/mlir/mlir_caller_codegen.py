@@ -58,7 +58,11 @@ class MLIRKernelCallerCodeGen():
             if self.is_in_arg(arg_attribute[0]):
                 argv_idx = self.get_argv_idx() if arg_name not in self.load_args else self.load_args[arg_name]
                 self.load_args[arg_name] = argv_idx
-                self.writeline(f'if(load_arg(c_{arg_name}, sizeof(c_{arg_name}), argv[{argv_idx}]) == -1){self.open_bracket}')
+                ctype = DTYPE_TO_C[arg_attribute[1]]
+                elem_count = arg_attribute[2]
+                size_expr = f'({elem_count}ULL * sizeof({ctype}))'
+
+                self.writeline(f'if(load_arg(c_{arg_name}, {size_expr}, argv[{argv_idx}]) == -1){self.open_bracket}')
                 with self.code.indent():
                     self.writeline(f'return -1{self.ending}')
                 self.writeline(self.closed_bracket)
@@ -67,7 +71,10 @@ class MLIRKernelCallerCodeGen():
         for arg_name, arg_attribute in self.arg_attributes:
             if self.is_out_arg(arg_attribute[0]):
                 argv_idx = self.get_argv_idx() if not self.is_inout_arg(arg_attribute[0]) else self.load_args[arg_name]
-                self.writeline(f'if(dump_arg(c_{arg_name}, sizeof(c_{arg_name}), argv[{argv_idx}]) == -1){self.open_bracket}')
+                ctype = DTYPE_TO_C[arg_attribute[1]]
+                elem_count = arg_attribute[2]
+                size_expr = f'({elem_count}ULL * sizeof({ctype}))'
+                self.writeline(f'if(dump_arg(c_{arg_name}, {size_expr}, argv[{argv_idx}]) == -1){self.open_bracket}')
                 with self.code.indent():
                     self.writeline(f'return -1{self.ending}')
                 self.writeline(self.closed_bracket)
@@ -84,29 +91,24 @@ class MLIRKernelCallerCodeGen():
     def generate_args_define(self):
         name_set = set()
         if self.validation:
-            self.writeline(f'int padding[0x100000]{self.ending}') # FIXME. For pooling operation... Some pooling layer use negative offset
+            self.writeline(f"int* padding = malloc(0x100000ULL * sizeof(int)){self.ending}")
         for arg_name, (_, arg_type, arg_size, arg_sizes, arg_stride) in self.arg_attributes:
             if not arg_name in name_set:
-                if self.validation:
-                    self.writeline(f'{DTYPE_TO_C[arg_type]} c_{arg_name}[{arg_size}ULL]{self.ending}')
+                if torch.is_floating_point(torch.tensor([], dtype=arg_type)):
+                    bits = torch.finfo(arg_type).bits
+                elif arg_type == torch.bool:
+                    bits = 8
                 else:
-                    if torch.is_floating_point(torch.tensor([], dtype=arg_type)):
-                        bits = torch.finfo(arg_type).bits
-                    elif arg_type == torch.bool:
-                        bits = 8
-                    else:
-                        bits = torch.iinfo(arg_type).bits
-                    self.writeline(f'{DTYPE_TO_C[arg_type]}* c_{arg_name} = malloc({arg_size * bits // 8}ULL){self.ending}')
+                    bits = torch.iinfo(arg_type).bits
+                self.writeline(f'{DTYPE_TO_C[arg_type]}* c_{arg_name} = malloc({arg_size * bits // 8}ULL){self.ending}')
                 name_set.add(arg_name)
         self.writeline(self.newline)
 
     def generate_main(self):
-        if self.validation:
-            self.generate_args_define()
-
         self.writeline(f'{self.newline}int main(int argc, char *argv[]) {self.open_bracket}{self.newline}')
         with self.code.indent():
             if self.validation:
+                self.generate_args_define()
                 self.load_arg()
                 self.writeline(self.newline)
             else:
