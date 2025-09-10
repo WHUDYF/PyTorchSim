@@ -16,6 +16,34 @@
 #include <ATen/core/GeneratorForPrivateuseone.h>
 #include <ATen/NativeFunctions.h>
 #include <ATen/native/CPUFallback.h>
+#include <pybind11/pybind11.h>
+namespace py = pybind11;
+
+namespace {
+  bool g_amp_enabled = false;
+  at::ScalarType g_amp_dtype = at::kFloat;
+}
+
+static at::ScalarType to_scalar_type(const py::object& dtype_obj) {
+  py::module torch_mod = py::module::import("torch");
+  if (dtype_obj.is(torch_mod.attr("bfloat16"))) return at::kBFloat16;
+  if (dtype_obj.is(torch_mod.attr("float16")))  return at::kHalf;
+  if (dtype_obj.is(torch_mod.attr("float32")))  return at::kFloat;
+  if (dtype_obj.is(torch_mod.attr("float64")))  return at::kDouble;
+  throw std::runtime_error("Unsupported dtype for extension_device AMP");
+}
+
+static py::object to_torch_dtype(at::ScalarType st) {
+  py::module torch_mod = py::module::import("torch");
+  switch (st) {
+    case at::kBFloat16: return torch_mod.attr("bfloat16");
+    case at::kHalf:     return torch_mod.attr("float16");
+    case at::kFloat:    return torch_mod.attr("float32");
+    case at::kDouble:   return torch_mod.attr("float64");
+    default:
+      throw std::runtime_error("Unsupported scalar type in get_autocast_dtype");
+  }
+}
 
 static uint64_t op_counter = 0;
 static uint64_t last_saved_value = 0;
@@ -99,8 +127,16 @@ at::Tensor custom_to_device(
   TORCH_CHECK(self.is_contiguous());
 
   op_counter += 1;
-  if (device != at::DeviceType::CPU) {
-    return at::empty(self.sizes(), self.options());
+  if (device.type() == at::DeviceType::CPU) {
+    auto out = at::empty(self.sizes(), dtype, self.options().layout(),
+                         device, false, memory_format);
+    std::memcpy(out.mutable_data_ptr(), self.data_ptr(), self.nbytes());
+    return out;
+  } else {
+    auto opts = self.options().device(device).dtype(dtype);
+    auto out = at::empty(self.sizes(), opts);
+    std::memcpy(out.mutable_data_ptr(), self.data_ptr(), self.nbytes());
+    return out;
   }
 
   auto out = at::empty(self.sizes(), dtype, self.options().layout(), device, false, memory_format);
@@ -135,33 +171,86 @@ static DummyCustomAllocator global_custom_alloc;
 REGISTER_ALLOCATOR(c10::DeviceType::PrivateUse1, &global_custom_alloc);
 
 at::Tensor & custom_fill__scalar(at::Tensor & self, const at::Scalar & value) {
-  TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1, "Dummy test only allows dummy device.");
+  TORCH_CHECK(self.device().type() == c10::DeviceType::PrivateUse1,
+              "Dummy test only allows dummy device.");
   TORCH_CHECK(self.is_contiguous());
-  // TORCH_CHECK(self.scalar_type() == c10::ScalarType::Float);
 
   op_counter += 1;
-  if (self.scalar_type() == c10::ScalarType::Float) {
-    auto _data = static_cast<float*>(self.mutable_data_ptr());
-    for (size_t idx = 0; idx < self.numel(); idx++) {
-      _data[idx] = value.toFloat();
-    }
-    return self;
-  } else if (self.scalar_type() == c10::ScalarType::Int) {
-    auto _data = static_cast<int*>(self.mutable_data_ptr());
-    for (size_t idx = 0; idx < self.numel(); idx++) {
-      _data[idx] = value.toInt();
-    }
-    return self;
-  } else if (self.scalar_type() == c10::ScalarType::Long) {
-    auto _data = static_cast<int64_t*>(self.mutable_data_ptr());
-    for (size_t idx = 0; idx < self.numel(); idx++) {
-      _data[idx] = value.toLong();
-    }
-    return self;
-  } else {
-    TORCH_CHECK(false, "Unsupported scalar type.");
-  }
 
+  switch (self.scalar_type()) {
+    case c10::ScalarType::Float: {
+      auto* data = self.mutable_data_ptr<float>();
+      for (int64_t i = 0; i < self.numel(); i++) {
+        data[i] = value.toFloat();
+      }
+      break;
+    }
+    case c10::ScalarType::Double: {
+      auto* data = self.mutable_data_ptr<double>();
+      for (int64_t i = 0; i < self.numel(); i++) {
+        data[i] = value.toDouble();
+      }
+      break;
+    }
+    case c10::ScalarType::Half: {
+      auto* data = self.mutable_data_ptr<at::Half>();
+      for (int64_t i = 0; i < self.numel(); i++) {
+        data[i] = at::Half(value.toHalf());
+      }
+      break;
+    }
+    case c10::ScalarType::BFloat16: {
+      auto* data = self.mutable_data_ptr<at::BFloat16>();
+      for (int64_t i = 0; i < self.numel(); i++) {
+        data[i] = at::BFloat16(value.toBFloat16());
+      }
+      break;
+    }
+    case c10::ScalarType::Int: {
+      auto* data = self.mutable_data_ptr<int>();
+      for (int64_t i = 0; i < self.numel(); i++) {
+        data[i] = value.toInt();
+      }
+      break;
+    }
+    case c10::ScalarType::Long: {
+      auto* data = self.mutable_data_ptr<int64_t>();
+      for (int64_t i = 0; i < self.numel(); i++) {
+        data[i] = value.toLong();
+      }
+      break;
+    }
+    case c10::ScalarType::Short: {
+      auto* data = self.mutable_data_ptr<int16_t>();
+      for (int64_t i = 0; i < self.numel(); i++) {
+        data[i] = static_cast<int16_t>(value.toShort());
+      }
+      break;
+    }
+    case c10::ScalarType::Char: {
+      auto* data = self.mutable_data_ptr<int8_t>();
+      for (int64_t i = 0; i < self.numel(); i++) {
+        data[i] = static_cast<int8_t>(value.toChar());
+      }
+      break;
+    }
+    case c10::ScalarType::Byte: {
+      auto* data = self.mutable_data_ptr<uint8_t>();
+      for (int64_t i = 0; i < self.numel(); i++) {
+        data[i] = static_cast<uint8_t>(value.toByte());
+      }
+      break;
+    }
+    case c10::ScalarType::Bool: {
+      auto* data = self.mutable_data_ptr<bool>();
+      for (int64_t i = 0; i < self.numel(); i++) {
+        data[i] = value.toBool();
+      }
+      break;
+    }
+    default:
+      TORCH_CHECK(false, "Unsupported scalar type: ", self.scalar_type());
+  }
   return self;
 }
 
@@ -204,6 +293,9 @@ at::Tensor custom__copy_from(const at::Tensor& self, const at::Tensor& dst, bool
       "Dummy test only allows copy from cpu -> dummy device.");
 
   // Some dummy asserts for the basic use case: inputs are the same size / dtype, all contiguous.
+  if (self.numel() != dst.numel()) {
+    custom_resize_(dst, self.sizes(), c10::nullopt);
+  }
   TORCH_CHECK(self.sizes() == dst.sizes());
 
   const bool same_dtype = (self.scalar_type() == dst.scalar_type());
@@ -255,9 +347,36 @@ at::Tensor& custom_arange_start_out_impl(
     const c10::Scalar& end,
     const c10::Scalar& step,
     at::Tensor& out) {
-    //const int64_t n = arange_len(start.toDouble(), end.toDouble(), step.toDouble());
-    //at::native::resize_output(out, {n});
-    return out;
+  double s = start.toDouble();
+  double e = end.toDouble();
+  double st = step.toDouble();
+  TORCH_CHECK(st != 0.0, "step must be nonzero");
+
+  int64_t length = 0;
+  if (st > 0) {
+    if (e > s) length = static_cast<int64_t>(std::ceil((e - s) / st));
+  } else {
+    if (e < s) length = static_cast<int64_t>(std::ceil((e - s) / st));
+  }
+
+  // Resize out tensor
+  custom_resize_(out, {length}, c10::nullopt);
+
+  if (out.scalar_type() == at::kFloat || out.scalar_type() == at::kDouble) {
+    double* data = out.mutable_data_ptr<double>();
+    for (int64_t i = 0; i < length; i++) {
+      data[i] = s + i * st;
+    }
+  } else if (out.scalar_type() == at::kLong) {
+    int64_t* data = out.mutable_data_ptr<int64_t>();
+    for (int64_t i = 0; i < length; i++) {
+      data[i] = static_cast<int64_t>(s + i * st);
+    }
+  } else {
+    TORCH_CHECK(false, "Unsupported dtype for arange on dummy device");
+  }
+
+  return out;
 }
 
 static at::Tensor custom_to_dtype_impl(const at::Tensor& self,
@@ -276,16 +395,16 @@ static at::Tensor custom_to_dtype_impl(const at::Tensor& self,
 // This macro registers your kernels to the PyTorch Dispatcher.
 // More details on the dispatcher can be found at http://blog.ezyang.com/2020/09/lets-talk-about-the-pytorch-dispatcher/.
 TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
-  m.impl("to.Device", &custom_to_device);
-  m.impl("to.dtype", &custom_to_dtype_impl);
-  m.impl("fill_.Scalar", &custom_fill__scalar);
-  m.impl("_copy_from", &custom__copy_from);
+  m.impl("to.Device",             &custom_to_device);
+  m.impl("to.dtype",              &custom_to_dtype_impl);
+  m.impl("fill_.Scalar",          &custom_fill__scalar);
+  m.impl("_copy_from",            &custom__copy_from);
   m.impl("_copy_from_and_resize", &custom__copy_from_and_resize);
-  m.impl("empty_strided", &custom_empty_strided);
-  m.impl("empty.memory_format", &custom_empty);
-  m.impl("as_strided", at::native::as_strided_tensorimpl);
-  m.impl("view", at::native::view);
-  m.impl("arange.start_out", &custom_arange_start_out_impl);
+  m.impl("empty_strided",         &custom_empty_strided);
+  m.impl("empty.memory_format",   &custom_empty);
+  m.impl("as_strided",            at::native::as_strided_tensorimpl);
+  m.impl("view",                  at::native::view);
+  m.impl("arange.start_out",      &custom_arange_start_out_impl);
 }
 
 TORCH_LIBRARY_IMPL(aten, AutogradPrivateUse1, m) {
@@ -293,11 +412,11 @@ TORCH_LIBRARY_IMPL(aten, AutogradPrivateUse1, m) {
 }
 
 TORCH_LIBRARY_FRAGMENT(aten, m) {
-m.def(
-  "_reinterpret_tensor(Tensor self, int[] size, int[] stride, int offset_increment=0) -> Tensor",
-  torch::dispatch(
-      c10::DispatchKey::AutogradPrivateUse1, _reinterpret_tensor),
-  {at::Tag::pt2_compliant_tag});
+  m.def(
+    "_reinterpret_tensor(Tensor self, int[] size, int[] stride, int offset_increment=0) -> Tensor",
+    torch::dispatch(c10::DispatchKey::AutogradPrivateUse1, _reinterpret_tensor),
+    {at::Tag::pt2_compliant_tag}
+  );
 }
 
 void custom_cpu_fallback(const c10::OperatorHandle& op, torch::jit::Stack* stack) {
@@ -305,39 +424,56 @@ void custom_cpu_fallback(const c10::OperatorHandle& op, torch::jit::Stack* stack
 }
 
 TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
-  m.impl("add.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("add.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("abs.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("sub.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("mul.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("div.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("pow.Tensor_Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("zero_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_add.List", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("index.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("triu_indices", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("neg.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("sum.IntList_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("eq.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("all.all_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_local_scalar_dense", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_log_softmax", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_log_softmax_backward_data", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("mse_loss.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("nll_loss_forward", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("nll_loss_backward", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_lerp_.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_mul_.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_addcmul_.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_sqrt", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_div_.ScalarList", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_add_.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_addcdiv_.ScalarList", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_add_.List", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("cat.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_native_multi_head_attention", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("resize_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("exp.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("add.Tensor",                    torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("add.out",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("abs.out",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("sub.Tensor",                    torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("mul.Tensor",                    torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("div.Tensor",                    torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("pow.Tensor_Scalar",             torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("zero_",                         torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_add.List",             torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("index.Tensor",                  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("triu_indices",                  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("neg.out",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("sum.IntList_out",               torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("eq.Tensor",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("all.all_out",                   torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_local_scalar_dense",           torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_log_softmax",                  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_log_softmax_backward_data",    torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("mse_loss.out",                  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("nll_loss_forward",              torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("nll_loss_backward",             torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_lerp_.Scalar",         torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_mul_.Scalar",          torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_addcmul_.Scalar",      torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_sqrt",                 torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_div_.ScalarList",      torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_add_.Scalar",          torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_addcdiv_.ScalarList",  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_add_.List",            torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("cat.out",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_native_multi_head_attention",  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("resize_",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("exp.out",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("where.self",                    torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("ge.Scalar",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("ge.Tensor",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("le.Scalar",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("le.Tensor",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("lt.Scalar",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("lt.Tensor",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("gt.Scalar",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("gt.Tensor",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("triu",                          torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("tril",                          torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_and.out",               torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_and.Tensor",            torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_or.out",                torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_or.Tensor",             torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_not.out",                torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_not.Tensor",             torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
 }
 
 // This basic implementation doesn't bother dealing with different device indices
@@ -360,7 +496,6 @@ bool custom_op_called() {
 
 class PrivateGeneratorImpl : public at::CPUGeneratorImpl {
 public:
-  // Constructors
   PrivateGeneratorImpl(c10::DeviceIndex device_index) {
     device_ = c10::Device(c10::DeviceType::PrivateUse1, device_index);
     key_set_ = c10::DispatchKeySet(c10::DispatchKey::PrivateUse1);
@@ -382,7 +517,21 @@ void register_generator() {
 // that's implemented in C++.
 // The implementation in this file maps directly to the `PrivateUse1` device type.
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("custom_device", &get_custom_device, "get custom device object");
-    m.def("custom_op_called", &custom_op_called, "check if our custom function was called");
-    m.def("register_generator", &register_generator, "register generator for custom device");
+  m.def("custom_device", &get_custom_device, "get custom device object");
+  m.def("custom_op_called", &custom_op_called, "check if our custom function was called");
+  m.def("register_generator", &register_generator, "register generator for custom device");
+  m.def("is_autocast_enabled", []() -> bool { return g_amp_enabled;});
+  m.def("set_autocast_enabled", [](bool flag) -> void {g_amp_enabled = flag;});
+  m.def("get_autocast_dtype", []() -> py::object { return to_torch_dtype(g_amp_dtype); });
+  m.def("set_autocast_dtype", [](py::object dtype_obj) -> void {
+    auto st = to_scalar_type(dtype_obj);
+    g_amp_dtype = st;
+  });
+  m.def("get_amp_supported_dtype", []() -> py::list {
+    py::module torch_mod = py::module::import("torch");
+    py::list lst;
+    lst.append(torch_mod.attr("float16"));
+    lst.append(torch_mod.attr("float32"));
+    return lst;
+  });
 }
