@@ -624,7 +624,7 @@ class ExtensionOverrides(common.OpOverrides):
             attribute = "one"
         elif ret_type[0] == "i":
             op_type = "arith.cmpi"
-            attribute = "sne"
+            attribute = "ne"
         else:
             raise ValueError(f"Unsupported data type for 'ne' operation: {ret_type}")
 
@@ -754,13 +754,25 @@ class ExtensionOverrides(common.OpOverrides):
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
         return f'arith.xori %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
+    @staticmethod
+    def to_bool(operand, *args, var_info=None, **kwargs):
+        tile_size, ret_type = var_info[operand]
+        const_one = ops.constant(0, ret_type)
+        if tile_size > 1:
+            const_one = ops.broadcast(const_one, tile_size)
+        ret = ops.ne(operand, const_one)
+        return ret, [tile_size, "i1"]
 
     @staticmethod
     def logical_and(operand1, operand2, *args, var_info=None, **kwargs):
-        op_type = var_info[operand1]
+        op_type1 = var_info[operand1]
+        op_type2 = var_info[operand2]
         # Type check & auto cast
-        if op_type[1] != "i1":
-            raise NotImplementedError("Logical operation with not bool data type")
+        if op_type1[1] != "i1":
+            operand1 = ops.to_bool(operand1)
+        if op_type2[1] != "i1":
+            operand2 = ops.to_bool(operand2)
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
         return ExtensionOverrides.and_(operand1, operand2, *args, var_info=var_info, **kwargs)
 
     @staticmethod
@@ -773,22 +785,30 @@ class ExtensionOverrides(common.OpOverrides):
         const_one = ops.constant(0, ret_type)
         const_one = ops.broadcast(const_one, tile_size)
         ret = ops.eq(operand,const_one)
-        return ret, [tile_size, var_info[ret]]
+        return ret, [tile_size, "i1"]
 
     @staticmethod
     def logical_or(operand1, operand2, *args, var_info=None, **kwargs):
-        op_type = var_info[operand1]
+        op_type1 = var_info[operand1]
+        op_type2 = var_info[operand2]
         # Type check & auto cast
-        if op_type[1] != "i1":
-            raise NotImplementedError("Logical operation with not bool data type")
+        if op_type1[1] != "i1":
+            operand1 = ops.to_bool(operand1)
+        if op_type2[1] != "i1":
+            operand2 = ops.to_bool(operand2)
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
         return ExtensionOverrides.or_(operand1, operand2, *args, var_info=var_info, **kwargs)
 
     @staticmethod
     def logical_xor(operand1, operand2, *args, var_info=None, **kwargs):
-        op_type = var_info[operand1]
+        op_type1 = var_info[operand1]
+        op_type2 = var_info[operand2]
         # Type check & auto cast
-        if op_type[1] != "i1":
-            raise NotImplementedError("Logical operation with not bool data type")
+        if op_type1[1] != "i1":
+            operand1 = ops.to_bool(operand1)
+        if op_type2[1] != "i1":
+            operand2 = ops.to_bool(operand2)
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
         return ExtensionOverrides.xor(operand1, operand2, *args, var_info=var_info, **kwargs)
 
     @staticmethod
@@ -1006,8 +1026,10 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             expr_str = expr_str.replace("//", " floordiv ")
         else:
             raise NotImplementedError("What is this case?")
-
-        indices = [expr.args[0]]
+        first_arg = expr.args[0]
+        if len(first_arg.free_symbols) != 1:
+            raise NotImplementedError("What is this case?")
+        indices = [list(first_arg.free_symbols)[0]]
         args = ", ".join(map(str, indices))
         map_var = self.map_cse.generate(self.global_vars, f"affine_map<({args}) -> ({expr_str})>")
         args = ", ".join([f"%{i}" for i in indices])
