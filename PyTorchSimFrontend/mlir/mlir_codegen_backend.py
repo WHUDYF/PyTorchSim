@@ -1171,11 +1171,23 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         self.spad_buffer_dict[str(out)] = [sram_var, local_tile_desc.get_tile_size(), tile_numel_per_lane, sram_index_var, tile_shape, vshape]
         return out
 
-    def store(self, name: str, index: sympy.Expr, value, *args, **kwargs):
+    def store(self, name: str, index: sympy.Expr, value, mode=None, *args, **kwargs):
         index = self.rename_indexing(index)
-        dram_var = self.kernel_group.args.output(name)
         dtype = V.graph.get_dtype(name)
         mlir_dtype = mlir_common.DTYPE_TO_MLIR[dtype]
+
+        # Handle scatter store
+        if "tmp" in str(index):
+            if mode == "atomic_add":
+                # Convert the output buffer type to the inplace buffer
+                arg_name =  V.graph.scheduler.mutation_real_name.get(name, name)
+                if arg_name not in self.kernel_group.args.inplace_buffers:
+                    self.kernel_group.args.make_inplace(arg_name, arg_name)
+
+                loaded_value = ops.load(name, index)
+                value = ops.add(loaded_value, value)
+            index, _ = self.convert_indirect_indexing(index)
+        dram_var = self.kernel_group.args.output(name)
 
         # Prepare dma instruction
         local_tile_desc, index_var, dram_stride = self.get_dma_info(name, index)
@@ -1736,9 +1748,9 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         total_dims =  [int(str(i)[5:]) for i in self.itervars]
         local_tile_desc = mlir_common.MLIRMultiDimTile([1], self.vector_lane)
         local_dims.sort() # Assume that smaller index is placed in the outer loop
-        indirect_dims = [f"{i}" for i in index.free_symbols if "tmp" in str(i)]
-        for indirect_dim in indirect_dims:
-            index = index.replace(sympy.Symbol(indirect_dim), 0)
+        indirect_syms = [s for s in index.free_symbols if "tmp" in s.name]
+        index = index.subs({s: 0 for s in indirect_syms}, simultaneous=True)
+        indirect_dims = [f"{i}" for i in indirect_syms]
 
         # Reduction can have two type of tile size
         if broadcast and (total_dims != local_dims or (self.reduction_depth!=len(total_dims) and total_dims[:self.reduction_depth] == local_dims)):

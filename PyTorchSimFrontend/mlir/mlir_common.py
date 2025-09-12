@@ -792,8 +792,6 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         code.splice(self.codegen_global_init())
         code.writeline(f'func.func @{kernel_decl_name}({arg_defs})')
         with code.indent():
-            for old, new in self.kernel_group.args.aliases():
-                code.writeline(f"auto {old} = {new};")
             # Loop body part
             code.splice(self.codegen_loops())
         return code.getvalue()

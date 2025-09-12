@@ -424,56 +424,165 @@ void custom_cpu_fallback(const c10::OperatorHandle& op, torch::jit::Stack* stack
 }
 
 TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
-  m.impl("add.Tensor",                    torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("add.out",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("abs.out",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("sub.Tensor",                    torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("mul.Tensor",                    torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("div.Tensor",                    torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("pow.Tensor_Scalar",             torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("zero_",                         torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_add.List",             torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("index.Tensor",                  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("triu_indices",                  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("neg.out",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("sum.IntList_out",               torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("eq.Tensor",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("abs", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("abs.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("abs_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("absolute", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("absolute.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("absolute_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("add.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("add.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("add.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("add_.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("add_.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("cat", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("cat.names", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("cat.names_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("cat.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("div.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("div.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("div.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("div_.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("div_.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("eq.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("eq.Scalar_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("eq.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("eq.Tensor_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("equal", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("erf", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("erf.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("erf_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("erfc", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("erfc.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("erfc_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("exp", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("exp.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("ge.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("ge.Scalar_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("ge.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("ge.Tensor_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("gt.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("gt.Scalar_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("gt.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("gt.Tensor_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("le.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("le.Scalar_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("le.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("le.Tensor_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("lt.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("lt.Scalar_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("lt.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("lt.Tensor_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("ne.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("ne.Scalar_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("ne.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("ne.Tensor_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("logical_and", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_and.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_and_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_not", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_not.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_not_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_or", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_or.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_or_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_xor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_xor.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("logical_xor_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("neg", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("neg.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("neg_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("mul.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("mul.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("mul_.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("pow.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("pow.Scalar_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("pow.Tensor_Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("pow.Tensor_Scalar_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("pow.Tensor_Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("pow.Tensor_Tensor_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("pow_.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("pow_.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("sub.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("sub.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("sub.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("sub_.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("sub_.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("sum", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("sum.DimnameList_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("sum.IntList_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("sum.dim_DimnameList", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("sum.dim_IntList", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("resize_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("resize_as_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  // Foreach ops
+  m.impl("_foreach_add.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_add_.Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_add_.ScalarList", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_add.List", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("_foreach_add_.List", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  // Indexed
+  m.impl("index_add.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("index_add_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("index_copy.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("index_copy_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("index_fill.int_Scalar", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("index_fill.int_Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("index_fill.int_Scalar_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("index_fill.int_Tensor_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("index_fill_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("tril", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("tril_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("triu", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("triu_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("triu_indices", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("nll_loss2d_forward", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("nll_loss2d_backward", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("nll_loss_backward", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("nll_loss_forward", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("scatter.src_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("scatter.value_out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("index_put.Default", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("index.Tensor", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("mm.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("sigmoid.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("gather.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("silu.out", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
   m.impl("all.all_out",                   torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
   m.impl("_local_scalar_dense",           torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
   m.impl("_log_softmax",                  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
   m.impl("_log_softmax_backward_data",    torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
   m.impl("mse_loss.out",                  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("nll_loss_forward",              torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("nll_loss_backward",             torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_lerp_.Scalar",         torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_mul_.Scalar",          torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_addcmul_.Scalar",      torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_sqrt",                 torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_div_.ScalarList",      torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_add_.Scalar",          torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_addcdiv_.ScalarList",  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("_foreach_add_.List",            torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("cat.out",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
   m.impl("_native_multi_head_attention",  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("resize_",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("exp.out",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
   m.impl("where.self",                    torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("ge.Scalar",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("ge.Tensor",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("le.Scalar",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("le.Tensor",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("lt.Scalar",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("lt.Tensor",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("gt.Scalar",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("gt.Tensor",                     torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("triu",                          torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("tril",                          torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("logical_and.out",               torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("logical_and.Tensor",            torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("logical_or.out",                torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("logical_or.Tensor",             torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("logical_not.out",                torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("logical_not.Tensor",             torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("min",                           torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("max",                           torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("index_select",                  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("nonzero",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+
+  m.impl("zero_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
+  m.impl("zeros_like", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
 }
 
 // This basic implementation doesn't bother dealing with different device indices
