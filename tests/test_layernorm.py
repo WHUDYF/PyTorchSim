@@ -44,5 +44,6 @@ if __name__ == "__main__":
     from Scheduler.scheduler import PyTorchSimRunner
     module = PyTorchSimRunner.setup_device()
     device = module.custom_device()
-    #test_LayerNorm(device)
-    test_LayerNorm(device, shape)
+    with torch.no_grad():
+        #test_LayerNorm(device)
+        test_LayerNorm(device, shape)

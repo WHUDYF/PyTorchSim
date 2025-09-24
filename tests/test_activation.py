@@ -23,9 +23,10 @@ def test_ReLU(device, size=(128, 128)):
     input = torch.randn(size)
     x1 = input.to(device=device)
     x2 = input.to("cpu")
-    opt_fn = torch.compile(dynamic=False)(torch.nn.functional.relu)
+    ReLU = torch.nn.ReLU()
+    opt_fn = torch.compile(dynamic=False)(ReLU)
     y = opt_fn(x1)
-    cpu_y = torch.nn.functional.relu(x2)
+    cpu_y = ReLU(x2)
     test_result("ReLU", y, cpu_y)
 
 def test_GeLU(device, size=(128, 128), approximate='none'):
