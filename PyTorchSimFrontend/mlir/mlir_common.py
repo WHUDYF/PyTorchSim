@@ -14,6 +14,7 @@ from torch._inductor.codegen import cpp
 from torch._inductor.virtualized import V
 from torch._inductor.ir import MultiOutputLayout
 from torch._inductor.dependencies import MemoryDep, StarDep, WeakDep
+from torch._inductor.codegen.wrapper import KernelDefinitionLine
 from torch.utils._sympy.functions import ModularIndexing, FloorDiv, Mod
 import sympy
 import contextlib
@@ -25,15 +26,20 @@ import sympy
 import torch.fx
 from torch.utils._sympy.value_ranges import ValueRanges
 from torch._inductor.utils import (
-    free_symbol_startswith,
     get_sympy_Expr_dtype,
     IndentedBuffer,
     sympy_subs,
-    sympy_symbol,
     unique,
 )
 from PyTorchSimFrontend import extension_config
 from PyTorchSimFrontend import extension_codecache
+from PyTorchSimFrontend.mlir.mlir_autotune import MLIRBenchmarkRequest
+
+from PyTorchSimFrontend.extension_utils import (
+    free_symbol_startswith,
+    sympy_symbol
+)
+
 schedule_log = torch._logging.getArtifactLogger(__name__, "schedule")
 
 DTYPE_TO_MLIR = {
@@ -654,7 +660,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         wrapper = V.graph.wrapper_code
         _, call_args, _, _ = self.kernel_group.args.mlir_argdefs()
        # generate the code to call this
-        wrapper.generate_kernel_call(kernel_name, call_args, cuda=False)
+        wrapper.generate_kernel_call(kernel_name, call_args, triton=False)
 
     def is_modular_indexing(self, expr):
         return "ModularIndexing" in str(expr)
@@ -778,8 +784,8 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             V.graph.removed_buffers |= self.removed_buffers
             # V.graph.inplaced_to_remove |= self.inplaced_to_remove
             src_code = self.codegen_kernel(kernel_name=kernel_name)
-            self.meta_kernel()
-            return src_code
+            meta_code = self.meta_kernel()
+            return src_code, meta_code
 
     def codegen_kernel(self, kernel_name):
         arg_defs, _, _, _ = self.kernel_group.args.mlir_argdefs()
@@ -797,12 +803,9 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         return code.getvalue()
 
     def meta_kernel(self):
-        wrapper = V.graph.wrapper_code
         _, _, arg_attributes, _ = self.kernel_group.args.mlir_argdefs()
-        wrapper.add_import_once('\nprint(f\'Wrapper Codegen Path = {__file__}\')')
-        # Dump loop and load/store information
-        wrapper.add_import_once(f"arg_attributes = {arg_attributes}")
-        return arg_attributes
+        meta_code = arg_attributes
+        return meta_code
 
     def get_constant_vector(self, expr):
         constant_vector = [[int(expr.coeff(var)),None] for var in self.itervars]
@@ -903,10 +906,10 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 if name in store_cache:
                     return store_cache[name]
                 key = name+str(index)
-                if key not in self.cse.cache:
+                if key not in self.cse._cache:
                     result = self.load(name, index)
-                    self.cse.cache[key] = result
-                return self.cse.cache[key]
+                    self.cse._cache[key] = result
+                return self.cse._cache[key]
 
             @staticmethod
             def store(name, index, value, mode=None):
@@ -914,7 +917,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 if mode is None:
                     self.cse.store_cache[name] = value
                     if self.current_node:
-                        for other_name in self.current_node.get_mutations():
+                        for other_name in self.current_node.get_output(name).get_mutations():
                             self.cse.store_cache[other_name] = value
                 if name not in V.graph.removed_buffers:
                     return self.store(name, index, value, mode=mode)
@@ -924,7 +927,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 self.store_buffer_names.add(name)
                 self.cse.store_cache[name] = value
                 if self.current_node:
-                    for other_name in self.current_node.get_mutations():
+                    for other_name in self.current_node.get_output(name).get_mutations():
                         self.cse.store_cache[other_name] = value
 
                 if name not in V.graph.removed_buffers:
@@ -970,7 +973,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
 
         super().__enter__()
         assert self.overrides
-        parent_handler = self.overrides(V.get_ops_handler())
+        parent_handler = self.overrides()
         self.exit_stack.enter_context(V.set_ops_handler(CSEProxy()))
         self.exit_stack.enter_context(V.set_kernel_handler(self))
         return self

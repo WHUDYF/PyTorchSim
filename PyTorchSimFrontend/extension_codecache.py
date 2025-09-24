@@ -3,7 +3,8 @@ import re
 import shlex
 import subprocess
 
-from torch._inductor.codecache import AsyncCompile, get_lock_dir, get_hash, write
+from torch._inductor.codecache import get_lock_dir, get_hash, write
+from torch._inductor.async_compile import AsyncCompile
 from AsmParser.tog_generator import tog_generator
 from PyTorchSimFrontend.mlir.mlir_caller_codegen import MLIRKernelCallerCodeGen
 from PyTorchSimFrontend import extension_config

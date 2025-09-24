@@ -6,12 +6,14 @@ import math
 from functools import reduce
 from operator import mul
 import torch
+from typing import Optional
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from torch._dynamo.testing import rand_strided
 from torch._inductor.autotune_process import TensorMeta
 from torch._dynamo.utils import dynamo_timed
 from torch._inductor.codegen import cpp, wrapper, common, memory_planning
+from torch._inductor.ir import GraphPartitionSignature
 from torch._inductor.virtualized import V, _ops as ops
 from torch._inductor.codecache import write_atomic
 from torch._inductor.utils import (
@@ -57,9 +59,24 @@ def reduction_partial_combine_vec(reduction_type, vector_value, init_value):
         return ops.logical_and(vector_value, init_value)
     raise AssertionError(reduction_type)
 
-class ExtensionWrapperCodegen(wrapper.WrapperCodeGen):
+class ExtensionWrapperCodegen(wrapper.PythonWrapperCodegen):
     def __init__(self):
         super().__init__()
+
+    @classmethod
+    def create(
+        cls,
+        is_subgraph: bool,
+        subgraph_name: Optional[str],
+        parent_wrapper: Optional[wrapper.PythonWrapperCodegen],
+        partition_signatures: Optional[GraphPartitionSignature] = None,
+    ):
+        if is_subgraph:
+            assert subgraph_name is not None and parent_wrapper is not None
+            return wrapper.SubgraphPythonWrapperCodegen(
+                subgraph_name, parent_wrapper, partition_signatures
+            )
+        return cls()
 
     def write_header(self):
         self.header.splice(
@@ -89,6 +106,7 @@ class ExtensionWrapperCodegen(wrapper.WrapperCodeGen):
                 reinterpret_tensor = torch.ops.aten._reinterpret_tensor
                 custom_async_compile = CustomAsyncCompile()
                 os.environ["TORCHSIM_LAST_COMPILED_MODULE"] = __file__
+                print(f\'Wrapper Codegen Path = {{__file__}}\')
             """
         )
         self.header.splice(
@@ -132,7 +150,7 @@ class ExtensionWrapperCodegen(wrapper.WrapperCodeGen):
                 self.prefix.writeline(f"{lhs} = args")
                 self.prefix.writeline("args.clear()")
 
-            self.codegen_inputs(self.prefix, V.graph.graph_inputs)
+            self.codegen_inputs()
             self.codegen_input_size_asserts()
             self.codegen_sram_plan_prefix()
 
@@ -152,10 +170,27 @@ class ExtensionWrapperCodegen(wrapper.WrapperCodeGen):
                 continue
             self.wrapper_call.writeline(f"sram_plan_postfix('{name}', {name})")
 
-    @dynamo_timed
+    def _generate_kernel_call_helper(
+        self,
+        kernel_name: str,
+        call_args,
+        *,
+        device=None,
+        triton=True,
+        arg_types=None,
+        raw_keys=None,
+        raw_args=None,
+        triton_meta=None,
+        graph_name="",
+        original_fxnode_name=None,
+    ):
+        device = device or V.graph.get_current_device_or_throw()
+        self.writeline(self.wrap_kernel_call(kernel_name, call_args))
+        return
+
     def generate(self, is_inference):
         result = IndentedBuffer()
-        result.splice(self.header)
+        # result.splice(self.header)
 
         with contextlib.ExitStack() as stack:
             stack.enter_context(self.wrapper_call.indent())
@@ -170,8 +205,13 @@ class ExtensionWrapperCodegen(wrapper.WrapperCodeGen):
 
                 if isinstance(line, wrapper.MemoryPlanningLine):
                     line.codegen(self.wrapper_call)
+                elif isinstance(line, wrapper.KernelCallLine):
+                    self.wrapper_call.writeline(self.wrap_kernel_call(line.kernel_name, line.call_args))
                 else:
-                    self.wrapper_call.writeline(line)
+                    if isinstance(line, wrapper.WrapperLine):
+                        line.codegen(self.wrapper_call)
+                    else:
+                        self.wrapper_call.writeline(line)
                 # Add buffer plan hook for alloc
                 if isinstance(line, memory_planning.AllocFromPoolLine) or isinstance(line, wrapper.AllocateLine):
                     self.wrapper_call.writeline(f"sram_plan_prefix('{line.node.get_name()}', {line.node.get_name()})")
@@ -180,7 +220,9 @@ class ExtensionWrapperCodegen(wrapper.WrapperCodeGen):
             self.mark_output_type()
             self.generate_return(output_refs)
 
-        self.append_precomputed_sizes_to_prefix()
+        # self.append_precomputed_sizes_to_prefix() # FIXME: Need to replace append_precomputed_sizes_to_prefix()
+        result.splice(self.header)
+
         self.finalize_prefix()
         result.splice(self.prefix)
 
@@ -189,7 +231,10 @@ class ExtensionWrapperCodegen(wrapper.WrapperCodeGen):
 
         self.generate_end(result)
         self.add_benchmark_harness(result)
-        return result.getvaluewithlinemap()
+        return (
+            result.getvaluewithlinemap(),
+            self.kernel_declarations.getvaluewithlinemap(),
+        )
 
     def memory_plan(self):
         self.lines = memory_planning.MemoryPlanner(self).plan(self.lines)
@@ -964,13 +1009,13 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         )
 
     def codegen_nodes(self, nodes, kernel_name):
-        src_code = super().codegen_nodes(nodes, kernel_name)
+        src_code, meta_code = super().codegen_nodes(nodes, kernel_name)
         self._prepare_simulator_headers(src_code)
         if "autotune" in extension_config.codegen_mapping_strategy and extension_config.pytorchsim_timing_mode:
             optimal_src_code = self.autotune(nodes, kernel_name)[0]
             if optimal_src_code is not None:
                 return optimal_src_code
-        return src_code
+        return src_code, meta_code
 
     def _prepare_simulator_headers(self, src_code):
         write_path = extension_codecache.get_write_path(src_code)

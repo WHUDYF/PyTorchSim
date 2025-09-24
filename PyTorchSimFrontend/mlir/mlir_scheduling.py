@@ -22,8 +22,6 @@ class MLIRScheduling(BaseScheduling):
     target_kernel = MLIRKernel
     def __init__(self, scheduler):
         self.scheduler = scheduler
-        self.scheduler.can_fuse_origin = self.scheduler.can_fuse
-        self.scheduler.can_fuse = self.can_fuse_with_exceptions
         #self.scheduler.enter_context = self.enter_context_fixed # FIXME. Monkey patch: For fixing the inductor bug
         self.kernel_group = mlir_common.MLIRWrapperKenrelGroup()
         self._ready_to_flush = False
@@ -90,6 +88,9 @@ class MLIRScheduling(BaseScheduling):
     def _set_flush_status(self, status: bool):
         self._ready_to_flush = status
 
+    def reset_kernel_group(self):
+        self.kernel_group = mlir_common.MLIRWrapperKenrelGroup()
+
     def can_fuse_vertical(self, node1, node2):
         return self.can_fuse_horizontal(node1, node2)
 
@@ -103,7 +104,7 @@ class MLIRScheduling(BaseScheduling):
 
         # Reduction is currently not supported
         if node1.is_reduction() and node2.is_reduction() and not node1.is_template() and not node2.is_template() and extension_config.CONFIG_FUSION_REDUCTION_REDUCTION:
-            return vars1 == vars2 and reduce1 == reduce2 and node1.inverse_users == node2.inverse_users
+            return vars1 == vars2 and reduce1 == reduce2 # and node1.inverse_users == node2.inverse_users
         if node1.is_reduction() or node2.is_reduction():
             return False
 
@@ -180,7 +181,8 @@ class MLIRScheduling(BaseScheduling):
     def group_fn(self, sizes):
         return tuple(tuple(map(V.graph.sizevars.simplify, s)) for s in sizes)
 
-    def codegen_nodes(self, nodes):
+    def codegen_node(self, _node):
+        nodes = _node.get_nodes()
         _, (group, reduction_group) = max(
             nodes, key=lambda x: int(x.is_reduction())
         ).group
@@ -210,8 +212,8 @@ class MLIRScheduling(BaseScheduling):
 
         kernel_name_candidate = f"extension_kernel_{MLIRScheduling.count}"
         MLIRScheduling.count += 1
-        src_code = ex_kernel.codegen_nodes(nodes, kernel_name_candidate)
-        kernel_name = self.define_kernel(src_code, kernel_name_candidate, ex_kernel.vector_lane,
+        src_code, meta_code = ex_kernel.codegen_nodes(nodes, kernel_name_candidate)
+        kernel_name = self.define_kernel(src_code, meta_code, kernel_name_candidate, ex_kernel.vector_lane,
                            ex_kernel.spad_info, origins= {str(i) for i in nodes[0].node.origins})
         ex_kernel.call_kernel(kernel_name)
         _, args, _, _ = ex_kernel.args.mlir_argdefs()
@@ -230,26 +232,30 @@ class MLIRScheduling(BaseScheduling):
         pass
 
     def flush(self):
-        self.kernel_group.codegen_define_and_call(V.graph.wrapper_code)
-        self.kernel_group = mlir_common.MLIRWrapperKenrelGroup()
+        src_code = self.kernel_group.codegen_group()
+        if src_code:
+            kernel_name = self.define_kernel(
+                src_code, self.kernel_group.scheduled_nodes
+            )
+            self.kernel_group.call_kernel(V.graph.wrapper_code, kernel_name)
+        self.reset_kernel_group()
         self._set_flush_status(False)
 
     def define_function(self, kernel):
         partial_code, function_name = kernel.def_function()
         if partial_code is not None and function_name not in self.outer_function:
             with V.set_kernel_handler(kernel):
-                code = partial_code.finalize()
+                code = partial_code.finalize_all()
                 wrapper = V.graph.wrapper_code
                 wrapper.header.writeline(code)
                 self.outer_function.add(function_name)
 
-    def define_kernel(self, src_code, kernel_name, vector_lane, spad_info, loop_size=None, origins={}):
+    def define_kernel(self, src_code, meta_code, kernel_name, vector_lane, spad_info, loop_size=None, origins={}):
         wrapper = V.graph.wrapper_code
         if src_code in wrapper.src_to_kernel:
             kernel_name = wrapper.src_to_kernel[src_code]
         else:
             wrapper.src_to_kernel[src_code] = kernel_name
-
             codecache_def = IndentedBuffer()
             codecache_def.writeline(f"custom_async_compile.mlir('''{src_code}''', ")
             codecache_def.writeline(f"vectorlane_size={vector_lane},")
@@ -261,26 +267,16 @@ class MLIRScheduling(BaseScheduling):
             wrapper.define_kernel(kernel_name, codecache_def.getvalue(), cuda=False)
         return kernel_name
 
-    def codegen_template(self, template_node, epilogue_nodes):
-        # Handle prologue pattern
-        prologue_nodes = []
-        if not template_node.is_template():
-            epilogue_nodes = [template_node] + epilogue_nodes
-            for i, node in enumerate(epilogue_nodes):
-                if node.is_template():
-                    template_node = node
-                    prologue_nodes = epilogue_nodes[:i]
-                    epilogue_nodes = epilogue_nodes[i+1:]
-                    break
-
+    def codegen_template(self, template_node, prologue_nodes, epilogue_nodes):
         # Generate template code
         template_buffer = template_node.node
         kernel, tile_candidates, render = template_buffer.make_kernel_render(template_buffer, prologue_nodes=prologue_nodes, epilogue_nodes=epilogue_nodes, kernel_group=self.kernel_group)
         _, _, _, kernel.buffer_types = self.kernel_group.args.mlir_argdefs()
         src_code = kernel.codegen_nodes(tile_candidates, render, template_node, prologue_nodes, epilogue_nodes)
+        meta_code = kernel.meta_kernel()
 
         with V.set_kernel_handler(kernel):
-            kernel_name = self.define_kernel(src_code, kernel.kernel_name, kernel.vector_lane, kernel.spad_info,
+            kernel_name = self.define_kernel(src_code, meta_code, kernel.kernel_name, kernel.vector_lane, kernel.spad_info,
                                              kernel.loop_size, origins={str(i) for i in template_node.node.origins})
             self.define_function(kernel)
 

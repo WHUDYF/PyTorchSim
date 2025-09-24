@@ -49,6 +49,9 @@ class MLIRBenchmarkRequest():
         self.extra_args = extra_args
         #self.hash_key, self.source_file = CUDACodeCache.write(self.source_code, "so")
 
+    def __str__(self) -> str:
+        return f"{self.kernel_name=}, {self.source_file=}, {self.hash_key=}"
+
     def make_run_fn(
         self, input_tensors: torch.Tensor, output_tensors: torch.Tensor
     ) -> Callable[[], None]:
@@ -84,5 +87,6 @@ class MLIRBenchmarkRequest():
             *args,
         )
 
-    def __str__(self) -> str:
-        return f"{self.kernel_name=}, {self.source_file=}, {self.hash_key=}"
+    def update_workspace_size(self) -> None:
+        # FIXME: Not implemented yet. Checkout torch/_inductor/codegen/rocm/rocm_benchmark_request.py
+        return

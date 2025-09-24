@@ -1,5 +1,6 @@
 from typing import List
 import os
+import sys
 import numpy as np
 import torch
 from pathlib import Path
@@ -7,6 +8,10 @@ import importlib.util
 from PyTorchSimFrontend.extension_codecache import hash_prefix
 from Simulator.simulator import TOGSimulator
 from PyTorchSimFrontend import extension_config
+from PyTorchSimFrontend.extension_device_interface import ExtensionDeviceInterface
+
+from torch._dynamo.device_interface import register_interface_for_device
+
 
 def import_module_from_path(module_name, path):
     module_path = Path(path)  # Convert to Path object for safety
@@ -194,17 +199,21 @@ class PyTorchSimRunner:
         from PyTorchSimFrontend.mlir.mlir_scheduling import (
             MLIRScheduling
         )
+
         register_backend_for_device(
-            "npu", MLIRScheduling, ExtensionWrapperCodegen
+            "npu",
+            lambda scheduling: MLIRScheduling(scheduling),
+            ExtensionWrapperCodegen
         )
-        assert(
-            get_scheduling_for_device("npu") == MLIRScheduling
-        )
+        import PyTorchSimFrontend.extension_device_op_overrides
+
         assert(
         get_wrapper_codegen_for_device("npu")
             == ExtensionWrapperCodegen
         )
         cls.NPU_MODULE = module
+        sys.modules['torch.npu'] = module
+        register_interface_for_device(module.custom_device(), ExtensionDeviceInterface)
         return module
 
     def submit(self, batched_req, partition_idx) -> List[RequestReturn]:

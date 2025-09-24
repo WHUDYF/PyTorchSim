@@ -13,8 +13,8 @@ from collections import OrderedDict
 from typing import List, Optional
 from unittest.mock import patch
 
-from torch._inductor.codegen.common import KernelTemplate, ChoiceCaller, CSE, DeferredLine
-from torch._inductor.ir import Buffer, IRNode, TemplateBuffer
+from torch._inductor.codegen.common import KernelTemplate, CSE, DeferredLine
+from torch._inductor.ir import Buffer, IRNode, TemplateBuffer, ChoiceCaller
 from torch._inductor.select_algorithm import PartialRender
 from torch._inductor.codegen.cuda.cuda_kernel import CUDATemplateCaller
 from torch._inductor.autotune_process import TensorMeta
@@ -394,18 +394,14 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                 for idx in range(len(arg_attributes)):
                     if arg_attributes[idx][0] == name:
                         arg_attributes[idx][1] = attr
-        wrapper.add_import_once('\nprint(f\'Wrapper Codegen Path = {__file__}\')')
-        # Dump loop and load/store information
-        wrapper.add_import_once(f"loop_info = {self.loop_info}")
-        wrapper.add_import_once(f"arg_attributes = {arg_attributes}")
+        return arg_attributes
 
     def call_kernel(self, kernel_name):
         wrapper = V.graph.wrapper_code
         _, call_args, _, _ = self.kernel_group.args.mlir_argdefs()
         # generate the code to call this
         wrapper.generate_kernel_call(
-            kernel_name if self.outer_func_name is None else self.outer_func_name + f"_{len(call_args)}",
-            call_args, cuda=False)
+            kernel_name if self.outer_func_name is None else self.outer_func_name + f"_{len(call_args)}", call_args)
 
     def codegen_template_code(self, render, template_node, prologue_nodes, epilogue_nodes, tile_info):
         with self as kernel:
@@ -479,7 +475,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             src_code = (
                 partial_code
                 if isinstance(partial_code, str)
-                else partial_code.finalize()
+                else partial_code.finalize_all()
             )
 
             # For consistency, white space could make wrong write_path
@@ -753,7 +749,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return "<REDUCTION_OUTPUT>"
 
     def def_function(self):
-        _, call_args, _ = self.kernel_group.args.python_argdefs()
+        _, call_args, _, _ = self.kernel_group.args.python_argdefs()
         if self.outer_func_render is not None:
             partial_code, function_name = self.outer_func_render(input_args=call_args)
             return PartialRender(
@@ -1153,7 +1149,7 @@ class MLIRTemplate(KernelTemplate):
         """
         super().__init__(name)
         self.input_nodes = [node for node in input_nodes if node is not None]
-        self.output_node: Buffer = Buffer("buf_out", layout)
+        self.output_node: Buffer = Buffer(name="buf_out", layout=layout)
         self.input_reorder = input_reorder
         self.layout = layout
 
@@ -1218,7 +1214,10 @@ class MLIRTemplate(KernelTemplate):
             self.output_node.get_layout(),
             make_kernel_render,
             bmreq,
+            False,  # supports_epilogue_fusion
             self,
+            kwargs,
+            "" # Currently Empty description
         )
 
     def get_tile_candidates(self, **kwargs):
