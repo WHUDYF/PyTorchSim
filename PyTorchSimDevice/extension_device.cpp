@@ -55,16 +55,12 @@ static inline at::MemoryFormat fix_memory_format(c10::optional<at::MemoryFormat>
     return mf;
 }
 
+#include "ExtensionDeviceGuardImpl.h"
+
 static uint64_t op_counter = 0;
 static uint64_t last_saved_value = 0;
 
-// register guard
-namespace at {
-namespace detail {
-
-C10_REGISTER_GUARD_IMPL(PrivateUse1, c10::impl::NoOpDeviceGuardImpl<DeviceType::PrivateUse1>);
-
-}} // namespace at::detail
+C10_REGISTER_GUARD_IMPL(PrivateUse1, c10::extension_device::impl::ExtensionDeviceGuardImpl);
 
 // basic dummy add function
 at::Tensor custom_add_Tensor(const at::Tensor & self, const at::Tensor & other, const at::Scalar & alpha) {
