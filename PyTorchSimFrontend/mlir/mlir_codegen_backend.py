@@ -1381,12 +1381,12 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         dim_list = []
         for idx in range(len(tile_size)):
             # Prepare initial values
-            offset = tile_desc.vlane_stride #* strides[idx]
-            outer_sz = tile_size[idx] // tile_desc.vlane_stride
+            offset = tile_desc.vmap.vlane_stride #* strides[idx]
+            outer_sz = tile_size[idx] // tile_desc.vmap.vlane_stride
             with self.override_buffer_cse(buffer=self.const_buffer, cse=self.const_cse):
                 div_coeff = self.get_const_cse(strides[idx], "index")
                 mod_coeff = self.get_const_cse(tile_size[idx], "index")
-                vlane_stride_coeff = self.get_const_cse(tile_desc.vlane_stride, "index")
+                vlane_stride_coeff = self.get_const_cse(tile_desc.vmap.vlane_stride, "index")
                 vlane_outer_coeff = self.get_const_cse(outer_sz, "index")
                 nr_vector_lane = self.get_const_cse(self.vector_lane, "index")
                 vlane_coeff = self.get_const_cse(0, "i64")

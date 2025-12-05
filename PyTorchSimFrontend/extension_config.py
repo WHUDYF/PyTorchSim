@@ -67,7 +67,7 @@ def __getattr__(name):
             "multi_tile_conv",
             "subtile"
         }
-        if opt_level == "all" or opt_level is "none":
+        if opt_level == "all" or opt_level == "none":
             pass
         elif isinstance(opt_level, list):
             # Check if provided list contains only valid options

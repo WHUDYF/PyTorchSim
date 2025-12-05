@@ -179,7 +179,7 @@ class PyTorchSimRunner:
         )
 
         torch.utils.rename_privateuse1_backend("npu")
-        torch._register_device_module("extension_device", module)
+        torch._register_device_module("npu", module)
         from torch._inductor.codegen.common import (
             get_scheduling_for_device,
             get_wrapper_codegen_for_device,
