@@ -16,6 +16,8 @@ import numpy as np
 from PyTorchSimFrontend.mlir.mlir_common import MLIRKernelArgs
 from PyTorchSimFrontend import extension_config
 
+print_lock = threading.Lock()
+
 TORCH_TO_NUMPY = {
     torch.float32: np.float32,
     torch.float64: np.float64,
@@ -157,9 +159,12 @@ class CycleSimulator():
             while not finished:
                 i = (i + 1) % 3
                 tail = "." * i + " " * (3-i)
-                sys.stdout.write("\r[Gem5] Gem5 is running." + tail)
+                with print_lock:
+                    sys.stdout.write("\r[Gem5] Gem5 is running." + tail)
+                    sys.stdout.flush()
                 time.sleep(1)
-            print("")
+            with print_lock:
+                print("")
 
         dir_path = os.path.join(os.path.dirname(target_binary), "m5out")
         gem5_script_path = os.path.join(extension_config.CONFIG_TORCHSIM_DIR, "gem5_script/script_systolic.py")
