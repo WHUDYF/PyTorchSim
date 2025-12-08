@@ -25,7 +25,7 @@ from torch._inductor.codecache import write_atomic
 import PyTorchSimFrontend.extension_codecache as extension_codecache
 from PyTorchSimFrontend.mlir.mlir_autotune import MLIRBenchmarkRequest
 from PyTorchSimFrontend.mlir.mlir_common import BaseMLIRHardwareInfo
-from PyTorchSimFrontend.mlir.mlir_codegen_backend import MLIRKernel, reduction_init, reduction_partial_combine_vec, reduction_combine_vec, is_welford_reduction
+from PyTorchSimFrontend.mlir.mlir_codegen_backend import MLIRKernel, reduction_init, reduction_partial_combine_vec, is_welford_reduction
 from PyTorchSimFrontend.mlir.mlir_scheduling import SchedulerNode
 from torch._inductor.codegen import common
 
@@ -1070,11 +1070,11 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
 
                     if self.current_node.node.origin_node: # FIXME: This is a temporary solution
                         # mean = SUM(X) / N
-                        self.reduction_mean.append(ops.div(out, divider_vec))
+                        self.reduction_mean.append(ops.truediv(out, divider_vec))
                         out = self.reduction_mean[i]
                     else:
                         # m2 = (E(X^2) - E(X)^2) * N
-                        sqr_mean = ops.div(out, divider_vec)
+                        sqr_mean = ops.truediv(out, divider_vec)
                         mean_sqr = ops.mul(self.reduction_mean[i], self.reduction_mean[i])
                         variance = ops.sub(sqr_mean, mean_sqr)
                         m2 = ops.mul(variance, divider_vec)
