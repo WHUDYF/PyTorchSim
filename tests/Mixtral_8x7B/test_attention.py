@@ -166,8 +166,8 @@ if __name__ == "__main__":
     from Scheduler.scheduler import PyTorchSimRunner
     module = PyTorchSimRunner.setup_device()
     device = module.custom_device()
-    test_rmsnorm(device, seq=1)
-    test_concat(device, size1=(1, 8, 64, 64), size2=(1,8,1,64), dim=2)
+    #test_rmsnorm(device, seq=1)
+    #test_concat(device, size1=(1, 8, 64, 64), size2=(1,8,1,64), dim=2)
     test_decode(device, 32, 3)
     #test_attention(device)
     #test_ffn(device)
