@@ -45,6 +45,16 @@ static py::object to_torch_dtype(at::ScalarType st) {
   }
 }
 
+static inline at::MemoryFormat fix_memory_format(c10::optional<at::MemoryFormat> mf_opt) {
+    if (!mf_opt.has_value()) return at::MemoryFormat::Contiguous;
+
+    auto mf = mf_opt.value();
+    if (mf == at::MemoryFormat::Preserve) {
+        return at::MemoryFormat::Contiguous;
+    }
+    return mf;
+}
+
 static uint64_t op_counter = 0;
 static uint64_t last_saved_value = 0;
 
@@ -339,7 +349,7 @@ at::Tensor custom_empty(c10::IntArrayRef size, c10::optional<at::ScalarType> dty
 
   constexpr c10::DispatchKeySet private_use_ks(c10::DispatchKey::PrivateUse1);
   auto dtype = c10::dtype_or_default(dtype_opt);
-  return  at::detail::empty_generic(size, &global_custom_alloc, private_use_ks, dtype, optional_memory_format);
+  return  at::detail::empty_generic(size, &global_custom_alloc, private_use_ks, dtype, fix_memory_format(optional_memory_format));
 }
 
 at::Tensor& custom_arange_start_out_impl(
@@ -386,6 +396,62 @@ static at::Tensor custom_to_dtype_impl(const at::Tensor& self,
   return at::native::to(self, dtype, non_blocking, copy, memory_format);
 }
 
+at::Tensor custom_zeros_like(
+    const at::Tensor& input,
+    c10::optional<at::ScalarType> dtype_opt,
+    c10::optional<at::Layout> layout_opt,
+    c10::optional<c10::Device> device_opt,
+    c10::optional<bool> pin_memory_opt,
+    c10::optional<c10::MemoryFormat> memory_format_opt)
+{
+  // dtype / layout / device fallback
+  auto dtype   = dtype_opt.value_or(input.scalar_type());
+  auto layout  = layout_opt.value_or(input.layout());
+  auto device  = device_opt.value_or(input.device());
+  auto memfmt  = memory_format_opt.value_or(c10::MemoryFormat::Contiguous);
+
+  TORCH_CHECK(
+      device.type() == c10::DeviceType::PrivateUse1,
+      "custom_zeros_like: device must be PrivateUse1");
+
+  at::Tensor out = custom_empty(
+      input.sizes(),
+      dtype,
+      layout,
+      device,
+      pin_memory_opt,
+      memfmt
+  );
+  size_t nbytes = out.numel() * out.element_size();
+  void* ptr = out.mutable_data_ptr();
+
+  TORCH_CHECK(ptr != nullptr,
+      "custom_zeros_like: out.mutable_data_ptr() returned NULL");
+  std::memset(ptr, 0, nbytes);
+  return out;
+}
+
+at::Tensor& custom_zero_impl(at::Tensor& self)
+{
+    TORCH_CHECK(
+        self.device().type() == c10::DeviceType::PrivateUse1,
+        "custom_zero_: expected a PrivateUse1 device tensor");
+
+    if (self.numel() == 0) {
+        return self;
+    }
+
+    void* data = self.mutable_data_ptr();
+    TORCH_CHECK(data != nullptr,
+        "custom_zero_: self.mutable_data_ptr() returned NULL "
+        "(storage was not allocated)");
+
+    size_t nbytes = self.numel() * self.element_size();
+    std::memset(data, 0, nbytes);
+
+    return self;
+}
+
 // With TORCH_LIBRARY_IMPL, you can register custom kernels for your backend.
 // For open registration, we're registering all of our kernels to the PrivateUse1 dispatch key.
 // Later in this file, we map a custom device to the PrivateUse1 device type,
@@ -405,6 +471,8 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   m.impl("as_strided",            at::native::as_strided_tensorimpl);
   m.impl("view",                  at::native::view);
   m.impl("arange.start_out",      &custom_arange_start_out_impl);
+  m.impl("zeros_like",            &custom_zeros_like);
+  m.impl("zero_",                 &custom_zero_impl);
 }
 
 TORCH_LIBRARY_IMPL(aten, AutogradPrivateUse1, m) {
@@ -580,9 +648,6 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   m.impl("max",                           torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
   m.impl("index_select",                  torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
   m.impl("nonzero",                       torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-
-  m.impl("zero_", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
-  m.impl("zeros_like", torch::CppFunction::makeFromBoxedFunction<&custom_cpu_fallback>());
 }
 
 // This basic implementation doesn't bother dealing with different device indices
