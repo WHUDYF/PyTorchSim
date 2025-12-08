@@ -696,6 +696,9 @@ TileGraphParser::TileGraphParser(std::string onnx_path, std::string attribute_pa
   loadConfig(config_path, _config_json);
   _attribute_path = attribute_path;
 
+  if (!std::filesystem::exists(onnx_path)) {
+    throw std::runtime_error("Error: ONNX file not found at path: " + onnx_path);
+  }
   /* Note: this parsing algorithm assume that all node are sorted in topological-order */
   std::ifstream model_istream(onnx_path);
   google::protobuf::io::IstreamInputStream zero_copy_input(&model_istream);
