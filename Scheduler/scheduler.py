@@ -358,6 +358,7 @@ class Scheduler:
 
         togsim_path = os.path.join(extension_config.CONFIG_TORCHSIM_DIR, "TOGSim")
         self.tog_simulator = TOGSimulator(togsim_path, togsim_config)
+        os.environ['TOGSIM_CONFIG'] = togsim_config
         self.tog_simulator.interactive_simulation()
         if engine_select == Scheduler.FIFO_ENGINE:
             self.execution_engine = FIFORunner(self.tog_simulator, self.num_request_queue)
