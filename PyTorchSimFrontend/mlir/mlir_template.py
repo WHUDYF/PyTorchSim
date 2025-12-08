@@ -1062,7 +1062,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
 
                 if self.welford_reduce_out is not None:
                     # NOTE: It not a real welford algorithm... We just used E(X^2) - E(X)^2
-                    divider = ops.constant(float(self.reduction_axis_size), "f32")
+                    divider = ops.constant(float(self.r_dim_size), "f32")
                     if self.buffer_types[name][1] > 1:
                         divider_vec = ops.broadcast(divider, new_vec_size)
                     else:

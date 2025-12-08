@@ -1402,7 +1402,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 vlane_vec = ops.broadcast(vlane_coeff, vlane_vec_size)
 
             dim = ops.modular(ops.div(vector_index, div_vec), mod_vec)
-            if idx == tile_desc.vlane_split_axis: # Need to add vector lane offset
+            if idx == tile_desc.vmap.vlane_split_axis: # Need to add vector lane offset
                 stride_dim = ops.modular(dim, vlane_stride_vec)
                 outer_dim = ops.modular(ops.div(dim, vlane_stride_vec), vlane_outer_vec)
                 dim = ops.add(stride_dim, ops.mul(outer_dim, nr_vector_lane_vec))
