@@ -626,7 +626,7 @@ class ExtensionOverrides(common.OpOverrides):
         tile_size = op_type[0]
         dtype = op_type[1]
         one = ops.constant(1, dtype)
-        return ops.truediv(one, ops.expm1(operand)), [tile_size, dtype]
+        return ops.truediv(one, ops.add(one, ops.exp(ops.neg(operand)))), [tile_size, dtype]
 
     @staticmethod
     def fmod(operand1, operand2, *args, var_info=None, **kwargs):
