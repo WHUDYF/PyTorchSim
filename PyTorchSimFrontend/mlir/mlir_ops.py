@@ -98,6 +98,7 @@ class ExtensionOverrides(common.OpOverrides):
         tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
         cond_type = var_info[condition]
         operand_type = var_info[operand1]
+        condition = ops.to_bool(condition)
         if cond_type[0] < tile_size:
             condition = ops.broadcast(condition, tile_size)
         elif cond_type[0] > tile_size:
@@ -969,6 +970,9 @@ class ExtensionOverrides(common.OpOverrides):
     @staticmethod
     def to_bool(operand, *args, var_info=None, **kwargs):
         tile_size, ret_type = var_info[operand]
+        if ret_type == "i1":
+            return operand, [tile_size, ret_type]
+
         const_one = ops.constant(0, ret_type)
         if tile_size > 1:
             const_one = ops.broadcast(const_one, tile_size)
