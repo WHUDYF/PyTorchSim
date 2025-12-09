@@ -274,7 +274,17 @@ def run_custom_llama_test(
     g = torch.Generator().manual_seed(0)
     vocab = cfg.vocab_size
     input_ids_cpu = torch.randint(low=0, high=vocab, size=(batch, seq_len), generator=g, dtype=torch.long)
-    attn_mask_cpu = torch.ones_like(input_ids_cpu, dtype=torch.long)
+
+    min_dtype = torch.finfo(torch_dtype).min
+    causal_mask = torch.zeros((seq_len, seq_len), dtype=torch_dtype, device="cpu")
+
+    if seq_len > 1:
+        causal_mask = torch.triu(torch.full_like(causal_mask, min_dtype), diagonal=1)
+
+    cache_position = torch.arange(seq_len, device="cpu")
+    mask_condition = torch.arange(seq_len, device="cpu") > cache_position.reshape(-1, 1)
+    causal_mask.masked_fill_(mask_condition, min_dtype)
+    attn_mask_cpu = causal_mask[None, None, :, :].expand(batch, 1, -1, -1)
 
     input_ids_dev = input_ids_cpu.to(device)
     attn_mask_dev = attn_mask_cpu.to(device)
@@ -325,11 +335,11 @@ def run_llama_model_test(
     g = torch.Generator().manual_seed(0)
     input_ids_cpu = torch.randint(low=0, high=cfg.vocab_size, size=(batch, seq_len), generator=g, dtype=torch.long)
 
-    # FIXME: Currently, the user must provide the mask manually.
-    # There is a functionality issue with the model generating the mask internally,
-    # so we explicitly create and inject a Causal Mask (lower triangular matrix) from the outside.
-    causal_mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.long))
-    attn_mask_cpu = causal_mask.unsqueeze(0).unsqueeze(0).expand(batch, 1, -1, -1).bool()
+    min_dtype = torch.finfo(torch_dtype).min
+    causal_mask = torch.full((seq_len, seq_len), fill_value=min_dtype, dtype=torch_dtype, device="cpu")
+    if seq_len > 1:
+        causal_mask = torch.triu(causal_mask, diagonal=1)
+    attn_mask_cpu = causal_mask[None, None, :, :].expand(batch, 1, -1, -1)
 
     input_ids_dev = input_ids_cpu.to(device)
     attn_mask_dev = attn_mask_cpu.to(device)
