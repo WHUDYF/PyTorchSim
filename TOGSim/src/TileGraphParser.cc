@@ -1,22 +1,5 @@
 #include "TileGraphParser.h"
 
-bool loadConfig(const std::string& config_path, YAML::Node& config_yaml) {
-  try {
-    config_yaml = YAML::LoadFile(config_path);
-    spdlog::info("[LoadConfig] Success to open \"{}\"", config_path);
-    return true;
-  } catch (const YAML::BadFile& e) {
-    spdlog::error("[LoadConfig] Failed to open \"{}\" (File not found or inaccessible)", config_path);
-    return false;
-  } catch (const YAML::ParserException& e) {
-    spdlog::error("[LoadConfig] Failed to parse YAML file \"{}\": {}", config_path, e.what());
-    return false;
-  } catch (const std::exception& e) {
-    spdlog::error("[LoadConfig] Unknown error loading \"{}\": {}", config_path, e.what());
-    return false;
-  }
-}
-
 void printIndexMap(std::string prefix, const std::map<std::string, int>& indexMap) {
     std::ostringstream oss;
     for (const auto& [key, value] : indexMap) {

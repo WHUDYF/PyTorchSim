@@ -1,5 +1,22 @@
 #include "Common.h"
 
+bool loadConfig(const std::string& config_path, YAML::Node& config_yaml) {
+  try {
+    config_yaml = YAML::LoadFile(config_path);
+    spdlog::info("[LoadConfig] Success to open \"{}\"", config_path);
+    return true;
+  } catch (const YAML::BadFile& e) {
+    spdlog::error("[LoadConfig] Failed to open \"{}\" (File not found or inaccessible)", config_path);
+    return false;
+  } catch (const YAML::ParserException& e) {
+    spdlog::error("[LoadConfig] Failed to parse YAML file \"{}\": {}", config_path, e.what());
+    return false;
+  } catch (const std::exception& e) {
+    spdlog::error("[LoadConfig] Unknown error loading \"{}\": {}", config_path, e.what());
+    return false;
+  }
+}
+
 template <typename T>
 T get_config_value(const YAML::Node& config, std::string key) {
   if (config[key]) {

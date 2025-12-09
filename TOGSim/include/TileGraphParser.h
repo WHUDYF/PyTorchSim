@@ -9,6 +9,7 @@
 #include "Instruction.h"
 #include "sstStonne.h"
 #include "IntervalTree.h"
+#include "Common.h"
 #include "onnx/defs/schema.h"
 #include "onnx/onnx-operators_pb.h"
 #include "onnx/onnx_pb.h"
@@ -32,8 +33,6 @@ enum class LoopType {
   ACCUMULATION_LOOP,
   INNER_LOOP
 };
-
-bool loadConfig(const std::string& config_path, YAML::Node& config_yaml);
 
 class TileNode {
  public:

@@ -1,5 +1,5 @@
 #!/bin/bash
-export TORCHSIM_CONFIG="/root/workspace/PyTorchSim/configs/systolic_ws_128x128_c2_simple_noc_tpuv2.json"
+export TORCHSIM_CONFIG="/root/workspace/PyTorchSim/configs/systolic_ws_128x128_c2_simple_noc_tpuv2.yml"
 
 # None FG DMA
 export TORCHSIM_SUBTILE=0

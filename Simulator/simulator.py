@@ -4,7 +4,7 @@ import ctypes
 import subprocess
 import re
 import sys
-import json
+import yaml
 import time
 import datetime
 import threading
@@ -204,7 +204,7 @@ class TOGSimulator():
     def __init__(self, togsim_path, config_path, vectorlane_size=-1) -> None:
         self.base_dir = togsim_path
         self.config_path = config_path
-        self.config_json = self.load_json(self.config_path)
+        self.config_yaml = self.load_yaml(self.config_path)
         self.process = None
         self.vectorlane_size = vectorlane_size
 
@@ -347,40 +347,41 @@ class TOGSimulator():
     def create_attribute_file(self, attribute_path, inputs, **kwargs):
         address_info = {}
         sram_buffer = {}
-        json_content = {}
+        yaml_content = {}
+
         os.makedirs(attribute_path, exist_ok=True)
         index = str(len(os.listdir(attribute_path)))
         attribute_path = os.path.join(attribute_path, index)
 
         for idx, tensor in enumerate(inputs):
             address_info[f"arg{idx}"] = tensor.data_ptr()
-        json_content["address_info"] = address_info
+        yaml_content["address_info"] = address_info
 
         for buf_name, range in self.ALLOC_POOL.items():
             sram_buffer[buf_name] = range
-        json_content["sram_alloc"] = sram_buffer
+        yaml_content["sram_alloc"] = sram_buffer
 
         with open(attribute_path, "w") as f:
-            json.dump(json_content, f, indent=4)
+            yaml.dump(yaml_content, f, default_flow_style=False)
             f.flush()
             os.fsync(f.fileno()) # There could be a race condition.
         return attribute_path
 
-    def load_json(self, config_path):
+    def load_yaml(self, config_path):
         config_path = Path(config_path)
         if not config_path.is_file():
-            raise FileNotFoundError(f"JSON file not found: {config_path}")
+            raise FileNotFoundError(f"YAML file not found: {config_path}")
 
         try:
             with open(config_path, "r") as file:
-                data = json.load(file)
+                data = yaml.safe_load(file)
                 return data
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON format: {e}")
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML format: {e}")
 
     def get_core_freq(self):
-        if "core_freq_mhz" in self.config_json:
-            return self.config_json["core_freq_mhz"] * 1000 * 1000 # MHz
+        if "core_freq_mhz" in self.config_yaml:
+            return self.config_yaml["core_freq_mhz"] * 1000 * 1000 # MHz
         else:
             raise KeyError("Key 'core_freq' not found in JSON.")
 
@@ -462,6 +463,6 @@ class TOGSimulator():
         return core_metrics, dram_channel_bw, avg_dram_bw, simulation_time, total_cycle
 
 if __name__ == "__main__":
-    sim = TOGSimulator("/workspace/PyTorchSim/TOGSim", "/workspace/PyTorchSim/configs/systolic_ws_128x128_c2_simple_noc_tpuv3_partition.json")
+    sim = TOGSimulator("/workspace/PyTorchSim/TOGSim", "/workspace/PyTorchSim/configs/systolic_ws_128x128_c2_simple_noc_tpuv3_partition.yml")
     sim.interactive_simulation()
     sim.until(4000)

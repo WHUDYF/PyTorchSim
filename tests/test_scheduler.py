@@ -7,7 +7,7 @@ from test_transformer import EncoderBlock as model2
 base_path = os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim')
 sys.path.append(base_path)
 from Scheduler.scheduler import Scheduler, SchedulerDNNModel, Request
-config = f'{base_path}/configs/systolic_ws_128x128_c2_simple_noc_tpuv3_partition.json'
+config = f'{base_path}/configs/systolic_ws_128x128_c2_simple_noc_tpuv3_partition.yml'
 
 target_model1 = model1().eval()
 target_model2 = model2(768, 12).eval()

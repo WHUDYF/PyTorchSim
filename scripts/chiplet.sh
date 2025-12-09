@@ -19,11 +19,11 @@ GEMM_DIR_NAME=$(basename "$GEMM_PATH")
 echo "GEMM Directory Name: $GEMM_DIR_NAME"
 
 CONFIG_LIST=(
-    "$TORCHSIM_DIR/configs/systolic_ws_128x128_c2_chiplet_tpuv3.json"
+    "$TORCHSIM_DIR/configs/systolic_ws_128x128_c2_chiplet_tpuv3.yml"
 )
 CONFIG_LIST2=(
-    "$TORCHSIM_DIR/configs/systolic_ws_128x128_c2_booksim_tpuv3.json"
-    "$TORCHSIM_DIR/configs/systolic_ws_128x128_c2_chiplet_tpuv3_xnuma.json"
+    "$TORCHSIM_DIR/configs/systolic_ws_128x128_c2_booksim_tpuv3.yml"
+    "$TORCHSIM_DIR/configs/systolic_ws_128x128_c2_chiplet_tpuv3_xnuma.yml"
 )
 shift
 shift
@@ -39,7 +39,7 @@ MODELS_LIST="$GEMM_PATH/tile_graph.onnx"
 ATTRIBUTE_PATH="$GEMM_PATH/runtime_0000/attribute"
 
 for CONFIG in "${CONFIG_LIST[@]}"; do
-    CONFIG_NAME=$(basename "$CONFIG" .json)
+    CONFIG_NAME=$(basename "$CONFIG" .yml)
 
     for ATTRIBUTE_FILE in "${ATTRIBUTE_FILES[@]}"; do
         ATTRIBUTE_NAME=$(basename "$ATTRIBUTE_FILE")
@@ -56,7 +56,7 @@ for CONFIG in "${CONFIG_LIST[@]}"; do
 done
 
 for CONFIG in "${CONFIG_LIST2[@]}"; do
-    CONFIG_NAME=$(basename "$CONFIG" .json)
+    CONFIG_NAME=$(basename "$CONFIG" .yml)
     ATTRIBUTE_NAME=0
     RESULTS_DIR="./chiplet_results$INDEX_NAME/$GEMM_DIR_NAME/$ATTRIBUTE_NAME"
     mkdir -p "$RESULTS_DIR"

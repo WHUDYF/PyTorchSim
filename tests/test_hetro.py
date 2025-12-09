@@ -17,7 +17,7 @@ if __name__ == "__main__":
     parser.add_argument("--N", type=int, default=128, help="Input layer size")
     parser.add_argument("--K", type=int, default=128, help="Hidden layer size")
     parser.add_argument("--sparsity", type=float, default=0.9, help="Output layer size")
-    parser.add_argument("--config", type=str, default="stonne_big_c1_simple_noc.json", help="Output layer size")
+    parser.add_argument("--config", type=str, default="stonne_big_c1_simple_noc.yml", help="Output layer size")
     parser.add_argument("--mode", type=int, default=0, help="Output layer size")
     args = parser.parse_args()
 
