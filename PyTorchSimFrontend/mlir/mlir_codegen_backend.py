@@ -919,7 +919,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             return float("inf") # Exceeded maximum number of autotuning attempts
         choices = self.make_choices(*args)
 
-        if len(choices) == 0: # can't autotune
+        if len(choices) == 0: # Can't autotune
             return [None, None]
         with ThreadPoolExecutor(max_workers=8) as executor:
             results = list(executor.map(get_cycle, choices))

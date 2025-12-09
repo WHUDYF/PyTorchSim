@@ -278,7 +278,7 @@ class CustomAsyncCompile(AsyncCompile):
                                     vectorlane_size=vectorlane_size, spad_info=spad_info,
                                     silent_mode=silent_mode)
                 if not extension_config.pytorchsim_timing_mode:
-                    return
+                    return [float("inf")]
 
                 onnx_path = os.path.join(result_path, "tile_graph.onnx")
                 attribute_path = os.path.join(runtime_path, "attribute")
@@ -286,7 +286,7 @@ class CustomAsyncCompile(AsyncCompile):
                 TOGSim = TOGSimulator(togsim_path, extension_config.CONFIG_TOGSIM_CONFIG)
                 TOGSim.vectorlane_size = vectorlane_size
                 attribute_path = TOGSim.create_attribute_file(attribute_path, args, loop_size=loop_size)
-                result_path = TOGSim.simulation(onnx_path, attribute_path, silent_mode=silent_mode)
+                result_path = TOGSim.simulation(onnx_path, attribute_path, silent_mode=silent_mode, autotune_mode=autotune)
                 result = TOGSimulator.get_result_from_file(result_path)
                 return result
 

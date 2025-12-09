@@ -9,6 +9,7 @@ import time
 import datetime
 import threading
 from pathlib import Path
+import uuid
 
 import torch
 import numpy as np
@@ -214,7 +215,7 @@ class TOGSimulator():
         cmd = f"{bin} --config {config}"
         return cmd
 
-    def simulation(self, model_path, attribute_path="", silent_mode=False):
+    def simulation(self, model_path, attribute_path="", silent_mode=False, autotune_mode=False):
         def show_progress():
             i = 0
             while not finished:
@@ -245,19 +246,35 @@ class TOGSimulator():
             if not silent_mode:
                 finished = True
                 progress_thread.join()
-                print("[TOGSim] Command failed with exit code", e.returncode)
-                print("[TOGSim] Error output:", e.output)
+                with print_lock:
+                    print("[TOGSim] Command failed with exit code", e.returncode)
+                    print("[TOGSim] Error output:", e.output)
             assert 0
-        # Save result to result_path
-        result_path = extension_config.CONFIG_TORCHSIM_LOG_PATH
-        os.makedirs(result_path, exist_ok=True)
-        file_name = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')+".log"
-        result_path = os.path.join(result_path, file_name)
+
+        # Separate Autotune logs
+        if autotune_mode:
+            base_dir = Path(model_path).parent / "togsim_result"
+            base_dir.mkdir(parents=True, exist_ok=True)
+            file_name = f"{len(list(base_dir.iterdir()))}.log"
+        else:
+            base_dir = Path(extension_config.CONFIG_TORCHSIM_LOG_PATH)
+            unique_id = uuid.uuid4().hex[:8]
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            file_name = f"{unique_id}_{timestamp}.log"
+
+        base_dir.mkdir(parents=True, exist_ok=True)
+        result_path = base_dir / file_name
+
+        # Prevent race condition
         with open(result_path, "w") as f:
             f.write(result.decode())
+            f.flush()
+            os.fsync(f.fileno())
+
         if not silent_mode or extension_config.CONFIG_DEBUG_MODE:
             model_path_log = f' of "{model_path}" ' if extension_config.CONFIG_DEBUG_MODE else " "
-            print(f'[TOGSim] Simulation log{model_path_log}is stored to "{result_path}"')
+            with print_lock:
+                print(f'[TOGSim] Simulation log{model_path_log}is stored to "{result_path}"')
         return result_path
 
     def interactive_simulation(self):
@@ -406,9 +423,9 @@ class TOGSimulator():
     def get_result_from_file(result_path):
         core_metrics = {}
         dram_channel_bw = {}
-        avg_dram_bw = None
-        simulation_time = None
-        total_cycle = None
+        avg_dram_bw = 0.0
+        simulation_time = float("inf")
+        total_cycle = float("inf")
 
         # Read and find total stat position
         with open(result_path, "r") as f:
@@ -423,7 +440,7 @@ class TOGSimulator():
                 break
 
         if simulation_finished_idx == -1:
-            print("[TOGSim] Tried to parsing wrong formated output file!")
+            print(f"[TOGSim] Warning: Unable to parse the output file ({result_path}). The file may be improperly formatted.")
             return core_metrics, dram_channel_bw, avg_dram_bw, simulation_time
 
         total_stat_lines = lines[simulation_finished_idx:]
