@@ -1,14 +1,18 @@
 #include "TileGraphParser.h"
 
-bool loadConfig(const std::string& config_path, json& config_json) {
-  std::ifstream config_file(config_path);
-  if (config_file.is_open()) {
-      config_file >> config_json;
-      config_file.close();
-      spdlog::info("[LoadConfig] Success to open \"{}\"", config_path);
-      return true;
-  } else {
-    spdlog::error("[LoadConfig] Failed to open \"{}\"", config_path);
+bool loadConfig(const std::string& config_path, YAML::Node& config_yaml) {
+  try {
+    config_yaml = YAML::LoadFile(config_path);
+    spdlog::info("[LoadConfig] Success to open \"{}\"", config_path);
+    return true;
+  } catch (const YAML::BadFile& e) {
+    spdlog::error("[LoadConfig] Failed to open \"{}\" (File not found or inaccessible)", config_path);
+    return false;
+  } catch (const YAML::ParserException& e) {
+    spdlog::error("[LoadConfig] Failed to parse YAML file \"{}\": {}", config_path, e.what());
+    return false;
+  } catch (const std::exception& e) {
+    spdlog::error("[LoadConfig] Unknown error loading \"{}\": {}", config_path, e.what());
     return false;
   }
 }
@@ -87,26 +91,33 @@ bool find_output_idx(TileGraphParser* tog_parser, std::vector<uint32_t>& output_
   m = output_idx.at(0);
   n = output_idx.at(1);
   k = output_idx.at(2);
+  auto attr_file = tog_parser->get_attribute_file();
 
-  auto attr_json = tog_parser->get_attribute_file();
+  if (!attr_file["zero_skip"]) {
+      return false;
+  }
 
-  // Check arg0: m -> k
+  YAML::Node zero_skip = attr_file["zero_skip"];
   bool found_arg0 = false;
-  if (attr_json["zero_skip"].contains("arg0")) {
-    auto& arg0 = attr_json["zero_skip"]["arg0"];
-    if (arg0.contains(std::to_string(m)) && arg0[std::to_string(m)].contains(std::to_string(k))) {
+  if (zero_skip["arg0"]) {
+    YAML::Node arg0 = zero_skip["arg0"];
+    std::string m_str = std::to_string(m);
+    std::string k_str = std::to_string(k);
+    if (arg0[m_str] && arg0[m_str][k_str]) {
       found_arg0 = true;
     }
   }
 
-  // Check arg1: n -> k
   bool found_arg1 = false;
-  if (attr_json["zero_skip"].contains("arg1")) {
-    auto& arg1 = attr_json["zero_skip"]["arg1"];
-    if (arg1.contains(std::to_string(k)) && arg1[std::to_string(k)].contains(std::to_string(n))) {
+  if (zero_skip["arg1"]) {
+    YAML::Node arg1 = zero_skip["arg1"];
+    std::string k_str = std::to_string(k);
+    std::string n_str = std::to_string(n);
+    if (arg1[k_str] && arg1[k_str][n_str]) {
       found_arg1 = true;
     }
   }
+
   return found_arg0 || found_arg1;
 }
 
@@ -692,8 +703,8 @@ void TileLoopNode::print_node() {
 }
 
 TileGraphParser::TileGraphParser(std::string onnx_path, std::string attribute_path, std::string config_path) {
-  loadConfig(attribute_path, _attribute_json);
-  loadConfig(config_path, _config_json);
+  loadConfig(attribute_path, _attribute_config);
+  loadConfig(config_path, _config_yaml);
   _attribute_path = attribute_path;
 
   if (!std::filesystem::exists(onnx_path)) {
@@ -705,32 +716,45 @@ TileGraphParser::TileGraphParser(std::string onnx_path, std::string attribute_pa
   onnx::ModelProto model_proto;
 
   /* Attribute parsing */
-  if (_attribute_json.contains("address_info")) {
-    auto address_info = _attribute_json["address_info"];
-    for (auto it = address_info.begin(); it != address_info.end(); ++it) {
-      uint64_t value = it.value();
-      _arg_to_address[it.key()] = value;
-      spdlog::info("[TOGParser/Attribute] Address Attribute key: {} address: 0x{:x}", it.key(), value);
+  if (_attribute_config["address_info"]) {
+    const auto& address_info = _attribute_config["address_info"];
+    for (YAML::const_iterator it = address_info.begin(); it != address_info.end(); ++it) {
+      std::string key = it->first.as<std::string>();
+      uint64_t value = it->second.as<uint64_t>();
+
+      _arg_to_address[key] = value;
+      spdlog::info("[TOGParser/Attribute] Address Attribute key: {} address: 0x{:x}", key, value);
     }
   }
-  if (_attribute_json.contains("address_numa_stride")) {
-    auto address_numa_stride = _attribute_json["address_numa_stride"];
-    for (auto it = address_numa_stride.begin(); it != address_numa_stride.end(); ++it) {
-      auto value_list = it.value();
-      for (auto value : value_list) {
-        _arg_numa_stride[it.key()].push_back(value);
+
+  if (_attribute_config["address_numa_stride"]) {
+    const auto& address_numa_stride = _attribute_config["address_numa_stride"];
+    for (YAML::const_iterator it = address_numa_stride.begin(); it != address_numa_stride.end(); ++it) {
+      std::string key = it->first.as<std::string>();
+      const auto& value_list = it->second; // YAML Sequence Node
+
+      for (const auto& val : value_list) {
+        _arg_numa_stride[key].push_back(val.as<uint32_t>());
       }
-      spdlog::info("[TOGParser/Attribute] Address numa info key: {} numa stride : {}", it.key(), fmt::join(_arg_numa_stride[it.key()], ", "));
+      spdlog::info("[TOGParser/Attribute] Address numa info key: {} numa stride : {}", key, fmt::join(_arg_numa_stride[key], ", "));
     }
   }
-  if (_attribute_json.contains("sram_alloc") and _config_json.contains("l2d_type") and _config_json["l2d_type"] == "datacache") {
-    auto sram_alloc_list = _attribute_json["sram_alloc"];
+
+  if (_attribute_config["sram_alloc"] &&
+      _config_yaml["l2d_type"] &&
+      _config_yaml["l2d_type"].as<std::string>() == "datacache") {
+
+    auto sram_alloc_list = _attribute_config["sram_alloc"];
     spdlog::info("[TOGParser/Attribute] ================= SRAM Alloc Plan ================");
-    for (auto it = sram_alloc_list.begin(); it != sram_alloc_list.end(); ++it) {
-      auto value_list = it.value();
-      unsigned long long start = value_list.at(0);
-      unsigned long long end = value_list.at(1);
-      spdlog::info("[TOGParser/Attribute] {:16s}: 0x{:016x} ~ 0x{:016x}", it.key(), start, end);
+
+    for (YAML::const_iterator it = sram_alloc_list.begin(); it != sram_alloc_list.end(); ++it) {
+      std::string key = it->first.as<std::string>();
+      const auto& value_list = it->second; // List [start, end]
+
+      unsigned long long start = value_list[0].as<unsigned long long>();
+      unsigned long long end = value_list[1].as<unsigned long long>();
+
+      spdlog::info("[TOGParser/Attribute] {:16s}: 0x{:016x} ~ 0x{:016x}", key, start, end);
       Interval<unsigned long long, int> entry = {start, end, 0};
       _cache_plan.push_back(entry);
     }
@@ -838,7 +862,7 @@ TileGraphParser::TileGraphParser(std::string onnx_path, std::string attribute_pa
   /* Iterate outer loop and initialize inner loop */
   for (auto iter=_tile_graph->begin(); iter!=_tile_graph->end(); ++iter) {
     std::shared_ptr<TileSubGraph> subgraph = std::make_shared<TileSubGraph>();
-    subgraph->set_core_id(getCoreIdFromJson(_attribute_json, subgraph->get_id()));
+    subgraph->set_core_id(getCoreIdFromConfig(_attribute_config, subgraph->get_id()));
     auto indices = iter.get_indices();
     for (auto loop : _loop_nodes.at(last_outer_idx)) {
       std::shared_ptr<TileLoopNode> outer_loop = std::static_pointer_cast<TileLoopNode>(loop);
@@ -941,11 +965,12 @@ const std::vector<uint32_t>& TileGraphParser::lookupNumaInfo(std::string key) {
   return _arg_numa_stride.at(key);
 }
 
-int TileGraphParser::getCoreIdFromJson(const json& attribute_json, int subgraph_id) {
-  if (attribute_json.contains("subgraph_map")) {
-    const auto& subgraph_map = attribute_json["subgraph_map"];
-    if (subgraph_map.contains(std::to_string(subgraph_id)) && subgraph_map[std::to_string(subgraph_id)].is_number_integer()) {
-        return subgraph_map[std::to_string(subgraph_id)];
+int TileGraphParser::getCoreIdFromConfig(const YAML::Node& attribute_config, int subgraph_id) {
+  std::string key = std::to_string(subgraph_id);
+  if (attribute_config["subgraph_map"]) {
+    const auto& subgraph_map = attribute_config["subgraph_map"];
+    if (subgraph_map[key]) {
+      return subgraph_map[key].as<int>();
     }
   }
   return -1;

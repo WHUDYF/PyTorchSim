@@ -22,11 +22,11 @@ void launchKernel(Simulator* simulator, std::string onnx_path, std::string attri
 }
 
 Simulator* create_simulator(std::string config_path) {
-  json config_json;
-  if(!loadConfig(config_path, config_json)) {
+  YAML::Node config_yaml;
+  if (!loadConfig(config_path, config_yaml))
     exit(1);
-  }
-  SimulationConfig config = initialize_config(config_json);
+  SimulationConfig config = initialize_config(config_yaml);
+
   auto simulator = new Simulator(config);
   return simulator;
 }

@@ -2,7 +2,7 @@
 #include <fstream>
 #include <algorithm>
 #include <filesystem>
-#include <nlohmann/json.hpp>
+#include <yaml-cpp/yaml.h>
 #include <fmt/ranges.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include "TileGraph.h"
@@ -12,8 +12,6 @@
 #include "onnx/defs/schema.h"
 #include "onnx/onnx-operators_pb.h"
 #include "onnx/onnx_pb.h"
-
-using json = nlohmann::json;
 
 enum class TileType{
   LOOP_INDEX_NODE,
@@ -35,7 +33,7 @@ enum class LoopType {
   INNER_LOOP
 };
 
-bool loadConfig(const std::string& config_path, json& config_json);
+bool loadConfig(const std::string& config_path, YAML::Node& config_yaml);
 
 class TileNode {
  public:
@@ -80,9 +78,9 @@ class TileGraphParser {
   LoopType get_loop_type(std::string key) { return std::get<2>(_loop_size_map[key]); }
   const std::map<std::string, std::tuple<int, int, LoopType>> & get_loop_map() { return _loop_size_map; }
   const std::vector<uint32_t> &lookupNumaInfo(std::string key);
-  int getCoreIdFromJson(const json& attribute_json, int subgraph_id);
+  int getCoreIdFromConfig(const YAML::Node& attribute_config, int subgraph_id);
   std::string getMetaByName(std::string key) { return _tog_meta[key]; }
-  const json& get_attribute_file() { return _attribute_json; }
+  const YAML::Node& get_attribute_file() { return _attribute_config; }
   std::vector<int> calc_tag(std::vector<int>& accum_tag, std::vector<int>& tag_idx, std::vector<int>& tag_stride);
   void register_memory_tag(std::string name, std::vector<int>& tag_key);
   bool check_memory_tag(std::string name, std::vector<int>& tag_key);
@@ -135,8 +133,8 @@ class TileGraphParser {
   void _tile_index_generate() {}
   int _loop_stack_pointer = 0;
 
-  json _attribute_json;
-  json _config_json;
+  YAML::Node _attribute_config; 
+  YAML::Node _config_yaml;
   std::string _tog_path;
   std::string _attribute_path;
   uint64_t indirect_counter = 0;

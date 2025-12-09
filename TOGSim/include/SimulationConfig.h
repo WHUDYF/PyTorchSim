@@ -1,13 +1,11 @@
 #pragma once
 
-#include <nlohmann/json.hpp>
 #include <string>
-
-using json = nlohmann::json;
+#include <yaml-cpp/yaml.h>
 
 enum class CoreType { WS_MESH, STONNE };
 
-enum class DramType { SIMPLE, RAMULATOR1, RAMULATOR2 };
+enum class DramType { SIMPLE, RAMULATOR2 };
 
 enum class IcntType { SIMPLE, BOOKSIM2 };
 
