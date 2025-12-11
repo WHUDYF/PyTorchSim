@@ -2,10 +2,10 @@
 
 base_dir=$TORCHSIM_DIR/experiments/artifact/speedup
 config=(
-    # "systolic_ws_8x8_c1_simple_noc.json"
-    "systolic_ws_128x128_c2_simple_noc_tpuv3.json"
-    #"systolic_ws_128x128_c2_booksim_tpuv3.json"
-    # "systolic_ws_128x128_c2_simple_noc_tpuv4.json"
+    # "systolic_ws_8x8_c1_simple_noc.yml"
+    "systolic_ws_128x128_c2_simple_noc_tpuv3.yml"
+    #"systolic_ws_128x128_c2_booksim_tpuv3.yml"
+    # "systolic_ws_128x128_c2_simple_noc_tpuv4.yml"
 )
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 SIZE_LIST=(

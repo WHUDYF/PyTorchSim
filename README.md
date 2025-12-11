@@ -220,7 +220,7 @@ Our load generator supports multi-tenancy experiments. You can run a simple exam
 python tests/test_scheduler.py
 ```
 Below is an example code of multi-tenancy `resnet18` and `EncoderBlock`.
-In this example, the `Scheduler` is initialized with a number of request queues, a scheduling policy, and a TOGSimulator config file(`.json`). The compiled PyTorch models are then registered with a unique model id.
+In this example, the `Scheduler` is initialized with a number of request queues, a scheduling policy, and a TOGSimulator config file(`.yml`). The compiled PyTorch models are then registered with a unique model id.
 
 ```python3
 import os
@@ -228,7 +228,7 @@ import sys
 import torch
 from torchvision.models import resnet18
 base_path = os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim')
-config = f'{base_path}/configs/systolic_ws_128x128_c2_simple_noc_tpuv3_partition.json'
+config = f'{base_path}/configs/systolic_ws_128x128_c2_simple_noc_tpuv3_partition.yml'
 
 sys.path.append(base_path)
 from tests.test_transformer import EncoderBlock
@@ -244,7 +244,7 @@ SchedulerDNNModel.register_model("model0", opt_model0)
 SchedulerDNNModel.register_model("model1", opt_model1)
 ```
 
-The config file(`.json`) specifies two key items:
+The config file(`.yml`) specifies two key items:
 - `num_partition`: The total number of independent request queues to create.
 - `partition`: Defines the hardware mapping, assigning each queue (identified by its index) to a specific physical core.
 For example, the configuration below creates two scheduling queues (`0` and `1`) and maps `core_0` to queue `0` and `core_1` to queue `1`:
@@ -415,7 +415,7 @@ export TORCHSIM_USE_TIMING_POOLING=0 # use lightweight pooling for timing
 ```
 You can set TOGSim config path as below.
 ```bash
-export TORCHSIM_CONFIG=/workspace/PyTorchSim/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.json
+export TORCHSIM_CONFIG=/workspace/PyTorchSim/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml
 ```
 ## Future Works
 Currently, PyTorchSim supports PyTorch 2.2. Support for newer versions will be added soon.

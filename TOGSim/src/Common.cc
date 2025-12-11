@@ -1,28 +1,41 @@
 #include "Common.h"
 
-uint32_t generate_id() {
-  static uint32_t id_counter{0};
-  return id_counter++;
+bool loadConfig(const std::string& config_path, YAML::Node& config_yaml) {
+  try {
+    config_yaml = YAML::LoadFile(config_path);
+    spdlog::info("[LoadConfig] Success to open \"{}\"", config_path);
+    return true;
+  } catch (const YAML::BadFile& e) {
+    spdlog::error("[LoadConfig] Failed to open \"{}\" (File not found or inaccessible)", config_path);
+    return false;
+  } catch (const YAML::ParserException& e) {
+    spdlog::error("[LoadConfig] Failed to parse YAML file \"{}\": {}", config_path, e.what());
+    return false;
+  } catch (const std::exception& e) {
+    spdlog::error("[LoadConfig] Unknown error loading \"{}\": {}", config_path, e.what());
+    return false;
+  }
 }
 
 template <typename T>
-T get_config_value(json config, std::string key) {
-  if (config.contains(key)) {
-    return config[key];
+T get_config_value(const YAML::Node& config, std::string key) {
+  if (config[key]) {
+    return config[key].as<T>();
   } else {
     throw std::runtime_error(fmt::format("Config key {} not found", key));
   }
 }
 
-SimulationConfig initialize_config(json config) {
+SimulationConfig initialize_config(YAML::Node config) {
   SimulationConfig parsed_config;
-  // print json
-  spdlog::info("TOGSim Config: {}", config.dump(2));
+  YAML::Emitter emitter;
+  emitter << config;
+  spdlog::info("PyTorchSim config:\n{}", emitter.c_str());
 
   /* Core configs */
-  parsed_config.num_cores = config["num_cores"];
-  if (config.contains("core_type")) {
-    std::vector<std::string> core_types = config["core_type"].get<std::vector<std::string>>();
+  parsed_config.num_cores = get_config_value<uint32_t>(config, "num_cores");
+  if (config["core_type"]) {
+    std::vector<std::string> core_types = config["core_type"].as<std::vector<std::string>>();
 
     if (core_types.size() != parsed_config.num_cores)
       throw std::runtime_error("Mismatch between num_cores and core_type list size");
@@ -41,100 +54,105 @@ SimulationConfig initialize_config(json config) {
     for (int i=0; i<parsed_config.num_cores; i++)
       parsed_config.core_type.push_back(CoreType::WS_MESH);
   }
-  parsed_config.core_freq_mhz = config["core_freq_mhz"];
-  if (config.contains("num_systolic_array_per_core"))
-    parsed_config.num_systolic_array_per_core = config["num_systolic_array_per_core"];
-  if (config.contains("num_stonne_per_core"))
-    parsed_config.num_stonne_per_core = config["num_stonne_per_core"];
-   if (config.contains("num_stonne_port"))
-    parsed_config.num_stonne_port = config["num_stonne_port"];
+
+  parsed_config.core_freq_mhz = get_config_value<uint32_t>(config, "core_freq_mhz");
+  if (config["num_systolic_array_per_core"])
+    parsed_config.num_systolic_array_per_core = config["num_systolic_array_per_core"].as<uint32_t>();
+  if (config["num_stonne_per_core"])
+    parsed_config.num_stonne_per_core = config["num_stonne_per_core"].as<uint32_t>();
+  if (config["num_stonne_port"])
+    parsed_config.num_stonne_port = config["num_stonne_port"].as<uint32_t>();
   parsed_config.core_print_interval = get_config_value<uint32_t>(config, "core_stats_print_period_cycles");
 
-  /* Stonne config */ 
-  if (config.contains("stonne_config_path"))
-    parsed_config.stonne_config_path = config["stonne_config_path"];
+  /* Stonne config */
+  if (config["stonne_config_path"])
+    parsed_config.stonne_config_path = config["stonne_config_path"].as<std::string>();
 
   /* DRAM config */
-  if ((std::string)config["dram_type"] == "simple")
+  std::string dram_type_str = get_config_value<std::string>(config, "dram_type");
+
+  if (dram_type_str == "simple") {
     parsed_config.dram_type = DramType::SIMPLE;
-  else if ((std::string)config["dram_type"] == "ramulator")
-    parsed_config.dram_type = DramType::RAMULATOR1;
-  else if ((std::string)config["dram_type"] == "ramulator2")
+    parsed_config.dram_latency = get_config_value<uint32_t>(config, "dram_latency");
+  } else if (dram_type_str == "ramulator2") {
     parsed_config.dram_type = DramType::RAMULATOR2;
-  else
-    throw std::runtime_error(fmt::format("Not implemented dram type {} ",
-                                         (std::string)config["dram_type"]));
-  parsed_config.dram_freq_mhz = config["dram_freq_mhz"];
-  if (config.contains("dram_latency"))
-    parsed_config.dram_latency = config["dram_latency"];
-  if (config.contains("ramulator_config_path"))
-    parsed_config.dram_config_path = config["ramulator_config_path"];
-  parsed_config.dram_channels = config["dram_channels"];
-  if (config.contains("dram_req_size_byte"))
-    parsed_config.dram_req_size = config["dram_req_size_byte"];
-  if (config.contains("dram_stats_print_period_cycles"))
-    parsed_config.dram_print_interval = config["dram_stats_print_period_cycles"];
-  if(config.contains("dram_num_burst_length"))
-    parsed_config.dram_nbl = config["dram_num_burst_length"];
-  if (config.contains("dram_num_partitions")) {
-    parsed_config.dram_num_partitions = config["dram_num_partitions"];
+    parsed_config.dram_config_path = get_config_value<std::string>(config, "ramulator_config_path");
+  } else {
+    throw std::runtime_error(fmt::format("Not implemented dram type {} ", dram_type_str));
+  }
+
+  parsed_config.dram_freq_mhz = get_config_value<uint32_t>(config, "dram_freq_mhz");
+  parsed_config.dram_channels = get_config_value<uint32_t>(config, "dram_channels");
+  parsed_config.dram_req_size = get_config_value<uint32_t>(config, "dram_req_size_byte");
+  parsed_config.dram_nbl = get_config_value<uint32_t>(config, "dram_num_burst_length");
+
+  if (config["dram_stats_print_period_cycles"])
+    parsed_config.dram_print_interval = config["dram_stats_print_period_cycles"].as<uint32_t>();
+  if (config["dram_num_partitions"]) {
+    parsed_config.dram_num_partitions = config["dram_num_partitions"].as<uint32_t>();
     if (parsed_config.dram_channels % parsed_config.dram_num_partitions != 0) {
       throw std::runtime_error("[Config] DRAM channels must be divisible by dram_num_partitions");
     }
   }
-  parsed_config.dram_channels_per_partitions =
-    parsed_config.dram_channels / parsed_config.dram_num_partitions;
 
+  if (parsed_config.dram_num_partitions != 0) {
+      parsed_config.dram_channels_per_partitions =
+        parsed_config.dram_channels / parsed_config.dram_num_partitions;
+  } else {
+      parsed_config.dram_channels_per_partitions = parsed_config.dram_channels;
+  }
 
    /* L2D config */
-  if (config.contains("l2d_type")) {
-    if ((std::string)config["l2d_type"] == "nocache")
+  if (config["l2d_type"]) {
+    std::string l2d_type_str = config["l2d_type"].as<std::string>();
+    if (l2d_type_str == "nocache")
       parsed_config.l2d_type = L2CacheType::NOCACHE;
-    else if ((std::string)config["l2d_type"] == "datacache")
+    else if (l2d_type_str == "datacache") {
       parsed_config.l2d_type = L2CacheType::DATACACHE;
-    else
-      throw std::runtime_error(fmt::format("Not implemented l2 cache type {} ",
-                                          (std::string)config["l2d_type"]));
+      parsed_config.l2d_config_str = get_config_value<std::string>(config, "l2d_config");
+      if (config["l2d_hit_latency"])
+        parsed_config.l2d_hit_latency = config["l2d_hit_latency"].as<uint32_t>();
+    } else
+      throw std::runtime_error(fmt::format("Not implemented l2 cache type {} ", l2d_type_str));
   } else {
     parsed_config.l2d_type = L2CacheType::NOCACHE;
   }
 
-  if (config.contains("l2d_config"))
-    parsed_config.l2d_config_str = config["l2d_config"];
-  if (config.contains("l2d_hit_latency"))
-    parsed_config.l2d_config_str = config["l2d_hit_latency"];
-
   /* Icnt config */
-  if ((std::string)config["icnt_type"] == "simple")
+  std::string icnt_type_str = config["icnt_type"].as<std::string>();
+  if (icnt_type_str == "simple") {
     parsed_config.icnt_type = IcntType::SIMPLE;
-  else if ((std::string)config["icnt_type"] == "booksim2")
+    if (config["icnt_latency_cycles"])
+      parsed_config.icnt_latency = config["icnt_latency_cycles"].as<uint32_t>();
+  } else if (icnt_type_str == "booksim2") {
     parsed_config.icnt_type = IcntType::BOOKSIM2;
-  else
-    throw std::runtime_error(fmt::format("Not implemented icnt type {} ",
-                                         (std::string)config["icnt_type"]));
-  parsed_config.icnt_freq_mhz = config["icnt_freq_mhz"];
-  if (config.contains("icnt_latency_cycles"))
-    parsed_config.icnt_latency = config["icnt_latency_cycles"];
-  if (config.contains("booksim_config_path"))
-    parsed_config.icnt_config_path = config["booksim_config_path"];
-  if (config.contains("icnt_stats_print_period_cycles"))
-    parsed_config.icnt_stats_print_period_cycles = config["icnt_stats_print_period_cycles"];
-  if (config.contains("icnt_injection_ports_per_core"))
-    parsed_config.icnt_injection_ports_per_core = config["icnt_injection_ports_per_core"];
+    parsed_config.icnt_config_path = get_config_value<std::string>(config, "booksim_config_path");
+  } else
+    throw std::runtime_error(fmt::format("Not implemented icnt type {} ", icnt_type_str));
 
-  if (config.contains("scheduler"))
-    parsed_config.scheduler_type = config["scheduler"];
-  if (config.contains("num_partition"))
-    parsed_config.num_partition = config["num_partition"];
-  if (config.contains("partition")) {
+  parsed_config.icnt_freq_mhz = config["icnt_freq_mhz"].as<double>();
+  if (config["icnt_stats_print_period_cycles"])
+    parsed_config.icnt_stats_print_period_cycles = config["icnt_stats_print_period_cycles"].as<uint32_t>();
+  if (config["icnt_injection_ports_per_core"])
+    parsed_config.icnt_injection_ports_per_core = config["icnt_injection_ports_per_core"].as<uint32_t>();
+
+  if (config["scheduler"])
+    parsed_config.scheduler_type = config["scheduler"].as<std::string>();
+  if (config["num_partition"])
+    parsed_config.num_partition = config["num_partition"].as<uint32_t>();
+  if (config["partition"]) {
     for (int i=0; i<parsed_config.num_cores; i++) {
       std::string core_partition = "core_" + std::to_string(i);
-      uint32_t partition_id = uint32_t(config["partition"][core_partition]);
-      parsed_config.partiton_map[i] = partition_id;
-      spdlog::info("[Config/Core] CPU {}: Partition {}", i, partition_id);
+      if (config["partition"][core_partition]) {
+          uint32_t partition_id = config["partition"][core_partition].as<uint32_t>();
+          parsed_config.partiton_map[i] = partition_id;
+          spdlog::info("[Config/Core] CPU {}: Partition {}", i, partition_id);
+      } else {
+          spdlog::warn("[Config/Core] CPU {}: Partition key not found, defaulting to 0", i);
+          parsed_config.partiton_map[i] = 0;
+      }
     }
   } else {
-    /* Default: all partition 0 */
     for (int i=0; i<parsed_config.num_cores; i++) {
       parsed_config.partiton_map[i] = 0;
       spdlog::info("[Config/Core] CPU {}: Partition {}", i, 0);

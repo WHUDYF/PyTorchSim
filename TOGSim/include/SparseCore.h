@@ -1,5 +1,6 @@
 #include <map>
 #include <vector>
+#include <iomanip>
 #include "Core.h"
 #include "sstStonne.h"
 #include "SimpleMem.h"

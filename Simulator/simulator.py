@@ -4,17 +4,20 @@ import ctypes
 import subprocess
 import re
 import sys
-import json
+import yaml
 import time
 import datetime
 import threading
 from pathlib import Path
+import uuid
 
 import torch
 import numpy as np
 
 from PyTorchSimFrontend.mlir.mlir_common import MLIRKernelArgs
 from PyTorchSimFrontend import extension_config
+
+print_lock = threading.Lock()
 
 TORCH_TO_NUMPY = {
     torch.float32: np.float32,
@@ -53,7 +56,7 @@ class FunctionalSimulator():
             tensor = arg.cpu().detach()
             buffer_size = tensor.untyped_storage().size()
             buffer = (ctypes.c_char * buffer_size).from_address(tensor.data_ptr())
-            t_arr = np.frombuffer(buffer, dtype=tensor.numpy().dtype, count=buffer_size // tensor.element_size())
+            t_arr = np.frombuffer(buffer, dtype=TORCH_TO_NUMPY[tensor.dtype], count=buffer_size // tensor.element_size())
             t_arr.tofile(data_path)
         else:
             assert(0)
@@ -157,9 +160,12 @@ class CycleSimulator():
             while not finished:
                 i = (i + 1) % 3
                 tail = "." * i + " " * (3-i)
-                sys.stdout.write("\r[Gem5] Gem5 is running." + tail)
+                with print_lock:
+                    sys.stdout.write("\r[Gem5] Gem5 is running." + tail)
+                    sys.stdout.flush()
                 time.sleep(1)
-            print("")
+            with print_lock:
+                print("")
 
         dir_path = os.path.join(os.path.dirname(target_binary), "m5out")
         gem5_script_path = os.path.join(extension_config.CONFIG_TORCHSIM_DIR, "gem5_script/script_systolic.py")
@@ -199,7 +205,7 @@ class TOGSimulator():
     def __init__(self, togsim_path, config_path, vectorlane_size=-1) -> None:
         self.base_dir = togsim_path
         self.config_path = config_path
-        self.config_json = self.load_json(self.config_path)
+        self.config_yaml = self.load_yaml(self.config_path)
         self.process = None
         self.vectorlane_size = vectorlane_size
 
@@ -209,7 +215,7 @@ class TOGSimulator():
         cmd = f"{bin} --config {config}"
         return cmd
 
-    def simulation(self, model_path, attribute_path="", silent_mode=False):
+    def simulation(self, model_path, attribute_path="", silent_mode=False, autotune_mode=False):
         def show_progress():
             i = 0
             while not finished:
@@ -240,19 +246,35 @@ class TOGSimulator():
             if not silent_mode:
                 finished = True
                 progress_thread.join()
-                print("[TOGSim] Command failed with exit code", e.returncode)
-                print("[TOGSim] Error output:", e.output)
+                with print_lock:
+                    print("[TOGSim] Command failed with exit code", e.returncode)
+                    print("[TOGSim] Error output:", e.output)
             assert 0
-        # Save result to result_path
-        result_path = extension_config.CONFIG_TORCHSIM_LOG_PATH
-        os.makedirs(result_path, exist_ok=True)
-        file_name = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')+".log"
-        result_path = os.path.join(result_path, file_name)
+
+        # Separate Autotune logs
+        if autotune_mode:
+            base_dir = Path(model_path).parent / "togsim_result"
+            base_dir.mkdir(parents=True, exist_ok=True)
+            file_name = f"{len(list(base_dir.iterdir()))}.log"
+        else:
+            base_dir = Path(extension_config.CONFIG_TORCHSIM_LOG_PATH)
+            unique_id = uuid.uuid4().hex[:8]
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            file_name = f"{unique_id}_{timestamp}.log"
+
+        base_dir.mkdir(parents=True, exist_ok=True)
+        result_path = base_dir / file_name
+
+        # Prevent race condition
         with open(result_path, "w") as f:
             f.write(result.decode())
+            f.flush()
+            os.fsync(f.fileno())
+
         if not silent_mode or extension_config.CONFIG_DEBUG_MODE:
             model_path_log = f' of "{model_path}" ' if extension_config.CONFIG_DEBUG_MODE else " "
-            print(f'[TOGSim] Simulation log{model_path_log}is stored to "{result_path}"')
+            with print_lock:
+                print(f'[TOGSim] Simulation log{model_path_log}is stored to "{result_path}"')
         return result_path
 
     def interactive_simulation(self):
@@ -342,40 +364,41 @@ class TOGSimulator():
     def create_attribute_file(self, attribute_path, inputs, **kwargs):
         address_info = {}
         sram_buffer = {}
-        json_content = {}
+        yaml_content = {}
+
         os.makedirs(attribute_path, exist_ok=True)
         index = str(len(os.listdir(attribute_path)))
         attribute_path = os.path.join(attribute_path, index)
 
         for idx, tensor in enumerate(inputs):
             address_info[f"arg{idx}"] = tensor.data_ptr()
-        json_content["address_info"] = address_info
+        yaml_content["address_info"] = address_info
 
         for buf_name, range in self.ALLOC_POOL.items():
             sram_buffer[buf_name] = range
-        json_content["sram_alloc"] = sram_buffer
+        yaml_content["sram_alloc"] = sram_buffer
 
         with open(attribute_path, "w") as f:
-            json.dump(json_content, f, indent=4)
+            yaml.dump(yaml_content, f, default_flow_style=False)
             f.flush()
             os.fsync(f.fileno()) # There could be a race condition.
         return attribute_path
 
-    def load_json(self, config_path):
+    def load_yaml(self, config_path):
         config_path = Path(config_path)
         if not config_path.is_file():
-            raise FileNotFoundError(f"JSON file not found: {config_path}")
+            raise FileNotFoundError(f"YAML file not found: {config_path}")
 
         try:
             with open(config_path, "r") as file:
-                data = json.load(file)
+                data = yaml.safe_load(file)
                 return data
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON format: {e}")
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML format: {e}")
 
     def get_core_freq(self):
-        if "core_freq_mhz" in self.config_json:
-            return self.config_json["core_freq_mhz"] * 1000 * 1000 # MHz
+        if "core_freq_mhz" in self.config_yaml:
+            return self.config_yaml["core_freq_mhz"] * 1000 * 1000 # MHz
         else:
             raise KeyError("Key 'core_freq' not found in JSON.")
 
@@ -400,9 +423,9 @@ class TOGSimulator():
     def get_result_from_file(result_path):
         core_metrics = {}
         dram_channel_bw = {}
-        avg_dram_bw = None
-        simulation_time = None
-        total_cycle = None
+        avg_dram_bw = 0.0
+        simulation_time = float("inf")
+        total_cycle = float("inf")
 
         # Read and find total stat position
         with open(result_path, "r") as f:
@@ -417,7 +440,7 @@ class TOGSimulator():
                 break
 
         if simulation_finished_idx == -1:
-            print("[TOGSim] Tried to parsing wrong formated output file!")
+            print(f"[TOGSim] Warning: Unable to parse the output file ({result_path}). The file may be improperly formatted.")
             return core_metrics, dram_channel_bw, avg_dram_bw, simulation_time
 
         total_stat_lines = lines[simulation_finished_idx:]
@@ -457,6 +480,6 @@ class TOGSimulator():
         return core_metrics, dram_channel_bw, avg_dram_bw, simulation_time, total_cycle
 
 if __name__ == "__main__":
-    sim = TOGSimulator("/workspace/PyTorchSim/TOGSim", "/workspace/PyTorchSim/configs/systolic_ws_128x128_c2_simple_noc_tpuv3_partition.json")
+    sim = TOGSimulator("/workspace/PyTorchSim/TOGSim", "/workspace/PyTorchSim/configs/systolic_ws_128x128_c2_simple_noc_tpuv3_partition.yml")
     sim.interactive_simulation()
     sim.until(4000)

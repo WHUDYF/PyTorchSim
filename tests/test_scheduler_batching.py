@@ -17,7 +17,7 @@ if __name__ == "__main__":
     target_model1 = model1().eval()
 
     # Init scheduler
-    scheduler = Scheduler(num_request_queue=1, max_batch=32, engine_select=Scheduler.FIFO_ENGINE, togsim_config=f"{CONFIG_TORCHSIM_DIR}/configs/systolic_ws_128x128_c2_simple_noc_tpuv2.json")
+    scheduler = Scheduler(num_request_queue=1, max_batch=32, engine_select=Scheduler.FIFO_ENGINE, togsim_config=f"{CONFIG_TORCHSIM_DIR}/configs/systolic_ws_128x128_c2_simple_noc_tpuv2.yml")
     # Register compiled model
     opt_model1 = torch.compile(target_model1.to(device=scheduler.execution_engine.module.custom_device(), memory_format=torch.channels_last), dynamic=False)
     SchedulerDNNModel.register_model("resnet18", opt_model1)

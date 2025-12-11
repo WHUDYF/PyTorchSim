@@ -1,7 +1,7 @@
 import os
 import sys
 import importlib
-import json
+import yaml
 
 CONFIG_TORCHSIM_DIR = os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim')
 CONFIG_GEM5_PATH = os.environ.get('GEM5_PATH', default="/workspace/gem5/build/RISCV/gem5.opt")
@@ -13,51 +13,53 @@ CONFIG_TORCHSIM_DUMP_LLVM_IR = int(os.environ.get("TORCHSIM_DUMP_LLVM_IR", defau
 def __getattr__(name):
     # TOGSim config
     config_path = os.environ.get('TOGSIM_CONFIG',
-                default=f"{CONFIG_TORCHSIM_DIR}/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.json")
+                default=f"{CONFIG_TORCHSIM_DIR}/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml")
     if name == "CONFIG_TOGSIM_CONFIG":
         return config_path
-    config_json = json.load(open(config_path, 'r'))
+
+    with open(config_path, 'r') as f:
+        config_yaml = yaml.safe_load(f)
 
     # Hardware info config
     if name == "vpu_num_lanes":
-        return config_json["vpu_num_lanes"]
+        return config_yaml["vpu_num_lanes"]
     if name == "CONFIG_SPAD_INFO":
         return {
           "spad_vaddr" : 0xD0000000,
           "spad_paddr" : 0x2000000000,
-          "spad_size" : config_json["vpu_spad_size_kb_per_lane"] << 10 # Note: spad size per lane
+          "spad_size" : config_yaml["vpu_spad_size_kb_per_lane"] << 10 # Note: spad size per lane
         }
 
     if name == "CONFIG_PRECISION":
         return 4 # 32bit
     if name == "CONFIG_NUM_CORES":
-        return config_json["num_cores"]
+        return config_yaml["num_cores"]
     if name == "vpu_vector_length_bits":
-        return config_json["vpu_vector_length_bits"]
+        return config_yaml["vpu_vector_length_bits"]
 
     if name == "pytorchsim_functional_mode":
-        return config_json['pytorchsim_functional_mode']
+        return config_yaml['pytorchsim_functional_mode']
     if name == "pytorchsim_timing_mode":
-        return config_json['pytorchsim_timing_mode']
+        return config_yaml['pytorchsim_timing_mode']
 
     # Mapping strategy
     if name == "codegen_mapping_strategy":
-        codegen_mapping_strategy = config_json["codegen_mapping_strategy"]
+        codegen_mapping_strategy = config_yaml["codegen_mapping_strategy"]
         assert(codegen_mapping_strategy in ["heuristic", "autotune", "external-then-heuristic", "external-then-autotune"]), "Invalid mapping strategy!"
         return codegen_mapping_strategy
 
     if name == "codegen_external_mapping_file":
-        return config_json["codegen_external_mapping_file"]
+        return config_yaml["codegen_external_mapping_file"]
 
     # Autotune config
     if name == "codegen_autotune_max_retry":
-        return config_json["codegen_autotune_max_retry"]
+        return config_yaml["codegen_autotune_max_retry"]
     if name == "codegen_autotune_template_topk":
-        return config_json["codegen_autotune_template_topk"]
+        return config_yaml["codegen_autotune_template_topk"]
 
     # Compiler Optimization
     if name == "codegen_compiler_optimization":
-        opt_level = config_json["codegen_compiler_optimization"]
+        opt_level = config_yaml["codegen_compiler_optimization"]
         valid_opts = {
             "fusion",
             "reduction_epilogue",
@@ -67,7 +69,7 @@ def __getattr__(name):
             "multi_tile_conv",
             "subtile"
         }
-        if opt_level == "all" or opt_level is "none":
+        if opt_level == "all" or opt_level == "none":
             pass
         elif isinstance(opt_level, list):
             # Check if provided list contains only valid options

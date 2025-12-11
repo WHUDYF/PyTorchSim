@@ -72,7 +72,7 @@ if __name__ == "__main__":
             continue
         tog_path = os.path.join(path, "tile_graph.onnx")
         togsim_path = os.path.join(extension_config.CONFIG_TORCHSIM_DIR, "TOGSim")
-        stonne_config_path = f'{extension_config.CONFIG_TORCHSIM_DIR}/configs/stonne_validation_c1_simple_noc.json'
+        stonne_config_path = f'{extension_config.CONFIG_TORCHSIM_DIR}/configs/stonne_validation_c1_simple_noc.yml'
         backsim = TOGSimulator(togsim_path, stonne_config_path)
         result_path = backsim.simulation(tog_path)
         nr_multiplications, total_cycle, sim_time = extract_simulation_stats(result_path)

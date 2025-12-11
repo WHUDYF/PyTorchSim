@@ -1,5 +1,5 @@
 import os
-import json
+import yaml
 import shutil
 import argparse
 import torch
@@ -41,9 +41,11 @@ def modify_file(dump_path, name, address_numa_stride=None, subgraph_map=None):
     if not os.path.exists(file_path):
         print(f"File {file_path} does not exist.")
         return
+
     with open(file_path, 'r') as f:
-        data = json.load(f)
-    # address_numa_stride와 subgraph_map 추가
+        data = yaml.safe_load(f)
+
+    # address_numa_stride, subgraph_map
     if address_numa_stride:
         data['address_numa_stride'] = address_numa_stride
     if subgraph_map:
@@ -52,8 +54,9 @@ def modify_file(dump_path, name, address_numa_stride=None, subgraph_map=None):
     output_path = file_path = os.path.join(dump_path, 'runtime_0000', 'attribute')
     os.makedirs(output_path, exist_ok=True)
     output_file = os.path.join(output_path, name)
+
     with open(output_file, 'w') as f:
-        json.dump(data, f, indent=4)
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
     print(f"Modified file saved to {output_file}")
 
 if __name__ == "__main__":

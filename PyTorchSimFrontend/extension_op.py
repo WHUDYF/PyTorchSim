@@ -276,7 +276,7 @@ def sparse_mm_stonne_outer(a, b, out):
     onnx_path, attribute_path, c_result_path = prepare_outer_product_matrix(a, b, out)
 
     togsim_path = os.path.join(extension_config.CONFIG_TORCHSIM_DIR, "TOGSim")
-    stonne_config_path = f'{extension_config.CONFIG_TORCHSIM_DIR}/configs/stonne_single_c1_simple_noc.json'
+    stonne_config_path = f'{extension_config.CONFIG_TORCHSIM_DIR}/configs/stonne_single_c1_simple_noc.yml'
     TOGSim = TOGSimulator(togsim_path, stonne_config_path)
     result_path = TOGSim.simulation(onnx_path)
     TOGSimulator.get_result_from_file(result_path)

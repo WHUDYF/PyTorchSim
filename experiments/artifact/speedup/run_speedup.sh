@@ -4,8 +4,8 @@ CONFIG_DIR="$TORCHSIM_DIR/configs"
 SIMULATOR_BIN="$TORCHSIM_DIR/TOGSim/build/bin/Simulator"
 
 configs=(
-    "systolic_ws_128x128_c2_simple_noc_tpuv3.json"
-    "systolic_ws_128x128_c2_booksim_tpuv3.json"
+    "systolic_ws_128x128_c2_simple_noc_tpuv3.yml"
+    "systolic_ws_128x128_c2_booksim_tpuv3.yml"
 )
 
 target_list=(
