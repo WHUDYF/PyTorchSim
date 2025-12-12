@@ -40,8 +40,8 @@ ENV PATH=$PATH:/root/.local/bin
 ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/opt/conda/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
 
 # Build Gem5
-RUN git clone https://github.com/PSAL-POSTECH/gem5.git --branch TorchSim
-RUN cd gem5 && scons build/RISCV/gem5.opt -j $(nproc)
+RUN git clone https://github.com/PSAL-POSTECH/gem5.git --branch tutorial
+RUN cd gem5 && scons build/RISCV/gem5.opt -j $(nproc) && git checkout TorchSim
 ENV GEM5_PATH=/workspace/gem5/build/RISCV/gem5.opt
 
 # Build LLVM RISC-V
@@ -88,3 +88,5 @@ RUN cd PyTorchSim/TOGSim && \
     conan install .. --build=missing && \
     cmake .. && \
     make -j$(nproc)
+
+RUN pip install jupyterhub jupyterlab

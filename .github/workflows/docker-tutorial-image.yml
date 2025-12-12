@@ -30,6 +30,6 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./Dockerfile.ksc2025
+          file: ./tutorial/jupyterhub/Dockerfile.ksc2025
           push: true
           tags: ghcr.io/psal-postech/torchsim_ksc2025:latest
