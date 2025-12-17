@@ -163,6 +163,8 @@ class PyTorchSimRunner:
 
     @staticmethod
     def setup_device():
+        if cls._npu_module is not None:
+            return cls._npu_module
         source_file_path = os.path.dirname(os.path.abspath(__file__))
         source_file = os.path.join(
             source_file_path, f"{extension_config.CONFIG_TORCHSIM_DIR}/PyTorchSimFrontend/extension_device.cpp"
@@ -201,6 +203,7 @@ class PyTorchSimRunner:
         get_wrapper_codegen_for_device("npu")
             == ExtensionWrapperCodegen
         )
+        cls._npu_module = module
         return module
 
     def submit(self, batched_req, partition_idx) -> List[RequestReturn]:
