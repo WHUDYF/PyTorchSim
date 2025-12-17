@@ -144,7 +144,7 @@ class PyTorchSimRunner:
     PARTITION_BUSY = 0
     PARTITION_IDLE = 1
     SELECT_NOTHING = 2
-    _npu_module = None
+    NPU_MODULE = None
     def __init__(self, tog_simulator : TOGSimulator, num_partion=1) -> None:
         self.module = self.setup_device()
         self.num_partion = num_partion
@@ -163,9 +163,9 @@ class PyTorchSimRunner:
         os.environ["TOGSIM_EAGER_MODE"] = "1"
 
     @classmethod
-    def setup_device():
-        if cls._npu_module is not None:
-            return cls._npu_module
+    def setup_device(cls):
+        if cls.NPU_MODULE is not None:
+            return cls.NPU_MODULE
         source_file_path = os.path.dirname(os.path.abspath(__file__))
         source_file = os.path.join(
             source_file_path, f"{extension_config.CONFIG_TORCHSIM_DIR}/PyTorchSimFrontend/extension_device.cpp"
@@ -204,7 +204,7 @@ class PyTorchSimRunner:
         get_wrapper_codegen_for_device("npu")
             == ExtensionWrapperCodegen
         )
-        cls._npu_module = module
+        cls.NPU_MODULE = module
         return module
 
     def submit(self, batched_req, partition_idx) -> List[RequestReturn]:
