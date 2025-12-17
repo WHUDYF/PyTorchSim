@@ -144,6 +144,7 @@ class PyTorchSimRunner:
     PARTITION_BUSY = 0
     PARTITION_IDLE = 1
     SELECT_NOTHING = 2
+    _npu_module = None
     def __init__(self, tog_simulator : TOGSimulator, num_partion=1) -> None:
         self.module = self.setup_device()
         self.num_partion = num_partion
@@ -161,7 +162,7 @@ class PyTorchSimRunner:
         # Dry run for compile and create generator
         os.environ["TOGSIM_EAGER_MODE"] = "1"
 
-    @staticmethod
+    @classmethod
     def setup_device():
         if cls._npu_module is not None:
             return cls._npu_module
