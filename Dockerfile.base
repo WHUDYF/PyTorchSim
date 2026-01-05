@@ -67,9 +67,7 @@ RUN curl -L -H "Accept: application/octet-stream" https://api.github.com/repos/P
 
 # Store RISC-V LLVM for TorchSim
 ENV TORCHSIM_LLVM_PATH=/riscv-llvm/bin
-ENV TORCHSIM_LLVM_INCLUDE_PATH=/riscv-llvm/include
 ENV TORCHSIM_DIR=/workspace/PyTorchSim
-ENV LLVM_DIR=/riscv-llvm
 
 # Download Spike simulator
 RUN curl -L -H "Accept: application/octet-stream" https://api.github.com/repos/PSAL-POSTECH/riscv-isa-sim/releases/assets/${SPIKE_ASSET_ID} -o /tmp/spike-release.tar.gz && \

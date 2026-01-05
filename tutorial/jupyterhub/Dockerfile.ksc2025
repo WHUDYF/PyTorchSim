@@ -52,9 +52,7 @@ RUN cd llvm-project && mkdir build && cd build && \
 
 # Store RISC-V LLVM for TorchSim
 ENV TORCHSIM_LLVM_PATH=/riscv-llvm/bin
-ENV TORCHSIM_LLVM_INCLUDE_PATH=/riscv-llvm/include
 ENV TORCHSIM_DIR=/workspace/PyTorchSim
-ENV LLVM_DIR=/riscv-llvm
 
 # Download RISC-V tool chain
 RUN apt install -y wget && \
