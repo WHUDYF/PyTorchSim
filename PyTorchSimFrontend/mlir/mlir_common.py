@@ -332,8 +332,8 @@ class TileAdjustMixin():
         remain = candidate_tile_size[axis] % stride
 
         if remain:
-            candidate_tile_size[axis] += stride - remain
-            self.tile_constraint[axis].must_divide_dim = False
+            # #201: relax vlane_stride constraints
+            self.vmap.vlane_stride = 1
         return candidate_tile_size
 
     def scale_tile_dim(self, axis, dim_sz, scale_factor=2):
@@ -488,7 +488,7 @@ class MLIRMultiDimTile(TileAdjustMixin):
         self.name = ""
         self._tile_size = list(tile_size)
         self._tile_stride = None
-        self.tile_constraint = [TileConstraint(vlane_stride) for _ in tile_size]
+        self.tile_constraint = [TileConstraint(vlane_stride if idx == vlane_split_axis else 1) for idx, _ in enumerate(tile_size)]
         self.tile_axis_order = list(range(len(tile_size)))
         self.update_tile_stride()
 
@@ -718,13 +718,13 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             init_tile_desc.nr_rdim = len(reduction_vars)
             self.kernel_group.set_tile_info(init_tile_desc)
 
-        # Handle edge case
-        if len(self.ranges)==1 and self.ranges[0] == 1: # Scalar case 2
-            self.kernel_group.tile_desc.vmap.vlane_stride = 1
-            self.kernel_group.tile_desc.vmap.vlane_split_axis = 0
-        elif vlane_split_axis == -1: # Reduction only case
-            self.kernel_group.tile_desc.vmap.vlane_split_axis = 0
-            self.kernel_group.tile_desc.vmap.vlane_stride = self.kernel_group.tile_desc.get_tile_size()[0]
+            # Handle edge case
+            if len(self.ranges)==1 and self.ranges[0] == 1: # Scalar case 2
+                self.kernel_group.tile_desc.vmap.vlane_stride = 1
+                self.kernel_group.tile_desc.vmap.vlane_split_axis = 0
+            elif vlane_split_axis == -1: # Reduction only case
+                self.kernel_group.tile_desc.vmap.vlane_split_axis = 0
+                self.kernel_group.tile_desc.vmap.vlane_stride = self.kernel_group.tile_desc.get_tile_size()[0]
 
         # Handle implict dims. Input operand could be high dimension tensor.
         # Note: https://github.com/PSAL-POSTECH/PyTorchSim/issues/173
