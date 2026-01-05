@@ -62,7 +62,7 @@ class DMA {
         const std::vector<int>& tag_key = tag_entry.first;
         uint32_t value = tag_entry.second;
         if (value == 1) {
-          spdlog::warn("[Tag Table][{}] Unused tag found: (key={}, val={})",
+          spdlog::debug("[Tag Table][{}] Unused tag found: (key={}, val={})",
             subgraph_id, fmt::format("[{}]", fmt::join(tag_key, ", ")), value);
         }
       }
