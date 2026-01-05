@@ -438,12 +438,12 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
 
         # Handle scatter store
         if "tmp" in str(index):
-            if mode == "atomic_add":
-                # Convert the output buffer type to the inplace buffer
-                arg_name =  V.graph.scheduler.mutation_real_name.get(name, name)
-                if arg_name not in self.kernel_group.args.inplace_buffers:
-                    self.kernel_group.args.make_inplace(arg_name, arg_name)
+            # Convert the output buffer type to the inplace buffer
+            arg_name =  V.graph.scheduler.mutation_real_name.get(name, name)
+            if arg_name not in self.kernel_group.args.inplace_buffers:
+                self.kernel_group.args.make_inplace(arg_name, arg_name)
 
+            if mode == "atomic_add":
                 loaded_value = ops.load(name, index)
                 value = ops.add(loaded_value, value)
             index, _ = self.convert_indirect_indexing(index)

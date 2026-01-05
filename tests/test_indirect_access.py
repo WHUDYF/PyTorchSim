@@ -70,11 +70,12 @@ def test_scatter_full(device, size=(128, 128)):
         a[idx, :] = b
         return a
     x = torch.randn(size, dtype=torch.float32).to(device=device)
+    x_cpu = x.clone().cpu()
     idx = torch.randint(0,128, [128]).to(device=device)
-    y = torch.randn(128, dtype=torch.float32).to(device=device)
+    y = torch.randn(size[1], dtype=torch.float32).to(device=device)
     opt_fn = torch.compile(dynamic=False)(vectoradd)
     res = opt_fn(x, idx, y)
-    out = vectoradd(x.cpu(), idx.cpu(), y.cpu())
+    out = vectoradd(x_cpu, idx.cpu(), y.cpu())
     test_result("Indirect VectorAdd", res, out)
 
 if __name__ == "__main__":
@@ -86,6 +87,7 @@ if __name__ == "__main__":
     module = PyTorchSimRunner.setup_device()
     device = module.custom_device()
     test_scatter_full(device)
+    test_scatter_full(device, size=(2048, 2048))
     test_scatter_add(device)
     test_indirect_vectoradd(device)
     #test_embedding(device, 1024, 2048)
