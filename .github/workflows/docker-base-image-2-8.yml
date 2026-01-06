@@ -2,7 +2,7 @@ name: Docker Base Image CI (PyTorch 2.8)
 
 on:
   push:
-    branches: [ "base" ]
+    branches: [ "base_v2.8" ]
   workflow_dispatch:
   repository_dispatch:
     types: [ build_base ]
