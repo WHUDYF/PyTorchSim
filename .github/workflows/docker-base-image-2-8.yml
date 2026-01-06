@@ -1,25 +1,24 @@
-name: Docker Base Image CI
+name: Docker Base Image CI (PyTorch 2.8)
 
 on:
   push:
     branches: [ "base" ]
+  workflow_dispatch:
   repository_dispatch:
     types: [ build_base ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     permissions:
       contents: read
       packages: write
 
     steps:
-      # Step 1: Checkout the repository
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Log in to GitHub Container Registry
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -27,7 +26,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 2: Set environemnt
       - name: Set environment
         env:
           GIT_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -58,15 +56,16 @@ jobs:
           echo "SPIKE_ASSET_ID=$SPIKE_ASSET_ID"
           echo "SPIKE_ASSET_ID=$SPIKE_ASSET_ID" >> $GITHUB_ENV
 
-      # Step 3: Build and Push Docker Image
-      - name: Build and Push Docker Image
+      - name: Build and Push Docker Image (PyTorch 2.8)
         uses: docker/build-push-action@v4
         with:
           context: .
           file: ./Dockerfile.base
           push: true
           build-args: |
+            PYTORCH_IMAGE=pytorch/pytorch:2.8.0-cuda12.6-cudnn9-runtime
             GEM5_ASSET_ID=${{ env.GEM5_ASSET_ID }}
             LLVM_ASSET_ID=${{ env.LLVM_ASSET_ID }}
             SPIKE_ASSET_ID=${{ env.SPIKE_ASSET_ID }}
-          tags: ghcr.io/psal-postech/torchsim_base:latest
+          tags: |
+            ghcr.io/psal-postech/torchsim_base_2_8:latest

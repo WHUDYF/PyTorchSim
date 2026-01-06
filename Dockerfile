@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.4
-FROM ghcr.io/psal-postech/torchsim_base:latest
+ARG BASE_IMAGE=ghcr.io/psal-postech/torchsim_base:latest
+FROM ${BASE_IMAGE}
 
 # Prepare PyTorchSim project
 COPY . /workspace/PyTorchSim
