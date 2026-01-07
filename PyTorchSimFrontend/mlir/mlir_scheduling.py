@@ -53,6 +53,11 @@ class MLIRScheduling(BaseScheduling):
 
         _, (vars1, reduce1) = node1.group
         _, (vars2, reduce2) = node2.group
+        # For input/dependency checks
+        reads1 = {dep.name for dep in node1.read_writes.reads}
+        reads2 = {dep.name for dep in node2.read_writes.reads}
+        writes1 = {dep.name for dep in node1.read_writes.writes}
+        writes2 = {dep.name for dep in node2.read_writes.writes}
 
         # Can't fuse two template node
         if node1.is_template() and node2.is_template():
@@ -66,8 +71,20 @@ class MLIRScheduling(BaseScheduling):
         base_template_node2 = [node for node in node2.get_nodes() if node.is_template()]
 
         # Case 0: Reduction fusion
-        if node1.is_reduction() and node2.is_reduction() and not node1.is_template() and not node2.is_template() and extension_config.CONFIG_FUSION_REDUCTION_REDUCTION:
-            return vars1 == vars2 and reduce1 == reduce2
+        if (
+            node1.is_reduction()
+            and node2.is_reduction()
+            and not node1.is_template()
+            and not node2.is_template()
+            and extension_config.CONFIG_FUSION_REDUCTION_REDUCTION
+        ):
+            # 1) Same loop/iteration domain
+            same_iter = vars1 == vars2 and reduce1 == reduce2
+            # 2) No data dependency between the two reductions
+            no_dependency = not (
+                writes1 & (reads2 | writes2) or writes2 & (reads1 | writes1)
+            )
+            return same_iter and no_dependency
 
         # Case 1: Template + Pointwise fusion
         if len(base_template_node1) == 1 and len(base_template_node2) == 0 and not node2.is_reduction():
