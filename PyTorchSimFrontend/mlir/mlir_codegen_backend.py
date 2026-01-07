@@ -91,6 +91,7 @@ class ExtensionWrapperCodegen(wrapper.PythonWrapperCodegen):
                 from torch._inductor.hooks import run_intermediate_hooks
                 from torch._inductor.utils import maybe_profile
                 from torch._inductor.codegen.memory_planning import _align as align
+                from torch._inductor.async_compile import AsyncCompile
 
                 from torch import device, empty, empty_strided
                 from {extension_codecache.__name__} import CustomAsyncCompile
@@ -105,6 +106,7 @@ class ExtensionWrapperCodegen(wrapper.PythonWrapperCodegen):
                 alloc_from_pool = torch.ops.inductor._alloc_from_pool
                 reinterpret_tensor = torch.ops.aten._reinterpret_tensor
                 custom_async_compile = CustomAsyncCompile()
+                async_compile = AsyncCompile()
                 os.environ["TORCHSIM_LAST_COMPILED_MODULE"] = __file__
                 print(f\'Wrapper Codegen Path = {{__file__}}\')
             """
@@ -138,6 +140,7 @@ class ExtensionWrapperCodegen(wrapper.PythonWrapperCodegen):
         )
 
     def write_prefix(self):
+        self.write_async_compile_wait()
         self.prefix.splice(
             """
             def call(args):
