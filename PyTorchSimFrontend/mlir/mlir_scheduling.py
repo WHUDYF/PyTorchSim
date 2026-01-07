@@ -167,6 +167,8 @@ class MLIRScheduling(BaseScheduling):
                 act_node.node.get_store_function(),
                 (args if act_node.node.get_reduction_type() else args[:1]),
                 var_ranges,
+                args[0],
+                args[1]
             )
             index_size = []
             reduce_size = []
@@ -188,7 +190,7 @@ class MLIRScheduling(BaseScheduling):
             nodes, key=lambda x: int(x.is_reduction())
         ).group
 
-        # Note: We assume that ther is at least one loop in the nodes
+        # Note: We assume that there is at least one loop in the nodes
         # But, inductor simplifies the group, there could be no loop
         # In that case, we add dummy loop(size=1) to the group
         if len(group) == 0:
@@ -263,9 +265,9 @@ class MLIRScheduling(BaseScheduling):
             codecache_def.writeline(f"loop_size={loop_size},")
             codecache_def.writeline(f"spad_info={spad_info},")
             codecache_def.writeline(f"origins={origins},")
-            codecache_def.writeline("arg_attributes=arg_attributes,")
+            codecache_def.writeline(f"arg_attributes={meta_code},")
             codecache_def.writeline(f"vlen={extension_config.vpu_vector_length_bits})")
-            wrapper.define_kernel(kernel_name, codecache_def.getvalue(), cuda=False)
+            wrapper.define_kernel(kernel_name, codecache_def.getvalue(), gpu=False)
         return kernel_name
 
     def codegen_template(self, template_node, prologue_nodes, epilogue_nodes):

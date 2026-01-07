@@ -22,4 +22,4 @@ class ExtensionDeviceOpOverrides(DeviceOpOverrides):
     def device_guard(self, device_idx: int) -> str:
         return "pass"
 
-register_device_op_overrides("extension_device", ExtensionDeviceOpOverrides())
+register_device_op_overrides("npu", ExtensionDeviceOpOverrides())

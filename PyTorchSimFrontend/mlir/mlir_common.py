@@ -23,7 +23,6 @@ from typing import Callable
 
 import sympy
 
-import torch.fx
 from torch.utils._sympy.value_ranges import ValueRanges
 from torch._inductor.utils import (
     get_sympy_Expr_dtype,
@@ -33,7 +32,6 @@ from torch._inductor.utils import (
 )
 from PyTorchSimFrontend import extension_config
 from PyTorchSimFrontend import extension_codecache
-from PyTorchSimFrontend.mlir.mlir_autotune import MLIRBenchmarkRequest
 
 from PyTorchSimFrontend.extension_utils import (
     free_symbol_startswith,
