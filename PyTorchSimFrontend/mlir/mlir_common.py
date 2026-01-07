@@ -645,7 +645,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
     def reduction(self, dtype, src_dtype, reduction_type, value):
         raise NotImplementedError()
 
-    def indirect_indexing(self, index_var, size, check):
+    def indirect_indexing(self, index_var, size, check, wrap_neg):
         raise NotImplementedError()
 
     def codegen_global_init(self):
@@ -888,9 +888,9 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 return inner
 
             @staticmethod
-            def indirect_indexing(index_var, size, check=True):
+            def indirect_indexing(index_var, size, check=True, wrap_neg=True):
                 # Skip CSE since this doesn't return an expression
-                return self.indirect_indexing(index_var, size, check)
+                return self.indirect_indexing(index_var, size, check, wrap_neg)
 
             @staticmethod
             def load(name: str, index: sympy.Expr):

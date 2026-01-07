@@ -667,7 +667,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                                     dram_shape, tile_shape, attribute)
             self.reductions_suffix.writeline(common.DeferredLine(name, code))
 
-    def indirect_indexing(self, index_var, size, check=True):
+    def indirect_indexing(self, index_var, size, check=True, wrap_neg=True):
         return str(index_var)
 
     def _index_expr(self, tile_desc, renamed_expression, index, base_vector_index):
