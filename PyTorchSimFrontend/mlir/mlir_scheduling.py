@@ -7,12 +7,14 @@ from sympy import symbols, sympify
 from PyTorchSimFrontend import extension_config
 from PyTorchSimFrontend.mlir.mlir_codegen_backend import MLIRKernel
 
+from torch.utils._ordered_set import OrderedSet
 from torch._inductor import config
 from torch._inductor.scheduler import BaseScheduling, FusedSchedulerNode, SchedulerNode, BaseSchedulerNode
 from torch._inductor.utils import IndentedBuffer
 from torch._inductor.virtualized import V
 from torch._inductor.ir import LoopBody
 from torch._inductor import dependencies
+from torch._inductor.codegen.common import BackendFeature
 
 from . import mlir_common
 from . import mlir_lowering # DO NOT REMOVE THIS LINE, it is used for lowering
@@ -34,6 +36,10 @@ class MLIRScheduling(BaseScheduling):
 
     def reset_kernel_group(self):
         self.kernel_group = mlir_common.MLIRWrapperKenrelGroup()
+
+    def get_backend_features(self, device):
+        """Return a set of .codegen.common.BackendFeature()"""
+        return OrderedSet([BackendFeature.REDUCE_TO_SINGLE_ELEMENT])
 
     def can_fuse_vertical(self, node1, node2):
         return self.can_fuse_horizontal(node1, node2)
