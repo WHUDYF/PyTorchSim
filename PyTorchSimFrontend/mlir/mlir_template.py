@@ -925,7 +925,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
 
         _, operand_type = self.var_info[value]
         if mlir_dtype != operand_type:
-            value = ops.to_dtype(value, mlir_dtype, var_info=self.var_info)
+            value = ops.to_dtype(value, mlir_dtype)
         compute_index_var = ",".join([f"%{zero_var}"] * (self.kernel_group.tile_desc.get_nr_dim()-1) + [f"%{self.compute_idx}"])
         # Generate vector load instruction
         buffer_name = name if not store_force else None

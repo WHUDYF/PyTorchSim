@@ -867,7 +867,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             @staticmethod
             def __getattr__(name: str) -> Callable[..., common.CSEVariable]:  # type: ignore[misc]
                 def inner(*args, **kwargs):
-                    code, ret_info = getattr(parent_handler, name)(*args, var_info=self.var_info, **kwargs)
+                    code, ret_info = getattr(parent_handler, name)(*args, **kwargs)
                     target_buffer = self.target_buffer_override.get()
                     target_cse = self.target_cse_override.get()
                     if isinstance(code, common.DeferredLine):

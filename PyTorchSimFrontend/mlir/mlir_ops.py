@@ -20,7 +20,7 @@ def reduction_combine_vec(reduction_type, vector_value, init_value, axis, shape,
 
 class ExtensionOverrides(common.OpOverrides):
     @staticmethod
-    def constant(value, src_type, *args, var_info=None, **kwargs):
+    def constant(value, src_type, *args, **kwargs):
         if isinstance(src_type, torch.dtype):
             src_type = mlir_common.DTYPE_TO_MLIR[src_type]
 
@@ -37,8 +37,8 @@ class ExtensionOverrides(common.OpOverrides):
         return f'arith.constant {value} : {src_type}', [1, src_type]
 
     @staticmethod
-    def broadcast(operand, target_size, *args, var_info=None, **kwargs):
-        src_size, dtype = var_info[operand]
+    def broadcast(operand, target_size, *args, **kwargs):
+        src_size, dtype = V.kernel.var_info[operand]
 
         src_shape = f"vector<{src_size}x{dtype}>" if src_size > 1 else dtype
         dst_shape = f"vector<{target_size}x{dtype}>"
@@ -63,8 +63,8 @@ class ExtensionOverrides(common.OpOverrides):
         return op_str, [target_size, dtype]
 
     @staticmethod
-    def broadcast_unflat(operand, target_size, *args, var_info=None, **kwargs):
-        src_size, dtype = var_info[operand]
+    def broadcast_unflat(operand, target_size, *args, **kwargs):
+        src_size, dtype = V.kernel.var_info[operand]
 
         outer_dim = target_size // src_size
         src_shape = f"vector<{src_size}x{dtype}>"
@@ -87,33 +87,33 @@ class ExtensionOverrides(common.OpOverrides):
 
     # Special operaitons
     @staticmethod
-    def masked(mask, body, other, *args, var_info=None, tile_size=16, dtype="f32", ninf_declared=False, **kwargs):
+    def masked(mask, body, other, *args, tile_size=16, dtype="f32", ninf_declared=False, **kwargs):
         result = body()
         val = ops.constant(other, dtype, *args, **kwargs)
         result = ops.where(mask, result, val)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     @staticmethod
-    def where(condition, operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
-        cond_type = var_info[condition]
-        operand_type = var_info[operand1]
+    def where(condition, operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
+        cond_type = V.kernel.var_info[condition]
+        operand_type = V.kernel.var_info[operand1]
         condition = ops.to_bool(condition)
         if cond_type[0] < tile_size:
             condition = ops.broadcast(condition, tile_size)
         elif cond_type[0] > tile_size:
             operand1 = ops.broadcast(operand1, cond_type[0])
             operand2 = ops.broadcast(operand2, cond_type[0])
-        tile_size, ret_type = var_info[operand1]
+        tile_size, ret_type = V.kernel.var_info[operand1]
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
         cond_shape = f"vector<{tile_size}xi1>" if tile_size > 1 else ""
         return f"arith.select %{condition}, %{operand1}, %{operand2} : {cond_shape}, {shape}", [tile_size, ret_type]
 
     @staticmethod
-    def to_dtype(operand, dst_mlir_dtype, *args, var_info=None, **kwargs):
+    def to_dtype(operand, dst_mlir_dtype, *args, **kwargs):
         # Extract source information
-        src_mlir_dtype = var_info[operand][1]
-        tile_size = var_info[operand][0]
+        src_mlir_dtype = V.kernel.var_info[operand][1]
+        tile_size = V.kernel.var_info[operand][0]
 
         # Normalize destination type (Torch dtype -> MLIR string)
         if isinstance(dst_mlir_dtype, torch.dtype):
@@ -172,13 +172,13 @@ class ExtensionOverrides(common.OpOverrides):
         return op_str, [tile_size, dst_mlir_dtype]
 
     @staticmethod
-    def identity(operand, *args, var_info=None, **kwargs):
-        operand_info = var_info[operand]
+    def identity(operand, *args, **kwargs):
+        operand_info = V.kernel.var_info[operand]
         return operand, operand_info
 
     @staticmethod
-    def to_dtype_bitcast(operand, dtype, *args, var_info=None, **kwargs):
-        tile_size, current_src_type = var_info[operand]
+    def to_dtype_bitcast(operand, dtype, *args, **kwargs):
+        tile_size, current_src_type = V.kernel.var_info[operand]
 
         if isinstance(dtype, torch.dtype):
             dst_mlir_type = mlir_common.DTYPE_TO_MLIR[dtype]
@@ -201,11 +201,12 @@ class ExtensionOverrides(common.OpOverrides):
 
     # Binary element wise operations
     @staticmethod
-    def binary_elementwise_common(operand1, operand2, var_info):
+    def binary_elementwise_common(operand1, operand2):
+        V.kernel.var_info = V.kernel.var_info
         operand1.bounds = operand1.bounds.unknown()
         operand2.bounds = operand2.bounds.unknown()
-        op_type1 = var_info[operand1]
-        op_type2 = var_info[operand2]
+        op_type1 = V.kernel.var_info[operand1]
+        op_type2 = V.kernel.var_info[operand2]
         # Tile size check
         if op_type1[0] != op_type2[0]:
             # Try to broad cast
@@ -213,33 +214,33 @@ class ExtensionOverrides(common.OpOverrides):
             rhs_tile_size, rhs_dtype = op_type2
             if lhs_tile_size > rhs_tile_size:
                 operand2 = ops.broadcast(operand2, lhs_tile_size)
-                op_type2 = var_info[operand2]
+                op_type2 = V.kernel.var_info[operand2]
             elif lhs_tile_size < rhs_tile_size:
                 operand1 = ops.broadcast(operand1, rhs_tile_size)
-                op_type1 = var_info[operand1]
+                op_type1 = V.kernel.var_info[operand1]
 
         # Data type check
         if op_type1[1] != op_type2[1]:
             if op_type1[1] == "index" or op_type1 == "index":
                 if op_type1[1] == "index":
                     operand1 = ops.index_cast(operand1, op_type2[1])
-                    op_type1 = var_info[operand1]
+                    op_type1 = V.kernel.var_info[operand1]
                 if op_type2[1] == "index":
                     operand2 = ops.index_cast(operand2, op_type1[1])
-                    op_type2 = var_info[operand2]
+                    op_type2 = V.kernel.var_info[operand2]
             elif op_type1[1][0] == "i" and op_type2[1][0] == "f":
                 operand1 = ops.to_dtype(operand1, op_type2[1])
-                op_type1 = var_info[operand1]
+                op_type1 = V.kernel.var_info[operand1]
             elif op_type1[1][0] == "f" and op_type2[1][0] == "i":
                 operand2 = ops.to_dtype(operand2, op_type1[1])
-                op_type2 = var_info[operand2]
+                op_type2 = V.kernel.var_info[operand2]
             elif op_type1[1][0] == op_type2[1][0]:
                 if mlir_common.MLIR_TO_BIT[op_type1[1]] > mlir_common.MLIR_TO_BIT[op_type2[1]]:
                    operand2 = ops.ext(operand2, op_type1[1])
-                   op_type2 = var_info[operand2]
+                   op_type2 = V.kernel.var_info[operand2]
                 elif mlir_common.MLIR_TO_BIT[op_type1[1]] < mlir_common.MLIR_TO_BIT[op_type2[1]]:
                    operand1 = ops.ext(operand1, op_type2[1])
-                   op_type1 = var_info[operand1]
+                   op_type1 = V.kernel.var_info[operand1]
             else:
                 raise NotImplementedError("Unsupported type converting")
 
@@ -249,45 +250,45 @@ class ExtensionOverrides(common.OpOverrides):
         return tile_size, ret_type, operand1, operand2
 
     @staticmethod
-    def abs(operand, *args, var_info=None, **kwargs):
+    def abs(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def exp(operand, *args, var_info=None, **kwargs):
+    def exp(operand, *args, **kwargs):
         # Check scalar
-        op_type = var_info[operand]
+        op_type = V.kernel.var_info[operand]
         if op_type[0] == 1:
             operand = ops.broadcast(operand, 4)
             val = ops.exp(operand)
             result = ops.extractelement(val, 0)
-            return result, var_info[result]
-        op_type = var_info[operand]
+            return result, V.kernel.var_info[result]
+        op_type = V.kernel.var_info[operand]
         tile_size = op_type[0]
         dtype = op_type[1]
         shape = f"vector<{tile_size}x{dtype}>" if tile_size > 1 else dtype
         return f'math.exp %{operand} : {shape}', [tile_size, dtype]
 
     @staticmethod
-    def exp2(operand, *args, var_info=None, **kwargs):
+    def exp2(operand, *args, **kwargs):
         # Hands-on part: implement exp2 using math.exp2
-        # var_info = {operand: [tile_size, dtype]}
-        # Ex) var_info[operand] = [8, "f32"]
+        # V.kernel.var_info = {operand: [tile_size, dtype]}
+        # Ex) V.kernel.var_info[operand] = [8, "f32"]
 
         ln2 = math.log(2)
         coeff = ops.constant(ln2, "f32")
         operand = ops.mul(operand, coeff)
-        return ops.exp(operand), var_info[operand]
+        return ops.exp(operand), V.kernel.var_info[operand]
 
     @staticmethod
-    def expm1(operand, *args, var_info=None, **kwargs):
+    def expm1(operand, *args, **kwargs):
         coeff = ops.constant(1.0, "f32")
         operand = ops.exp(operand)
         operand = ops.sub(operand, coeff)
-        return operand, var_info[operand]
+        return operand, V.kernel.var_info[operand]
 
     @staticmethod
-    def sqrt(operand, *args, var_info=None, **kwargs):
-        op_type = var_info[operand]
+    def sqrt(operand, *args, **kwargs):
+        op_type = V.kernel.var_info[operand]
 
         tile_size = op_type[0]
         dtype = op_type[1]
@@ -300,14 +301,14 @@ class ExtensionOverrides(common.OpOverrides):
         return f'math.sqrt %{operand} : {shape}', [tile_size, dtype]
 
     @staticmethod
-    def relu(operand, *args, var_info=None, **kwargs):
-        src_mlir_dtype = var_info[operand][1]
-        tile_size = var_info[operand][0]
+    def relu(operand, *args, **kwargs):
+        src_mlir_dtype = V.kernel.var_info[operand][1]
+        tile_size = V.kernel.var_info[operand][0]
         return ops.maximum(operand, ops.constant(0, src_mlir_dtype)), [tile_size, src_mlir_dtype]
 
     @staticmethod
-    def minimum(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def minimum(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
         if ret_type[0] == "f":
             opcode = f'arith.minimumf'
@@ -316,8 +317,8 @@ class ExtensionOverrides(common.OpOverrides):
         return f'{opcode} %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def maximum(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def maximum(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
         if ret_type[0] == "f":
             opcode = f'arith.maximumf'
@@ -326,17 +327,17 @@ class ExtensionOverrides(common.OpOverrides):
         return f'{opcode} %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def cos(operand, *args, var_info=None, **kwargs):
-        op_type = var_info[operand]
+    def cos(operand, *args, **kwargs):
+        op_type = V.kernel.var_info[operand]
 
         # Check scalar
-        op_type = var_info[operand]
+        op_type = V.kernel.var_info[operand]
         if op_type[0] == 1:
             operand = ops.broadcast(operand, 4)
             val = ops.cos(operand)
             result = ops.extractelement(val, 0)
-            return result, var_info[result]
-        op_type = var_info[operand]
+            return result, V.kernel.var_info[result]
+        op_type = V.kernel.var_info[operand]
         tile_size = op_type[0]
         dtype = op_type[1]
 
@@ -347,17 +348,17 @@ class ExtensionOverrides(common.OpOverrides):
         return f'math.cos %{operand} : {shape}', [tile_size, dtype]
 
     @staticmethod
-    def sin(operand, *args, var_info=None, **kwargs):
-        op_type = var_info[operand]
+    def sin(operand, *args, **kwargs):
+        op_type = V.kernel.var_info[operand]
 
         # Check scalar
-        op_type = var_info[operand]
+        op_type = V.kernel.var_info[operand]
         if op_type[0] == 1:
             operand = ops.broadcast(operand, 4)
             val = ops.sin(operand)
             result = ops.extractelement(val, 0)
-            return result, var_info[result]
-        op_type = var_info[operand]
+            return result, V.kernel.var_info[result]
+        op_type = V.kernel.var_info[operand]
         tile_size = op_type[0]
         dtype = op_type[1]
 
@@ -368,51 +369,51 @@ class ExtensionOverrides(common.OpOverrides):
         return f'math.sin %{operand} : {shape}', [tile_size, dtype]
 
     @staticmethod
-    def tan(operand, *args, var_info=None, **kwargs):
+    def tan(operand, *args, **kwargs):
         sin_res = ops.sin(operand)
         cos_res = ops.cos(operand)
         operand = ops.truediv(sin_res, cos_res)
-        return operand, var_info[operand]
+        return operand, V.kernel.var_info[operand]
 
     @staticmethod
-    def lgamma(operand, *args, var_info=None, **kwargs):
+    def lgamma(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def erf(operand, *args, var_info=None, **kwargs):
+    def erf(operand, *args, **kwargs):
         # Check scalar
-        op_type = var_info[operand]
+        op_type = V.kernel.var_info[operand]
         if op_type[0] == 1:
             operand = ops.broadcast(operand, 4)
             val = ops.erf(operand)
             result = ops.extractelement(val, 0)
-            return result, var_info[result]
-        op_type = var_info[operand]
+            return result, V.kernel.var_info[result]
+        op_type = V.kernel.var_info[operand]
         tile_size = op_type[0]
         dtype = op_type[1]
         shape = f"vector<{tile_size}x{dtype}>" if tile_size > 1 else dtype
         return f'math.erf %{operand} : {shape}', [tile_size, dtype]
 
     @staticmethod
-    def cosh(operand, *args, var_info=None, **kwargs):
+    def cosh(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def sinh(operand, *args, var_info=None, **kwargs):
+    def sinh(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def tanh(operand, *args, var_info=None, **kwargs):
-        op_type = var_info[operand]
+    def tanh(operand, *args, **kwargs):
+        op_type = V.kernel.var_info[operand]
 
         # Check scalar
-        op_type = var_info[operand]
+        op_type = V.kernel.var_info[operand]
         if op_type[0] == 1:
             operand = ops.broadcast(operand, 4)
             val = ops.tanh(operand)
             result = ops.extractelement(val, 0)
-            return result, var_info[result]
-        op_type = var_info[operand]
+            return result, V.kernel.var_info[result]
+        op_type = V.kernel.var_info[operand]
         tile_size = op_type[0]
         dtype = op_type[1]
 
@@ -423,80 +424,80 @@ class ExtensionOverrides(common.OpOverrides):
         return f'math.tanh %{operand} : {shape}', [tile_size, dtype]
 
     @staticmethod
-    def acos(operand, *args, var_info=None, **kwargs):
+    def acos(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def acosh(operand, *args, var_info=None, **kwargs):
+    def acosh(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def asin(operand, *args, var_info=None, **kwargs):
+    def asin(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def asinh(operand, *args, var_info=None, **kwargs):
+    def asinh(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def atan2(operand1, operand2, *args, var_info=None, **kwargs):
+    def atan2(operand1, operand2, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def atan(operand, *args, var_info=None, **kwargs):
+    def atan(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def atanh(operand, *args, var_info=None, **kwargs):
+    def atanh(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def copysign(operand1, operand2, *args, var_info=None, **kwargs):
+    def copysign(operand1, operand2, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def erfc(operand, *args, var_info=None, **kwargs):
+    def erfc(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def erfinv(operand, *args, var_info=None, **kwargs):
+    def erfinv(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def frexp(operand, *args, var_info=None, **kwargs):
+    def frexp(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def hypot(operand1, operand2, *args, var_info=None, **kwargs):
+    def hypot(operand1, operand2, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def log10(operand, *args, var_info=None, **kwargs):
+    def log10(operand, *args, **kwargs):
         val_ln = ops.log(operand)
         
-        tile_size, dtype = var_info[val_ln]
+        tile_size, dtype = V.kernel.var_info[val_ln]
         inv_ln10 = 1/math.log(10)
         const_op = ops.constant(inv_ln10, dtype)
         
         # Multiply: ln(x) * (1/ln(10))
         result = ops.mul(val_ln, const_op)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     @staticmethod
-    def log2(operand, *args, var_info=None, **kwargs):
+    def log2(operand, *args, **kwargs):
         val_ln = ops.log(operand)
         
-        tile_size, dtype = var_info[val_ln]
+        tile_size, dtype = V.kernel.var_info[val_ln]
         inv_ln10 = 1/math.log(2)
         const_op = ops.constant(inv_ln10, dtype)
         
         # Multiply: ln(x) * (1/ln(10))
         result = ops.mul(val_ln, const_op)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     @staticmethod
-    def log(operand, *args, var_info=None, **kwargs):
-        op_type = var_info[operand]
+    def log(operand, *args, **kwargs):
+        op_type = V.kernel.var_info[operand]
         tile_size = op_type[0]
         dtype = op_type[1]
 
@@ -508,109 +509,107 @@ class ExtensionOverrides(common.OpOverrides):
         return f'math.log %{operand} : {shape}', [tile_size, dtype]
 
     @staticmethod
-    def log1p(operand, *args, var_info=None, **kwargs):
-        tile_size, dtype = var_info[operand]
+    def log1p(operand, *args, **kwargs):
+        tile_size, dtype = V.kernel.var_info[operand]
         const_one = ops.constant(1, dtype)
 
-        # 3. 덧셈 연산: (x + 1)
-        # ops.add가 (result_ssa, result_info)를 반환한다고 가정
         val_add = ops.add(operand, const_one)
         result = ops.log(val_add)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     @staticmethod
-    def nextafter(operand1, operand2, *args, var_info=None, **kwargs):
+    def nextafter(operand1, operand2, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def logical_and(operand1, operand2, *args, var_info=None, **kwargs):
-        if var_info[operand1][1] != "i1":
+    def logical_and(operand1, operand2, *args, **kwargs):
+        if V.kernel.var_info[operand1][1] != "i1":
             operand1 = ops.to_bool(operand1)
         
-        if var_info[operand2][1] != "i1":
+        if V.kernel.var_info[operand2][1] != "i1":
             operand2 = ops.to_bool(operand2)
         result = ops.and_(operand1, operand2)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     @staticmethod
-    def logical_or(operand1, operand2, *args, var_info=None, **kwargs):
-        if var_info[operand1][1] != "i1":
+    def logical_or(operand1, operand2, *args, **kwargs):
+        if V.kernel.var_info[operand1][1] != "i1":
             operand1 = ops.to_bool(operand1)
         
-        if var_info[operand2][1] != "i1":
+        if V.kernel.var_info[operand2][1] != "i1":
             operand2 = ops.to_bool(operand2)
         result = ops.or_(operand1, operand2)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     @staticmethod
-    def logical_xor(operand1, operand2, *args, var_info=None, **kwargs):
-        if var_info[operand1][1] != "i1":
+    def logical_xor(operand1, operand2, *args, **kwargs):
+        if V.kernel.var_info[operand1][1] != "i1":
             operand1 = ops.to_bool(operand1)
         
-        if var_info[operand2][1] != "i1":
+        if V.kernel.var_info[operand2][1] != "i1":
             operand2 = ops.to_bool(operand2)
         result = ops.xor(operand1, operand2)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
     
     @staticmethod
-    def logical_not(operand, *args, var_info=None, **kwargs):
-        op_info = var_info[operand]
+    def logical_not(operand, *args, **kwargs):
+        op_info = V.kernel.var_info[operand]
         tile_size = op_info[0]
         dtype = op_info[1]
         
         zero_const = ops.constant(0, dtype)
         result = ops.eq(operand, zero_const)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     @staticmethod
-    def bitwise_and(operand1, operand2, *args, var_info=None, **kwargs):
+    def bitwise_and(operand1, operand2, *args, **kwargs):
         # Float check
-        if var_info[operand1][1].startswith("f") or var_info[operand2][1].startswith("f"):
+        if V.kernel.var_info[operand1][1].startswith("f") or V.kernel.var_info[operand2][1].startswith("f"):
             raise ValueError("Bitwise AND not supported for floats")
             
         result = ops.and_(operand1, operand2)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     @staticmethod
-    def bitwise_not(operand, *args, var_info=None, **kwargs):
-        tile_size, dtype = var_info[operand]
+    def bitwise_not(operand, *args, **kwargs):
+        tile_size, dtype = V.kernel.var_info[operand]
         # Float check
-        if var_info[operand][1].startswith("f"):
+        if V.kernel.var_info[operand][1].startswith("f"):
             raise ValueError("Bitwise NOT not supported for floats")
         
         neg_one = ops.constant(-1, dtype)
         result = ops.xor(operand, neg_one) 
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     @staticmethod
-    def bitwise_or(operand1, operand2, *args, var_info=None, **kwargs):
+    def bitwise_or(operand1, operand2, *args, **kwargs):
         # Float check
-        if var_info[operand1][1].startswith("f") or var_info[operand2][1].startswith("f"):
+        if V.kernel.var_info[operand1][1].startswith("f") or V.kernel.var_info[operand2][1].startswith("f"):
             raise ValueError("Bitwise AND not supported for floats")
             
         result = ops.or_(operand1, operand2)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     @staticmethod
-    def bitwise_xor(operand1, operand2, *args, var_info=None, **kwargs):
+    def bitwise_xor(operand1, operand2, *args, **kwargs):
                 # Float check
-        if var_info[operand1][1].startswith("f") or var_info[operand2][1].startswith("f"):
+        if V.kernel.var_info[operand1][1].startswith("f") or V.kernel.var_info[operand2][1].startswith("f"):
             raise ValueError("Bitwise AND not supported for floats")
             
         result = ops.xor(operand1, operand2)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     @staticmethod
-    def bitwise_left_shift(operand1, operand2, *args, var_info=None, **kwargs):
+    def bitwise_left_shift(operand1, operand2, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def bitwise_right_shift(operand1, operand2, *args, var_info=None, **kwargs):
+    def bitwise_right_shift(operand1, operand2, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def rsqrt(operand, *args, var_info=None, **kwargs):
-        op_type = var_info[operand]
+    def rsqrt(operand, *args, **kwargs):
+        op_type = V.kernel.var_info[operand]
         tile_size = op_type[0]
         dtype = op_type[1]
 
@@ -622,28 +621,28 @@ class ExtensionOverrides(common.OpOverrides):
         return f'math.rsqrt %{operand} : {shape}', [tile_size, dtype]
 
     @staticmethod
-    def sigmoid(operand, *args, var_info=None, **kwargs):
-        op_type = var_info[operand]
+    def sigmoid(operand, *args, **kwargs):
+        op_type = V.kernel.var_info[operand]
         tile_size = op_type[0]
         dtype = op_type[1]
         one = ops.constant(1, dtype)
         return ops.truediv(one, ops.add(one, ops.exp(ops.neg(operand)))), [tile_size, dtype]
 
     @staticmethod
-    def fmod(operand1, operand2, *args, var_info=None, **kwargs):
+    def fmod(operand1, operand2, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def isinf(operand, *args, var_info=None, **kwargs):
+    def isinf(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def isnan(operand, *args, var_info=None, **kwargs):
+    def isnan(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def round(operand, *args, var_info=None, **kwargs):
-        tile_size, dtype = var_info[operand]
+    def round(operand, *args, **kwargs):
+        tile_size, dtype = V.kernel.var_info[operand]
         shape = f"vector<{tile_size}x{dtype}>" if tile_size > 1 else dtype
 
         if dtype.startswith("f"):
@@ -652,8 +651,8 @@ class ExtensionOverrides(common.OpOverrides):
             return operand, [tile_size, dtype]
 
     @staticmethod
-    def floor(operand, *args, var_info=None, **kwargs):
-        tile_size, dtype = var_info[operand]
+    def floor(operand, *args, **kwargs):
+        tile_size, dtype = V.kernel.var_info[operand]
         shape = f"vector<{tile_size}x{dtype}>" if tile_size > 1 else dtype
 
         if dtype.startswith("f"):
@@ -662,12 +661,12 @@ class ExtensionOverrides(common.OpOverrides):
             return operand, [tile_size, dtype]
 
     @staticmethod
-    def sign(operand, *args, var_info=None, **kwargs):
+    def sign(operand, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def trunc(operand, *args, var_info=None, **kwargs):
-        tile_size, dtype = var_info[operand]
+    def trunc(operand, *args, **kwargs):
+        tile_size, dtype = V.kernel.var_info[operand]
         shape = f"vector<{tile_size}x{dtype}>" if tile_size > 1 else dtype
 
         if dtype.startswith("f"):
@@ -676,8 +675,8 @@ class ExtensionOverrides(common.OpOverrides):
             return operand, [tile_size, dtype]
 
     @staticmethod
-    def ceil(operand, *args, var_info=None, **kwargs):
-        tile_size, dtype = var_info[operand]
+    def ceil(operand, *args, **kwargs):
+        tile_size, dtype = V.kernel.var_info[operand]
         shape = f"vector<{tile_size}x{dtype}>" if tile_size > 1 else dtype
 
         if dtype.startswith("f"):
@@ -687,8 +686,8 @@ class ExtensionOverrides(common.OpOverrides):
 
     # Logical operations
     @staticmethod
-    def neg(operand, *args, var_info=None, **kwargs):
-        op_type = var_info[operand]
+    def neg(operand, *args, **kwargs):
+        op_type = V.kernel.var_info[operand]
         tile_size = op_type[0]
         dtype = op_type[1]
 
@@ -700,8 +699,8 @@ class ExtensionOverrides(common.OpOverrides):
         return f'arith.negf %{operand} : {shape}', [tile_size, dtype]
 
     @staticmethod
-    def reciprocal(operand, *args, var_info=None, **kwargs):
-        op_type = var_info[operand]
+    def reciprocal(operand, *args, **kwargs):
+        op_type = V.kernel.var_info[operand]
         tile_size = op_type[0]
         dtype = op_type[1]
 
@@ -712,8 +711,8 @@ class ExtensionOverrides(common.OpOverrides):
         return ops.truediv(ops.constant(1.0, dtype), operand), [tile_size, dtype]
 
     @staticmethod
-    def eq(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def eq(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         if ret_type[0] == "f":
             op_type = "arith.cmpf"
             attribute = "oeq"
@@ -727,8 +726,8 @@ class ExtensionOverrides(common.OpOverrides):
         return f'{op_type} {attribute}, %{operand1}, %{operand2} : {shape}', [tile_size, "i1"]
 
     @staticmethod
-    def ne(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def ne(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         if ret_type[0] == "f":
             op_type = "arith.cmpf"
             attribute = "one"
@@ -742,8 +741,8 @@ class ExtensionOverrides(common.OpOverrides):
         return f'{op_type} {attribute}, %{operand1}, %{operand2} : {shape}', [tile_size, "i1"]
 
     @staticmethod
-    def lt(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def lt(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         if ret_type[0] == "f":
             op_type = "arith.cmpf"
             attribute = "olt"
@@ -757,8 +756,8 @@ class ExtensionOverrides(common.OpOverrides):
         return f'{op_type} {attribute}, %{operand1}, %{operand2} : {shape}', [tile_size, "i1"]
 
     @staticmethod
-    def gt(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def gt(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         if ret_type[0] == "f":
             op_type = "arith.cmpf"
             attribute = "ogt"
@@ -772,8 +771,8 @@ class ExtensionOverrides(common.OpOverrides):
         return f'{op_type} {attribute}, %{operand1}, %{operand2} : {shape}', [tile_size, "i1"]
 
     @staticmethod
-    def le(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def le(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         if ret_type[0] == "f":
             op_type = "arith.cmpf"
             attribute = "ole"
@@ -787,8 +786,8 @@ class ExtensionOverrides(common.OpOverrides):
         return f'{op_type} {attribute}, %{operand1}, %{operand2} : {shape}', [tile_size, "i1"]
 
     @staticmethod
-    def ge(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def ge(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         if ret_type[0] == "f":
             op_type = "arith.cmpf"
             attribute = "oge"
@@ -802,29 +801,29 @@ class ExtensionOverrides(common.OpOverrides):
         return f'{op_type} {attribute}, %{operand1}, %{operand2} : {shape}', [tile_size, "i1"]
 
     @staticmethod
-    def add(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def add(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
         opcode = f'arith.add{ret_type[0]}'
         return f'{opcode} %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def sub(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def sub(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
         opcode = f'arith.sub{ret_type[0]}'
         return f'{opcode} %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def mul(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def mul(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
         opcode = f'arith.mul{ret_type[0]}'
         return f'{opcode} %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def pow(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def pow(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         # Type check & auto cast
         if ret_type.startswith("f"):
             operand1 = ops.to_dtype(operand1, "f32")
@@ -837,37 +836,37 @@ class ExtensionOverrides(common.OpOverrides):
         return f"math.pow{ret_type[0]} %{operand1}, %{operand2} : {shape}", [tile_size, ret_type]
 
     @staticmethod
-    def and_(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def and_(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
         return f'arith.andi %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def or_(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def or_(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
         return f'arith.ori %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def xor(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def xor(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
         return f'arith.xori %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def lshift(operand1, operand2, *args, var_info=None, **kwargs):
+    def lshift(operand1, operand2, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def rshift(operand1, operand2, *args, var_info=None, **kwargs):
+    def rshift(operand1, operand2, *args, **kwargs):
         raise NotImplementedError
 
     @staticmethod
-    def truncdiv(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def truncdiv(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
 
         if ret_type.startswith("f"):
@@ -877,8 +876,8 @@ class ExtensionOverrides(common.OpOverrides):
         return f'arith.divsi %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def floordiv(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def floordiv(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
 
         if ret_type.startswith("f"):
@@ -889,8 +888,8 @@ class ExtensionOverrides(common.OpOverrides):
         return f'arith.floordivsi %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def truediv(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def truediv(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
 
         if not ret_type.startswith("f"):
@@ -899,12 +898,12 @@ class ExtensionOverrides(common.OpOverrides):
         return f'arith.divf %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def int_truediv(operand1, operand2, *args, var_info=None, **kwargs):
+    def int_truediv(operand1, operand2, *args, **kwargs):
         """
         True division for Integers (Int -> Float).
         Promotes integers to floats, then performs floating-point division.
         """
-        tile_size, src_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+        tile_size, src_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         if not src_type.startswith("f"):
             target_float_type = "f32"
             operand1 = ops.to_dtype(operand1, target_float_type)
@@ -912,11 +911,11 @@ class ExtensionOverrides(common.OpOverrides):
             src_type = target_float_type
 
         result = ops.truediv(operand1, operand2)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     @staticmethod
-    def mod(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def mod(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
         if ret_type[0] == "f":
             raise NotImplementedError("Not support remainder operation for floating point")
@@ -925,8 +924,8 @@ class ExtensionOverrides(common.OpOverrides):
         return f'{opcode} %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def remainder(operand1, operand2, *args, var_info=None, **kwargs):
-        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2, var_info)
+    def remainder(operand1, operand2, *args, **kwargs):
+        tile_size, ret_type, operand1, operand2 = ExtensionOverrides.binary_elementwise_common(operand1, operand2)
         shape = f"vector<{tile_size}x{ret_type}>" if tile_size > 1 else ret_type
 
         if ret_type.startswith("f"):
@@ -937,28 +936,28 @@ class ExtensionOverrides(common.OpOverrides):
         return f'{opcode} %{operand1}, %{operand2} : {shape}', [tile_size, ret_type]
 
     @staticmethod
-    def square(operand, *args, var_info=None, **kwargs):
+    def square(operand, *args, **kwargs):
         result = ops.mul(operand, operand)
-        return result, var_info[result]
+        return result, V.kernel.var_info[result]
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # PyTorchSim specific operations 
 
     @staticmethod
-    def alloc(size, src_type, *args, var_info=None, **kwargs):
+    def alloc(size, src_type, *args, **kwargs):
         return f"memref.alloc() : memref<{size}x{src_type}>", [size, src_type]
 
     @staticmethod
-    def extractelement(operand, idx, *args, var_info=None, **kwargs):
-        op_type = var_info[operand]
+    def extractelement(operand, idx, *args, **kwargs):
+        op_type = V.kernel.var_info[operand]
         tile_size = op_type[0]
         dtype = op_type[1]
         shape = f"vector<{tile_size}x{dtype}>" if tile_size > 1 else dtype
         return f"vector.extract %{operand}[{idx}]: {dtype} from {shape}", [1, dtype]
 
     @staticmethod
-    def ext(operand, dtype, *args, var_info=None, **kwargs):
-        op_type = var_info[operand]
+    def ext(operand, dtype, *args, **kwargs):
+        op_type = V.kernel.var_info[operand]
         shape = f"vector<{op_type[0]}x{op_type[1]}>" if op_type[0] > 1 else f"{op_type[1]}"
         target_type = f"vector<{op_type[0]}x{dtype}>" if op_type[0] > 1 else f"{dtype}"
         if op_type[0] == "f":
@@ -968,8 +967,8 @@ class ExtensionOverrides(common.OpOverrides):
         return f'{opcode} %{operand} : {shape} to {target_type}', [op_type[0], dtype]
 
     @staticmethod
-    def to_bool(operand, *args, var_info=None, **kwargs):
-        tile_size, ret_type = var_info[operand]
+    def to_bool(operand, *args, **kwargs):
+        tile_size, ret_type = V.kernel.var_info[operand]
         if ret_type == "i1":
             return operand, [tile_size, ret_type]
 
@@ -984,15 +983,15 @@ class ExtensionOverrides(common.OpOverrides):
         return f"vector.step : {index_shape}", [size, dtype]
 
     @staticmethod
-    def index_cast(operand, target_type, *args, var_info=None, **kwrags):
-        op_type = var_info[operand]
+    def index_cast(operand, target_type, *args, **kwrags):
+        op_type = V.kernel.var_info[operand]
         src_shape = f"vector<{op_type[0]}x{op_type[1]}>" if op_type[0] > 1 else op_type[1]
         des_shape = f"vector<{op_type[0]}x{target_type}>" if op_type[0] > 1 else target_type
         return f"arith.index_cast %{operand} : {src_shape} to {des_shape}", [op_type[0], target_type]
 
     @staticmethod
-    def shape_cast(operand, src_shape, dst_shape, *args, var_info=None, **kwargs):
-        operand_type = var_info[operand]
+    def shape_cast(operand, src_shape, dst_shape, *args, **kwargs):
+        operand_type = V.kernel.var_info[operand]
         return f"vector.shape_cast %{operand} : {src_shape} to {dst_shape}", operand_type
 
     @staticmethod
@@ -1008,7 +1007,7 @@ class ExtensionOverrides(common.OpOverrides):
         return line, [red_size, type_name]
 
     @staticmethod
-    def _load(compute_vec_size, mlir_dtype, buffer, indices, buffer_shape, *args, var_info=None, **kwargs):
+    def _load(compute_vec_size, mlir_dtype, buffer, indices, buffer_shape, *args, **kwargs):
         if compute_vec_size == 1:
             vshape = f"{mlir_dtype}"
             operation = "affine.load"
@@ -1020,8 +1019,8 @@ class ExtensionOverrides(common.OpOverrides):
         return line, [compute_vec_size, mlir_dtype]
 
     @staticmethod
-    def _store(operand, buffer, indices, buffer_shape, *args, buffer_name=None, var_info=None, **kwargs):
-        compute_vec_size, mlir_dtype = var_info[operand][0], var_info[operand][1]
+    def _store(operand, buffer, indices, buffer_shape, *args, buffer_name=None, **kwargs):
+        compute_vec_size, mlir_dtype = V.kernel.var_info[operand][0], V.kernel.var_info[operand][1]
 
         if compute_vec_size == 1:
             vshape = f"{mlir_dtype}"
