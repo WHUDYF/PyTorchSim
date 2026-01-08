@@ -609,9 +609,14 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         self.recodegen = reason # spad overflow, tile size, vlane stride
         self.stop_autotune = False
 
-        # Context var for codegen
-        self.target_buffer_override = contextvars.ContextVar("Handler_compute_override", default=self.compute)
-        self.target_cse_override = contextvars.ContextVar("Handler_cse_override", default=self.cse)
+        # Context var for codegen - preserve existing ContextVar on reset to avoid Token mismatch
+        # Don't recreate if already exists (e.g., when reset() is called during active context manager)
+        if not hasattr(self, 'target_buffer_override'):
+            instance_id = id(self)
+            self.target_buffer_override = contextvars.ContextVar(f"Handler_compute_override_{instance_id}", default=self.compute)
+            self.target_cse_override = contextvars.ContextVar(f"Handler_cse_override_{instance_id}", default=self.cse)
+        else:
+            pass
 
     def set_ranges(self, lengths, reduction_lengths):
         if self.call_ranges:
