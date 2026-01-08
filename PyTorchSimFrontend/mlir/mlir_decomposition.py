@@ -67,14 +67,37 @@ def decompose_native_multi_head_attention(
         value_flat = value
 
     # QKV projection using qkv_weight and qkv_bias
-    # qkv_weight shape: [3*embed_dim, embed_dim] -> split into 3 parts
-    # Split qkv_weight into Q, K, V weights
-    qkv_weight_q, qkv_weight_k, qkv_weight_v = torch.split(qkv_weight, embed_dim, dim=0)
-    if qkv_bias is not None:
-        # qkv_bias shape: [3*embed_dim] -> split into 3 parts
-        qkv_bias_q, qkv_bias_k, qkv_bias_v = torch.split(qkv_bias, embed_dim, dim=0)
+    # Check if GQA (Grouped Query Attention) is used
+    # Standard MHA: qkv_weight shape = [3*embed_dim, embed_dim]
+    # GQA: qkv_weight shape = [embed_dim + 2*kv_embed_dim, embed_dim] where kv_embed_dim < embed_dim
+    qkv_weight_total = qkv_weight.shape[0]
+
+    # Determine if GQA: if qkv_weight is not exactly 3*embed_dim, it might be GQA
+    if qkv_weight_total == 3 * embed_dim:
+        # Standard MHA: split equally
+        qkv_weight_q, qkv_weight_k, qkv_weight_v = torch.split(qkv_weight, embed_dim, dim=0)
+        if qkv_bias is not None:
+            qkv_bias_q, qkv_bias_k, qkv_bias_v = torch.split(qkv_bias, embed_dim, dim=0)
+        else:
+            qkv_bias_q = qkv_bias_k = qkv_bias_v = None
+        kv_embed_dim = embed_dim
+        kv_heads = num_heads
     else:
-        qkv_bias_q = qkv_bias_k = qkv_bias_v = None
+        # GQA: Q has embed_dim, K and V share the rest
+        # Assume Q = embed_dim, K = V = (qkv_weight_total - embed_dim) / 2
+        q_dim = embed_dim
+        kv_dim = (qkv_weight_total - embed_dim) // 2
+        qkv_weight_q = qkv_weight[:q_dim]
+        qkv_weight_k = qkv_weight[q_dim:q_dim + kv_dim]
+        qkv_weight_v = qkv_weight[q_dim + kv_dim:]
+        if qkv_bias is not None:
+            qkv_bias_q = qkv_bias[:q_dim]
+            qkv_bias_k = qkv_bias[q_dim:q_dim + kv_dim]
+            qkv_bias_v = qkv_bias[q_dim + kv_dim:]
+        else:
+            qkv_bias_q = qkv_bias_k = qkv_bias_v = None
+        kv_embed_dim = kv_dim
+        kv_heads = kv_embed_dim // head_dim  # Number of KV heads
 
     # Project Q, K, V
     q = torch.nn.functional.linear(query_flat, qkv_weight_q, qkv_bias_q)
@@ -83,25 +106,25 @@ def decompose_native_multi_head_attention(
 
     # Reshape back: [batch*seq_len, embed_dim] -> [batch, seq_len, embed_dim]
     q = q.view(batch_size, seq_len, embed_dim)
-    k = k.view(batch_size, seq_len, embed_dim)
-    v = v.view(batch_size, seq_len, embed_dim)
+    k = k.view(batch_size, seq_len, kv_embed_dim)
+    v = v.view(batch_size, seq_len, kv_embed_dim)
 
     # Step 2: Reshape to multi-head format
     # [batch, seq_len, embed_dim] -> [batch, seq_len, num_heads, head_dim]
     q = q.view(batch_size, seq_len, num_heads, head_dim)
-    k = k.view(batch_size, seq_len, num_heads, head_dim)
-    v = v.view(batch_size, seq_len, num_heads, head_dim)
-
-    # Transpose to [batch, num_heads, seq_len, head_dim] for bmm
-    # [batch, seq_len, embed_dim] -> [batch, seq_len, num_heads, head_dim]
-    q = q.view(batch_size, seq_len, num_heads, head_dim)
-    k = k.view(batch_size, seq_len, num_heads, head_dim)
-    v = v.view(batch_size, seq_len, num_heads, head_dim)
+    k = k.view(batch_size, seq_len, kv_heads, head_dim)
+    v = v.view(batch_size, seq_len, kv_heads, head_dim)
 
     # Transpose to [batch, num_heads, seq_len, head_dim] for bmm
     q = q.transpose(1, 2)  # [batch, num_heads, seq_len, head_dim]
-    k = k.transpose(1, 2)  # [batch, num_heads, seq_len, head_dim]
-    v = v.transpose(1, 2)  # [batch, num_heads, seq_len, head_dim]
+    k = k.transpose(1, 2)  # [batch, kv_heads, seq_len, head_dim]
+    v = v.transpose(1, 2)  # [batch, kv_heads, seq_len, head_dim]
+
+    # GQA: If key/value have fewer heads, repeat them to match query heads
+    if kv_heads < num_heads:
+        repeat_factor = num_heads // kv_heads
+        k = k.repeat_interleave(repeat_factor, dim=1)  # [batch, num_heads, seq_len, head_dim]
+        v = v.repeat_interleave(repeat_factor, dim=1)  # [batch, num_heads, seq_len, head_dim]
 
     # Step 3: Scaled dot product attention
     # Scale Q
