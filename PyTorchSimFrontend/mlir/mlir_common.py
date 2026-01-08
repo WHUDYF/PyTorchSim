@@ -609,14 +609,9 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         self.recodegen = reason # spad overflow, tile size, vlane stride
         self.stop_autotune = False
 
-        # Context var for codegen - preserve existing ContextVar on reset to avoid Token mismatch
-        # Don't recreate if already exists (e.g., when reset() is called during active context manager)
-        if not hasattr(self, 'target_buffer_override'):
-            instance_id = id(self)
-            self.target_buffer_override = contextvars.ContextVar(f"Handler_compute_override_{instance_id}", default=self.compute)
-            self.target_cse_override = contextvars.ContextVar(f"Handler_cse_override_{instance_id}", default=self.cse)
-        else:
-            pass
+        instance_id = id(self)
+        self.target_buffer_override = contextvars.ContextVar(f"Handler_compute_override_{instance_id}", default=self.compute)
+        self.target_cse_override = contextvars.ContextVar(f"Handler_cse_override_{instance_id}", default=self.cse)
 
     def set_ranges(self, lengths, reduction_lengths):
         if self.call_ranges:
@@ -697,7 +692,9 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             }
             new_index = operand.index.subs(subs_map)
             for arg in new_index.args:
-                if len(arg.free_symbols) != 1:
+                if arg.is_number:
+                    continue
+                if len(arg.free_symbols) > 1:
                     raise NotImplementedError("Not supporting this view operation...!")
                 if arg.is_Mul and arg.args[0].is_number:
                     arg = arg.args[1]
@@ -852,18 +849,20 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
 
     @contextmanager
     def override_buffer_cse(self, *, buffer=None, cse=None):
+        buffer_override = self.target_buffer_override
+        cse_override = self.target_cse_override
         target_buffer = target_cse = None
         try:
             if buffer is not None:
-                target_buffer = self.target_buffer_override.set(buffer)
+                target_buffer = buffer_override.set(buffer)
             if cse is not None:
-                target_cse = self.target_cse_override.set(cse)
+                target_cse = cse_override.set(cse)
             yield self
         finally:
             if target_cse is not None:
-                self.target_cse_override.reset(target_cse)
+                cse_override.reset(target_cse)
             if target_buffer is not None:
-                self.target_buffer_override.reset(target_buffer)
+                buffer_override.reset(target_buffer)
 
     def __enter__(self):
         class CSEProxy:

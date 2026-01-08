@@ -360,6 +360,8 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
 
         # Replace Identity arguments with Identity.args[0]
         for arg in expr.args:
+            if arg.is_Mul and arg.args[0].is_number and isinstance(arg.args[1], Identity):
+                expr = expr.replace(arg.args[1], arg.args[1].args[0])
             if isinstance(arg, Identity):
                 expr = expr.replace(arg, arg.args[0] if arg.args else arg)
 
