@@ -3,6 +3,7 @@ from __future__ import annotations
 from textwrap import dedent
 
 from torch._inductor.codegen.common import DeviceOpOverrides, register_device_op_overrides
+from torch._inductor.codegen.cpu_device_op_overrides import CpuDeviceOpOverrides
 
 class ExtensionDeviceOpOverrides(DeviceOpOverrides):
     def import_get_raw_stream_as(self, name: str) -> str:
@@ -23,3 +24,4 @@ class ExtensionDeviceOpOverrides(DeviceOpOverrides):
         return "pass"
 
 register_device_op_overrides("npu", ExtensionDeviceOpOverrides())
+register_device_op_overrides("cpu", CpuDeviceOpOverrides())

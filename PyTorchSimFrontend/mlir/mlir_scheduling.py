@@ -18,6 +18,7 @@ from torch._inductor.codegen.common import BackendFeature
 
 from . import mlir_common
 from . import mlir_lowering # DO NOT REMOVE THIS LINE, it is used for lowering
+from . import mlir_decomposition # DO NOT REMOVE THIS LINE, it is used for decomposition
 
 class MLIRScheduling(BaseScheduling):
     count = 0
