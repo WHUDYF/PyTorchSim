@@ -21,7 +21,7 @@ from torch._inductor.utils import (
     is_welford_reduction,
     sympy_product
 )
-from torch.utils._sympy.functions import ModularIndexing, FloorDiv
+from torch.utils._sympy.functions import ModularIndexing, FloorDiv, Identity
 from PyTorchSimFrontend import extension_codecache
 from PyTorchSimFrontend import extension_config
 from . import mlir_common
@@ -198,26 +198,27 @@ class ExtensionWrapperCodegen(wrapper.PythonWrapperCodegen):
         with contextlib.ExitStack() as stack:
             stack.enter_context(self.wrapper_call.indent())
             self.memory_plan_reuse()
-            for line in self.lines:
-                # Add buffer plan hook for dealloc
-                if isinstance(line, memory_planning.DeallocFromPoolLine):
-                    self.wrapper_call.writeline(f"sram_plan_postfix('{line.node.get_name()}', {line.node.get_name()})")
-                elif isinstance(line, str) and "del" in line:
-                    name = line.split(" ")[1]
-                    self.wrapper_call.writeline(f"sram_plan_postfix('{name}', {name})")
+            with self.set_writeline(self.wrapper_call.writeline):
+                for line in self.lines:
+                    # Add buffer plan hook for dealloc
+                    if isinstance(line, memory_planning.DeallocFromPoolLine):
+                        self.wrapper_call.writeline(f"sram_plan_postfix('{line.node.get_name()}', {line.node.get_name()})")
+                    elif isinstance(line, str) and "del" in line:
+                        name = line.split(" ")[1]
+                        self.wrapper_call.writeline(f"sram_plan_postfix('{name}', {name})")
 
-                if isinstance(line, wrapper.MemoryPlanningLine):
-                    line.codegen(self.wrapper_call)
-                elif isinstance(line, wrapper.KernelCallLine):
-                    self.wrapper_call.writeline(self.wrap_kernel_call(line.kernel_name, line.call_args))
-                else:
-                    if isinstance(line, wrapper.WrapperLine):
+                    if isinstance(line, wrapper.MemoryPlanningLine):
                         line.codegen(self.wrapper_call)
+                    elif isinstance(line, wrapper.KernelCallLine):
+                        self.wrapper_call.writeline(self.wrap_kernel_call(line.kernel_name, line.call_args))
                     else:
-                        self.wrapper_call.writeline(line)
-                # Add buffer plan hook for alloc
-                if isinstance(line, memory_planning.AllocFromPoolLine) or isinstance(line, wrapper.AllocateLine):
-                    self.wrapper_call.writeline(f"sram_plan_prefix('{line.node.get_name()}', {line.node.get_name()})")
+                        if isinstance(line, wrapper.WrapperLine):
+                            line.codegen(self.wrapper_call)
+                        else:
+                            self.wrapper_call.writeline(line)
+                    # Add buffer plan hook for alloc
+                    if isinstance(line, memory_planning.AllocFromPoolLine) or isinstance(line, wrapper.AllocateLine):
+                        self.wrapper_call.writeline(f"sram_plan_prefix('{line.node.get_name()}', {line.node.get_name()})")
             output_refs = self.get_output_refs()
             self.codegen_sram_plan_postfix(output_refs)
             self.mark_output_type()
@@ -334,6 +335,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             expr_str = expr_str.replace("//", " floordiv ")
         else:
             raise NotImplementedError("What is this case?")
+
         first_arg = expr.args[0]
         if len(first_arg.free_symbols) != 1:
             raise NotImplementedError("What is this case?")
@@ -355,6 +357,11 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         # Identity case
         if len(expr.args) == 0 and len(indirect_dims) == 0:
             return expr
+
+        # Replace Identity arguments with Identity.args[0]
+        for arg in expr.args:
+            if isinstance(arg, Identity):
+                expr = expr.replace(arg, arg.args[0] if arg.args else arg)
 
         if len(expr.args) == 0:
             args = [expr]
@@ -677,9 +684,10 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         # In case of index expr, dimension size should be divisible by tile size
         if not self.kernel_group.tile_desc.is_dim_dividable(self.ranges):
             new_tile_size = self.kernel_group.tile_desc.adjust_tile_to_divisible(self.ranges)
+            prior_tile_size, prior_ranges = self.kernel_group.tile_desc.get_tile_size(), self.ranges
             self.kernel_group.tile_desc.set_tile_size(new_tile_size)
             self.reset("recompile")
-            raise mlir_common.RecompileSignal(f"Index access (tile size {self.kernel_group.tile_desc.get_tile_size()} is not divisible by {self.ranges})")
+            raise mlir_common.RecompileSignal(f"Index access (tile size {prior_tile_size} is not divisible by {prior_ranges})")
 
         tile_size = tile_desc.get_tile_size_per_lane()
         compute_vec_size = tile_desc.get_compute_vec_size()
