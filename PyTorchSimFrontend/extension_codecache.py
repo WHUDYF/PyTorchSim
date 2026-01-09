@@ -10,6 +10,9 @@ from PyTorchSimFrontend.mlir.mlir_caller_codegen import MLIRKernelCallerCodeGen
 from PyTorchSimFrontend import extension_config
 from Simulator.simulator import FunctionalSimulator, CycleSimulator, TOGSimulator
 
+# Configure logger for extension_codecache module (WARNING level by default)
+logger = extension_config.setup_logger()
+
 LOCK_TIMEOUT = 600
 
 def hash_prefix(hash_value):
@@ -166,8 +169,8 @@ class MLIRCodeCache:
                     subprocess.check_call(translate_cmd)
                     subprocess.check_call(llc_cmd)
                 except subprocess.CalledProcessError as e:
-                    print("Command failed with exit code", e.returncode)
-                    print("Error output:", e.output)
+                    logger.error(f"Command failed with exit code {e.returncode}")
+                    logger.error(f"Error output: {e.output.decode() if isinstance(e.output, bytes) else e.output}")
                     assert(0)
 
                 val_llvm_caller = MLIRKernelCallerCodeGen(extension_config.pytorchsim_functional_mode, arg_attributes)
@@ -179,8 +182,10 @@ class MLIRCodeCache:
                 spad_size =  val_llvm_caller.get_spad_size(target)
                 spad_usage = stack_size + spad_size # Spad usage per lane
                 if extension_config.CONFIG_SPAD_INFO["spad_size"] < spad_usage:
-                    print(f"[Warning] Scratchpad size exceeded: required {spad_usage} bytes, "
-                        f"but only {extension_config.CONFIG_SPAD_INFO['spad_size']} bytes available.")
+                    logger.debug(
+                        f"Scratchpad size exceeded: required {spad_usage} bytes, "
+                        f"but only {extension_config.CONFIG_SPAD_INFO['spad_size']} bytes available."
+                    )
                     raise SpadOverflowError()
 
         # Launch tile graph generator
@@ -197,8 +202,8 @@ class MLIRCodeCache:
                 subprocess.check_call(gem5_translate_cmd)
                 subprocess.check_call(gem5_llc_cmd)
             except subprocess.CalledProcessError as e:
-                print("Command failed with exit code", e.returncode)
-                print("Error output:", e.output)
+                logger.error(f"Command failed with exit code {e.returncode}")
+                logger.error(f"Error output: {e.output.decode() if isinstance(e.output, bytes) else e.output}")
                 assert(0)
 
             if not extension_config.pytorchsim_timing_mode:

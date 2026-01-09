@@ -32,6 +32,9 @@ from torch._inductor.codegen import common
 from PyTorchSimFrontend import extension_config
 from . import mlir_common
 
+# Configure logger for mlir_template module
+logger = extension_config.setup_logger()
+
 class IndentedBufferGroup:
     def __init__(self, kernel: 'MLIRTemplateKernel', prefix=""):
         self.kernel = kernel
@@ -386,7 +389,6 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return tile_candidates
 
     def meta_kernel(self):
-        wrapper = V.graph.wrapper_code
         kernel_arg_attributes = self.kernel_arg_attributes
         _, _, arg_attributes, _ = self.kernel_group.args.mlir_argdefs()
         if kernel_arg_attributes is not None:
@@ -483,38 +485,36 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             buffer.splice(src_code)
             src_code = buffer.getvalue()
             self._prepare_simulator_headers(src_code)
-        return src_code
+        meta_code = self.meta_kernel()
+        return src_code, meta_code
 
     def make_choices(self, tile_candidates, render, template_node, prologue_nodes, epilogue_nodes):
         choices = []
         for tile_info in tile_candidates:
-            if extension_config.CONFIG_DEBUG_MODE:
-                # Compute Tile M, N, K DMA Tile M, N, K
-                print(f"[Auto-tune] Trying tile size: {list(tile_info)}")
-            src_code = self.codegen_template_code(render, template_node, prologue_nodes, epilogue_nodes, tile_info)
+            # Compute Tile M, N, K DMA Tile M, N, K
+            logger.debug(f"Auto-tune: Trying tile size: {list(tile_info)}")
+            src_code, meta_code = self.codegen_template_code(render, template_node, prologue_nodes, epilogue_nodes, tile_info)
             bench_runner = self.run_bench([template_node], self.kernel_name, src_code)
-            choices.append((bench_runner, src_code, tile_info, self.loop_size))
+            choices.append((bench_runner, src_code, meta_code, tile_info, self.loop_size))
             self.reset(reason=None)
         return choices
 
     def _log_autotune_result(self, best_choice, best_cycle):
-        tile_size = best_choice[2]
-        print(
-            f"[Auto-tune] Optimal tile size: {list(tile_size)}, "
+        tile_size = best_choice[3]
+        logger.debug(
+            f"Auto-tune: Optimal tile size: {list(tile_size)}, "
             f"cycles: {best_cycle}"
         )
 
     def codegen_nodes(self, tile_candidates, render, template_node, prologue_nodes, epilogue_nodes):
         if "autotune" in extension_config.codegen_mapping_strategy and len(tile_candidates):
-            src_code, loop_size = self.autotune(tile_candidates, render, template_node, prologue_nodes, epilogue_nodes)
+            src_code, meta_code, loop_size = self.autotune(tile_candidates, render, template_node, prologue_nodes, epilogue_nodes)
             self.loop_size = loop_size
         else:
             tile_info = tile_candidates[0] if tile_candidates else None
-            src_code = self.codegen_template_code(render, template_node, prologue_nodes, epilogue_nodes, tile_info)
+            src_code, meta_code = self.codegen_template_code(render, template_node, prologue_nodes, epilogue_nodes, tile_info)
 
-        with V.set_kernel_handler(self):
-            self.meta_kernel()
-        return src_code
+        return src_code, meta_code
 
     def _prepare_simulator_headers(self, src_code):
         spad_end_symbol = f"int spad_end[0] __attribute__ ((section(\".spad\")));\n"

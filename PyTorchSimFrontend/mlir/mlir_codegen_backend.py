@@ -2,7 +2,6 @@ import contextlib
 import sympy
 import re
 import os
-import math
 from functools import reduce
 from operator import mul
 import torch
@@ -28,6 +27,9 @@ from . import mlir_common
 from .mlir_common import LoopLevel, LoopNest
 from .mlir_ops import ExtensionOverrides
 from PyTorchSimFrontend.mlir.mlir_autotune import MLIRBenchmarkRequest
+
+# Configure logger for mlir_codegen_backend module
+logger = extension_config.setup_logger()
 
 def reduction_init(reduction_type, dtype):
     if dtype in cpp.DTYPE_LOWP_FP:
@@ -95,10 +97,13 @@ class ExtensionWrapperCodegen(wrapper.PythonWrapperCodegen):
 
                 from torch import device, empty, empty_strided
                 from {extension_codecache.__name__} import CustomAsyncCompile
-                from PyTorchSimFrontend.extension_config import CONFIG_SRAM_BUFFER_PLAN, CONFIG_TOGSIM_EAGER_MODE
+                from PyTorchSimFrontend.extension_config import CONFIG_SRAM_BUFFER_PLAN, CONFIG_TOGSIM_EAGER_MODE, setup_logger
                 from Simulator.simulator import TOGSimulator
                 from PyTorchSimFrontend.extension_op import sparse_mm_dummy_stonne_outer
                 from torch._inductor.select_algorithm import extern_kernels
+
+                # Configure logger for generated wrapper code
+                _logger = setup_logger("PyTorchSimFrontend.mlir.generated_wrapper")
 
                 aten = torch.ops.aten
                 inductor_ops = torch.ops.inductor
@@ -108,7 +113,7 @@ class ExtensionWrapperCodegen(wrapper.PythonWrapperCodegen):
                 custom_async_compile = CustomAsyncCompile()
                 async_compile = AsyncCompile()
                 os.environ["TORCHSIM_LAST_COMPILED_MODULE"] = __file__
-                print(f\'Wrapper Codegen Path = {{__file__}}\')
+                _logger.info(f'Wrapper Codegen Path = {{__file__}}')
             """
         )
         self.header.splice(
@@ -909,15 +914,14 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
 
             # Try initial tile size
             self.reset(None)
-            src_code = super().codegen_nodes(nodes, kernel_name)
+            src_code, meta_code = super().codegen_nodes(nodes, kernel_name)
             current_tile_sz = tuple(self.kernel_group.tile_desc.get_tile_size())
             search_space.add(current_tile_sz)
 
-            if extension_config.CONFIG_DEBUG_MODE:
-                print(f"[Auto-tune] Trying tile size: {list(current_tile_sz)}, vlane_stride: {self.kernel_group.tile_desc.vmap.vlane_stride}, split_axis: {self.kernel_group.tile_desc.vmap.vlane_split_axis}")
+            logger.debug(f"Auto-tune: Trying tile size: {list(current_tile_sz)}, vlane_stride: {self.kernel_group.tile_desc.vmap.vlane_stride}, split_axis: {self.kernel_group.tile_desc.vmap.vlane_split_axis}")
             self._prepare_simulator_headers(src_code)
             bench_runner = self.run_bench(nodes, kernel_name, src_code)
-            choices.append((bench_runner, src_code, current_tile_sz, self.kernel_group.tile_desc.vmap.vlane_stride))
+            choices.append((bench_runner, src_code, meta_code, current_tile_sz, self.kernel_group.tile_desc.vmap.vlane_stride))
 
             while prevent_infinite_loop < 10 and candidate_axes:
                 for axis in list(candidate_axes):
@@ -939,7 +943,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                         continue
 
                     self.reset(None)
-                    src_code = super().codegen_nodes(nodes, kernel_name)
+                    src_code, meta_code = super().codegen_nodes(nodes, kernel_name)
                     current_tile_sz = tuple(self.kernel_group.tile_desc.get_tile_size())
 
                     # FIXME. How to intergrate this constraint to tile system?
@@ -956,11 +960,10 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
 
                     # Add this choice
                     search_space.add(current_tile_sz)
-                    if extension_config.CONFIG_DEBUG_MODE:
-                        print(f"[Auto-tune] Trying tile size: {list(current_tile_sz)}, vlane_stride: {self.kernel_group.tile_desc.vmap.vlane_stride}, split_axis: {self.kernel_group.tile_desc.vmap.vlane_split_axis}")
+                    logger.debug(f"Auto-tune: Trying tile size: {list(current_tile_sz)}, vlane_stride: {self.kernel_group.tile_desc.vmap.vlane_stride}, split_axis: {self.kernel_group.tile_desc.vmap.vlane_split_axis}")
                     self._prepare_simulator_headers(src_code)
                     bench_runner = self.run_bench(nodes, kernel_name, src_code)
-                    choices.append((bench_runner, src_code, self.kernel_group.tile_desc.get_tile_size(), self.kernel_group.tile_desc.vmap.vlane_stride))
+                    choices.append((bench_runner, src_code, meta_code, self.kernel_group.tile_desc.get_tile_size(), self.kernel_group.tile_desc.vmap.vlane_stride))
                     prevent_infinite_loop += 1
         self.kernel_group.tile_desc.prev_tail_threshold = prev_tail_threshold
         return choices
@@ -976,18 +979,20 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                     return float("inf")
             return float("inf") # Exceeded maximum number of autotuning attempts
         choices = self.make_choices(*args)
-
         if len(choices) == 0: # Can't autotune
-            return [None, None]
+            return [None, None, None]
+
+        # Get cycle time for each choice
         with ThreadPoolExecutor(max_workers=8) as executor:
             results = list(executor.map(get_cycle, choices))
-        max_idx = results.index(min(results))
+        min_idx = results.index(min(results))
         if min(results) == float("inf"):
             raise RuntimeError("Failed to find optimal tile size...")
-        if extension_config.CONFIG_DEBUG_MODE:
-            self._log_autotune_result(choices[max_idx], results[max_idx])
-        optimal_src_code, loop_size = choices[max_idx][1], choices[max_idx][-1]
-        return optimal_src_code, loop_size
+
+        self._log_autotune_result(choices[min_idx], results[min_idx])
+
+        optimal_src_code, meta_code, loop_size = choices[min_idx][1], choices[min_idx][2], choices[min_idx][-1]
+        return optimal_src_code, meta_code, loop_size
 
     def run_bench(self, nodes, kernel_name, src_code):
         _, _, arg_attributes, _ = self.kernel_group.args.mlir_argdefs()
@@ -1015,9 +1020,9 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         return bmreq.make_run_fn(dummy_inputs, dummy_outputs)
 
     def _log_autotune_result(self, best_choice, best_cycle):
-        print(
-            f"[Auto-tune] Optimal tile size: {list(best_choice[2])}, "
-            f"vlane_stride: {best_choice[3]}, "
+        logger.debug(
+            f"Auto-tune: Optimal tile size: {list(best_choice[3])}, "
+            f"vlane_stride: {best_choice[4]}, "
             f"cycles: {best_cycle}"
         )
 
@@ -1025,9 +1030,9 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         src_code, meta_code = super().codegen_nodes(nodes, kernel_name)
         self._prepare_simulator_headers(src_code)
         if "autotune" in extension_config.codegen_mapping_strategy and extension_config.pytorchsim_timing_mode:
-            optimal_src_code = self.autotune(nodes, kernel_name)[0]
+            optimal_src_code, meta_code = self.autotune(nodes, kernel_name)[:2]
             if optimal_src_code is not None:
-                return optimal_src_code
+                return optimal_src_code, meta_code
         return src_code, meta_code
 
     def _prepare_simulator_headers(self, src_code):

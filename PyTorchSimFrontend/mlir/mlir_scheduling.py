@@ -299,8 +299,7 @@ class MLIRScheduling(BaseScheduling):
         template_buffer = template_node.node
         kernel, tile_candidates, render = template_buffer.make_kernel_render(template_buffer, prologue_nodes=prologue_nodes, epilogue_nodes=epilogue_nodes, kernel_group=self.kernel_group)
         _, _, _, kernel.buffer_types = self.kernel_group.args.mlir_argdefs()
-        src_code = kernel.codegen_nodes(tile_candidates, render, template_node, prologue_nodes, epilogue_nodes)
-        meta_code = kernel.meta_kernel()
+        src_code, meta_code = kernel.codegen_nodes(tile_candidates, render, template_node, prologue_nodes, epilogue_nodes)
 
         with V.set_kernel_handler(kernel):
             kernel_name = self.define_kernel(src_code, meta_code, kernel.kernel_name, kernel.vector_lane, kernel.spad_info,

@@ -1,9 +1,12 @@
 import math
 import torch
+import warnings
 
 from torch._inductor.codegen import common
 from torch._inductor.virtualized import V, _ops as ops
 from . import mlir_common
+
+warnings.filterwarnings('ignore', message='undefined OpHandler\\..*, please add missing op schema')
 
 def reduction_combine_vec(reduction_type, vector_value, init_value, axis, shape, reduced_shape):
     if reduction_type == "sum":

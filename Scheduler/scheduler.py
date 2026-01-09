@@ -12,6 +12,9 @@ from PyTorchSimDevice.extension_device_interface import ExtensionDeviceInterface
 
 from torch._dynamo.device_interface import register_interface_for_device
 
+# Configure logger for Scheduler module
+logger = extension_config.setup_logger()
+
 
 def import_module_from_path(module_name, path):
     module_path = Path(path)  # Convert to Path object for safety
@@ -380,7 +383,7 @@ class Scheduler:
         elif engine_select == Scheduler.RR_ENGINE:
             self.execution_engine = RoundRobinRunner(self.tog_simulator, self.num_request_queue)
         else:
-            print(f"Not supporetd engine type {engine_select}")
+            logger.error(f"Not supported engine type {engine_select}")
             exit(1)
 
     def add_request(self, request: Request, request_time=-1):
@@ -441,9 +444,11 @@ class Scheduler:
         self.finish_queue.append(req)
         self.request_queue[req.request_queue_idx].remove(req)
         turnaround_time, response_time, tbt_time = req.get_latency()
-        print(f"[Request-{req.id} finished] partition: {req.request_queue_idx} arrival_time: "
-              f"{req.arrival_time} start_time: {req.start_time[0]} turnaround latency: {turnaround_time}, "
-              f"response time: {response_time} tbt_time: {tbt_time}")
+        logger.info(
+            f"[Request-{req.id} finished] partition: {req.request_queue_idx} arrival_time: "
+            f"{req.arrival_time} start_time: {req.start_time[0]} turnaround latency: {turnaround_time}, "
+            f"response time: {response_time} tbt_time: {tbt_time}"
+        )
 
     def per_schedule(self, request_queue_idx):
         # Wait partition is idle
@@ -454,11 +459,13 @@ class Scheduler:
         if not request_list:
             return False
 
-        print(f"[Request issue] partition: {request_queue_idx} batch size: {len(request_list)}", flush=True)
+        logger.info(f"[Request issue] partition: {request_queue_idx} batch size: {len(request_list)}")
         for req in request_list:
             req.set_start(self.current_time())
-            print(f"[Request-{req.id} issue] partition: {req.request_queue_idx} "
-                f"arrival_time: {req.arrival_time} start_time: {req.start_time[0]}", flush=True)
+            logger.info(
+                f"[Request-{req.id} issue] partition: {req.request_queue_idx} "
+                f"arrival_time: {req.arrival_time} start_time: {req.start_time[0]}"
+            )
         # Submit batched request
         self.execution_engine.submit(request_list, request_queue_idx)
 

@@ -17,7 +17,46 @@ import numpy as np
 from PyTorchSimFrontend.mlir.mlir_common import MLIRKernelArgs
 from PyTorchSimFrontend import extension_config
 
-print_lock = threading.Lock()
+# Configure logger for Simulator module
+logger = extension_config.setup_logger()
+from tqdm import tqdm
+
+
+class ProgressBar:
+    def __init__(self, desc, silent_mode=False, update_interval=0.5):
+        self.desc = desc
+        self.silent_mode = silent_mode
+        self.update_interval = update_interval
+        self.pbar = None
+        self.finished = False
+        self.progress_thread = None
+
+    def __enter__(self):
+        if not self.silent_mode:
+            self.pbar = tqdm(
+                desc=self.desc,
+                bar_format='{desc}: {elapsed}',
+                leave=False,  # Don't leave the bar when done (it will disappear)
+                ncols=80,
+                disable=False,
+                total=100,  # Use a total for smooth animation
+            )
+            # Update progress bar in a separate thread
+            def update_progress():
+                while not self.finished:
+                    self.pbar.update(1)
+                    time.sleep(self.update_interval)
+
+            self.progress_thread = threading.Thread(target=update_progress, daemon=True)
+            self.progress_thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.finished = True
+        if not self.silent_mode and self.pbar is not None:
+            self.pbar.close()
+        return False
+
 
 TORCH_TO_NUMPY = {
     torch.float32: np.float32,
@@ -105,9 +144,9 @@ class FunctionalSimulator():
         os.makedirs(os.path.join(runtime_path, "indirect_access"), exist_ok=True)
         os.makedirs(os.path.join(runtime_path, "dma_access"), exist_ok=True)
         run = f'spike --isa rv64gcv --varch=vlen:256,elen:64 {vectorlane_option} {spad_option} {kernel_address} {base_path} /workspace/riscv-pk/build/pk {target_binary} {file_path_str}'
-        if not silent_mode and extension_config.CONFIG_DEBUG_MODE:
-            print("[Spike] cmd> ", run)
-        print("[Spike] Running Spike simulator")
+        if not silent_mode:
+            logger.debug(f"[Spike] cmd> {run}")
+        logger.info("[Spike] Running Spike simulator")
         run_cmd = shlex.split(run)
         try:
             stdout_setting = subprocess.DEVNULL if silent_mode else None
@@ -115,7 +154,7 @@ class FunctionalSimulator():
             subprocess.check_call(run_cmd, stdout=stdout_setting, stderr=stderr_setting)
         except subprocess.CalledProcessError as e:
             if not silent_mode:
-                print("[Spike] Command failed with exit code", e.returncode)
+                logger.error(f"[Spike] Command failed with exit code {e.returncode}")
             error_msg = ""
             if e.returncode == 200:
                 error_msg = "INVALID_SPAD_ACCESS"
@@ -155,41 +194,23 @@ class CycleSimulator():
         pass
 
     def compile_and_simulate(self, target_binary, array_size, vectorlane_size, silent_mode=False):
-        def show_progress():
-            i = 0
-            while not finished:
-                i = (i + 1) % 3
-                tail = "." * i + " " * (3-i)
-                with print_lock:
-                    sys.stdout.write("\r[Gem5] Gem5 is running." + tail)
-                    sys.stdout.flush()
-                time.sleep(1)
-            with print_lock:
-                print("")
-
         dir_path = os.path.join(os.path.dirname(target_binary), "m5out")
         gem5_script_path = os.path.join(extension_config.CONFIG_TORCHSIM_DIR, "gem5_script/script_systolic.py")
         gem5_cmd = [extension_config.CONFIG_GEM5_PATH, "-r", "--stdout-file=sto.log", "-d", dir_path, gem5_script_path, "-c", target_binary, "--vlane", str(vectorlane_size)]
+
+        is_dryrun = int(os.environ.get('TOGSIM_EAGER_MODE', default=False)) or silent_mode
+
+        if not is_dryrun:
+            logger.debug(f"[Gem5] cmd> {' '.join(gem5_cmd)}")
+            logger.info("[Gem5] Gem5 simulation started")
+
         try:
-            # Create progress thread
-            is_dryrun = int(os.environ.get('TOGSIM_EAGER_MODE', default=False)) or silent_mode
-            if not is_dryrun:
-                if extension_config.CONFIG_DEBUG_MODE:
-                    print("[Gem5] cmd> ", " ".join(gem5_cmd))
-                finished = False
-                progress_thread = threading.Thread(target=show_progress)
-                progress_thread.start()
-                output = subprocess.check_output(gem5_cmd, stderr=subprocess.DEVNULL)
-                finished = True
-                progress_thread.join()
-            else:
-                output = subprocess.check_output(gem5_cmd, stderr=subprocess.DEVNULL)
+            #with ProgressBar("[Gem5] Running simulation", silent_mode=is_dryrun):
+            output = subprocess.check_output(gem5_cmd, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
-            print(f"[Gem5] Gem5 simulation failed with error: \"{e.output.decode()}\"")
-            if not is_dryrun:
-                finished = True
-                progress_thread.join()
-            raise RuntimeError(f"Gem5 Simulation Failed: \"{e.output.decode()}\"")
+            output_error = e.output.decode() if isinstance(e.output, bytes) else str(e.output)
+            logger.error(f"[Gem5] Gem5 simulation failed with error: \"{output_error}\"")
+            raise RuntimeError(f"Gem5 Simulation Failed: \"{output_error}\"")
 
         with open(f"{dir_path}/stats.txt", "r") as stat_file:
             raw_list = stat_file.readlines()
@@ -216,39 +237,21 @@ class TOGSimulator():
         return cmd
 
     def simulation(self, model_path, attribute_path="", silent_mode=False, autotune_mode=False):
-        def show_progress():
-            i = 0
-            while not finished:
-                i = (i + 1) % 3
-                tail = "." * i + " " * (3-i)
-                sys.stdout.write("\r[TOGSim] TOGSim is running." + tail)
-                time.sleep(1)
-            print("")
         cmd = f"{self.get_togsim_command()} --models_list {model_path}"
         if extension_config.CONFIG_TOGSIM_DEBUG_LEVEL:
             cmd += f" --log_level {extension_config.CONFIG_TOGSIM_DEBUG_LEVEL}"
         if attribute_path:
             cmd = f"{cmd} --attributes_list {attribute_path}"
-        if not silent_mode and extension_config.CONFIG_DEBUG_MODE:
-            print("[TOGSim] cmd> ", cmd)
-
-        # Create progress thread
         if not silent_mode:
-            finished = False
-            progress_thread = threading.Thread(target=show_progress)
-            progress_thread.start()
+            logger.debug(f"[TOGSim] cmd> {cmd}")
+            logger.info("[TOGSim] TOGSim simulation started")
+
         try:
-            result = subprocess.check_output(shlex.split(cmd))
-            if not silent_mode:
-                finished = True
-                progress_thread.join()
+            with ProgressBar("[TOGSim] Running simulation", silent_mode=silent_mode):
+                result = subprocess.check_output(shlex.split(cmd))
         except subprocess.CalledProcessError as e:
-            if not silent_mode:
-                finished = True
-                progress_thread.join()
-                with print_lock:
-                    print("[TOGSim] Command failed with exit code", e.returncode)
-                    print("[TOGSim] Error output:", e.output)
+            logger.error(f"[TOGSim] Command failed with exit code {e.returncode}")
+            logger.error(f"[TOGSim] Error output: {e.output.decode() if isinstance(e.output, bytes) else e.output}")
             assert 0
 
         # Separate Autotune logs
@@ -271,10 +274,10 @@ class TOGSimulator():
             f.flush()
             os.fsync(f.fileno())
 
-        if not silent_mode or extension_config.CONFIG_DEBUG_MODE:
-            model_path_log = f' of "{model_path}" ' if extension_config.CONFIG_DEBUG_MODE else " "
-            with print_lock:
-                print(f'[TOGSim] Simulation log{model_path_log}is stored to "{result_path}"')
+        if not silent_mode:
+            import logging as _logging
+            model_path_log = f' of "{model_path}" ' if logger.isEnabledFor(_logging.DEBUG) else " "
+            logger.info(f'[TOGSim] Simulation log{model_path_log}is stored to "{result_path}"')
         return result_path
 
     def interactive_simulation(self):
@@ -282,8 +285,7 @@ class TOGSimulator():
         if extension_config.CONFIG_TOGSIM_DEBUG_LEVEL:
             cmd += f" --log_level {extension_config.CONFIG_TOGSIM_DEBUG_LEVEL}"
 
-        if extension_config.CONFIG_DEBUG_MODE:
-            print("[TOGSim] cmd> ", cmd)
+        logger.debug(f"[TOGSim] cmd> {cmd}")
         if self.process is None:
             self.process = subprocess.Popen(
                 shlex.split(cmd),
@@ -292,28 +294,27 @@ class TOGSimulator():
                 universal_newlines=True
             )
         else:
-            print("[TOGSim] Simulator is already running.")
+            logger.warning("[TOGSim] Simulator is already running.")
 
     def stop(self):
         if self.process:
             self.process.terminate()
             self.process.wait()
             self.process = None
-            print("[TOGSim] Simulator stopped.")
+            logger.info("[TOGSim] Simulator stopped.")
 
     def wait(self):
         if self.process:
-            print("[TOGSim] Waiting for simulation to complete...")
+            logger.info("[TOGSim] Waiting for simulation to complete...")
             self.quit()
             self.process.wait()
             self.process = None
-            print("[TOGSim] Simulation completed.")
+            logger.info("[TOGSim] Simulation completed.")
 
     def send_command(self, command):
         if self.process:
             try:
-                if extension_config.CONFIG_TORCHSIM_DEBUG_MODE:
-                    print(command, flush=True)
+                logger.debug(command)
                 self.process.stdin.write(command + '\n')
                 self.process.stdin.flush()
                 ret = self.process.stderr.readline().strip()
@@ -321,11 +322,11 @@ class TOGSimulator():
             except BrokenPipeError:
                 err = self.process.stderr.readlines()
                 for line in err:
-                    print(line)
+                    logger.error(line.strip())
                 self.process = None
                 exit(1)
         else:
-            print("Simulator is not running.")
+            logger.warning("Simulator is not running.")
             return None
 
     def launch(self, onnx_path, attribute_path, arrival_time=0, partion_id=0):
@@ -440,7 +441,7 @@ class TOGSimulator():
                 break
 
         if simulation_finished_idx == -1:
-            print(f"[TOGSim] Warning: Unable to parse the output file ({result_path}). The file may be improperly formatted.")
+            logger.warning(f"[TOGSim] Warning: Unable to parse the output file ({result_path}). The file may be improperly formatted.")
             return core_metrics, dram_channel_bw, avg_dram_bw, simulation_time
 
         total_stat_lines = lines[simulation_finished_idx:]
