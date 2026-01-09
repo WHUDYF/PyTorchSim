@@ -943,6 +943,12 @@ class ExtensionOverrides(common.OpOverrides):
         result = ops.mul(operand, operand)
         return result, V.kernel.var_info[result]
 
+    @staticmethod
+    def fma(operand1, operand2, operand3, *args, **kwargs):
+        result = ops.mul(operand1, operand2)
+        result = ops.add(result, operand3)
+        return result, V.kernel.var_info[result]
+
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # PyTorchSim specific operations 
 

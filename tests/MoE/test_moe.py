@@ -4,7 +4,6 @@ import sys
 import copy
 import matplotlib.pyplot as plt
 
-
 import torch
 import torch.nn as nn
 from torch.distributions.normal import Normal
@@ -64,6 +63,7 @@ class SparseDispatcher(object):
     `Tensor`s for expert i only the batch elements for which `gates[b, i] > 0`.
     """
 
+    @torch.compiler.disable(recursive=True)
     def __init__(self, num_experts, gates):
         """Create a SparseDispatcher."""
         gates = gates.cpu()
