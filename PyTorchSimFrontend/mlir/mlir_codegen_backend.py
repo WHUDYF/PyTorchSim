@@ -31,6 +31,8 @@ from PyTorchSimFrontend.mlir.mlir_autotune import MLIRBenchmarkRequest
 # Configure logger for mlir_codegen_backend module
 logger = extension_config.setup_logger()
 
+from Simulator.simulator import ProgressBar
+
 def reduction_init(reduction_type, dtype):
     if dtype in cpp.DTYPE_LOWP_FP:
         # Since load promotes all half-precision inputs to float, the initial
@@ -983,8 +985,12 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             return [None, None, None]
 
         # Get cycle time for each choice
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            results = list(executor.map(get_cycle, choices))
+        # Show progress bar only when CONFIG_DEBUG_MODE is off
+        show_progress = not extension_config.CONFIG_DEBUG_MODE
+        with ProgressBar("[Auto-tune] Running benchmarks", silent_mode=not show_progress) if show_progress else contextlib.nullcontext():
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                results = list(executor.map(get_cycle, choices))
+
         min_idx = results.index(min(results))
         if min(results) == float("inf"):
             raise RuntimeError("Failed to find optimal tile size...")

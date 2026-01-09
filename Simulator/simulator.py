@@ -209,7 +209,7 @@ class CycleSimulator():
             output = subprocess.check_output(gem5_cmd, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
             output_error = e.output.decode() if isinstance(e.output, bytes) else str(e.output)
-            logger.error(f"[Gem5] Gem5 simulation failed with error: \"{output_error}\"")
+            logger.debug(f"[Gem5] Gem5 simulation failed with error: \"{output_error}\"")
             raise RuntimeError(f"Gem5 Simulation Failed: \"{output_error}\"")
 
         with open(f"{dir_path}/stats.txt", "r") as stat_file:
