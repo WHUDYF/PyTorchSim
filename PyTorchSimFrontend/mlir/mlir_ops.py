@@ -226,11 +226,25 @@ class ExtensionOverrides(common.OpOverrides):
         if op_type1[1] != op_type2[1]:
             if op_type1[1] == "index" or op_type1 == "index":
                 if op_type1[1] == "index":
-                    operand1 = ops.index_cast(operand1, op_type2[1])
-                    op_type1 = V.kernel.var_info[operand1]
+                    # index -> target type: 2-step casting if target is float
+                    if op_type2[1][0] == "f":
+                        operand1 = ops.index_cast(operand1, "i64")
+                        operand1 = ops.to_dtype(operand1, op_type2[1])
+                        op_type1 = V.kernel.var_info[operand1]
+                    else:
+                        # index -> integer: direct casting
+                        operand1 = ops.index_cast(operand1, op_type2[1])
+                        op_type1 = V.kernel.var_info[operand1]
                 if op_type2[1] == "index":
-                    operand2 = ops.index_cast(operand2, op_type1[1])
-                    op_type2 = V.kernel.var_info[operand2]
+                    # index -> target type: 2-step casting if target is float
+                    if op_type1[1][0] == "f":
+                        operand2 = ops.index_cast(operand2, "i64")
+                        operand2 = ops.to_dtype(operand2, op_type1[1])
+                        op_type2 = V.kernel.var_info[operand2]
+                    else:
+                        # index -> integer: direct casting
+                        operand2 = ops.index_cast(operand2, op_type1[1])
+                        op_type2 = V.kernel.var_info[operand2]
             elif op_type1[1][0] == "i" and op_type2[1][0] == "f":
                 operand1 = ops.to_dtype(operand1, op_type2[1])
                 op_type1 = V.kernel.var_info[operand1]
