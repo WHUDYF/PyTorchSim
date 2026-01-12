@@ -1179,7 +1179,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             max_dim = len(self.ranges) if not store_reduction else len(self.ranges) - 1
             for i in range(max_dim):
                 target_dim = f"index{i}"
-                if target_dim not in str(index):
+                if sympy.Symbol(target_dim) not in index.free_symbols:
                     dram_dict[target_dim] = [0]
             sorted_keys = sorted(dram_dict.keys())
             dram_stride = sum((dram_dict[key] for key in sorted_keys), [])
