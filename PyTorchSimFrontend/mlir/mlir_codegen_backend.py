@@ -1196,13 +1196,18 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                     dim_idx = int((str(sub.args[0])[5:]))
                     if int(self.kernel_group.tile_desc.get_tile_size()[dim_idx] % sub.args[1]) != 0:
                         # In this case, need to recompile
-                        original_size = self.kernel_group.tile_desc.get_tile_size()[dim_idx]
-                        divisor = sub.args[1]
+                        original_tile = self.kernel_group.tile_desc.get_tile_size()
+                        original_size = original_tile[dim_idx]
+                        divisor = sub.args[1] * self.kernel_group.tile_desc.vmap.vlane_stride
                         new_size = ((original_size + divisor - 1) // divisor) * divisor
                         new_tile_sizes = list(self.kernel_group.tile_desc.get_tile_size())
                         new_tile_sizes[dim_idx] = new_size
                         self.kernel_group.tile_desc.set_tile_size(new_tile_sizes)
                         self.kernel_group.tile_desc.tile_constraint[dim_idx].fixed = True
+
+                        # Can't use dim_idx as vlane_split_axis
+                        if dim_idx == self.kernel_group.tile_desc.vmap.vlane_split_axis:
+                            self.kernel_group.tile_desc.vmap.vlane_split_axis = (dim_idx + 1) % len(original_tile)
 
                         # Send recompile signal
                         self.reset("recompile")

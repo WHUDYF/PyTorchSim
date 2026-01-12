@@ -557,14 +557,14 @@ if __name__ == "__main__":
     module = PyTorchSimRunner.setup_device()
     device = module.custom_device()
 
-    #test_upsample2d(device)
-    #test_groupnorm(device)
-    #test_groupnorm(device, stride=[1, 1, 320*32, 320])
-    #test_resnetblock2d(device, in_channels=640, out_channels=320, temb_channels=320)
-    #test_resnetblock2d(device, in_channels=640, out_channels=320, temb_channels=1280)
-    #test_cross_attn_down_block2d(device)
-    #test_unet_mid_block2d_cross_attn(device)
-    #test_cross_attn_up_block2d(device)
+    test_upsample2d(device)
+    test_groupnorm(device)
+    test_groupnorm(device, stride=[1, 1, 320*32, 320])
+    test_resnetblock2d(device, in_channels=640, out_channels=320, temb_channels=320)
+    test_resnetblock2d(device, in_channels=640, out_channels=320, temb_channels=1280)
+    test_cross_attn_down_block2d(device)
+    test_unet_mid_block2d_cross_attn(device)
+    test_cross_attn_up_block2d(device)
     test_unet2d_condition_model(device)
     #test_unet_conditional(
     #    device=device,
