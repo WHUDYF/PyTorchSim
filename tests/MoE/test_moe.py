@@ -16,6 +16,32 @@ from torch._inductor import config
 
 sys.path.append(os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim'))
 
+# FIXME. This is a temporary solution to avoid is_forward conflict during backward
+def patch_compile_event_logger():
+    """Patch CompileEventLogger.compilation_metric to avoid is_forward conflict during backward."""
+    from torch._dynamo.utils import CompileEventLogger
+    from torch._dynamo.utils import get_metrics_context
+
+    original_compilation_metric = CompileEventLogger.compilation_metric
+
+    @staticmethod
+    def patched_compilation_metric(is_forward=True, **kwargs):
+        """Patched version that clears is_forward before setting it if there's a conflict."""
+        try:
+            metrics_context = get_metrics_context()
+            if metrics_context.in_progress() and hasattr(metrics_context, '_metrics'):
+                # If is_forward is already set and we're trying to set it to a different value, clear it first
+                current_is_forward = metrics_context._metrics.get('is_forward')
+                if current_is_forward is not None and current_is_forward != is_forward:
+                    metrics_context._metrics.pop('is_forward', None)
+        except:
+            pass
+        # Call the original function
+        return original_compilation_metric(is_forward=is_forward, **kwargs)
+
+    # Patch the method
+    CompileEventLogger.compilation_metric = patched_compilation_metric
+
 def test_result(name, out, cpu_out, rtol=1e-4, atol=1e-4):
     pass_message = f"|{name} Test Passed|"
     fail_message = f"|{name} Test Failed|"
@@ -469,6 +495,9 @@ def test_moe(device):
         print("\n")
 
 def train_moe(device):
+    # Patch CompileEventLogger to avoid metric conflicts
+    patch_compile_event_logger()
+
     def perceptron(a, b, c):
         return a * b + c
 
@@ -589,6 +618,9 @@ def train_moe(device):
     plt.savefig('result.png')
 
 def train_moe_mnist(device):
+    # Patch CompileEventLogger to avoid metric conflicts
+    patch_compile_event_logger()
+
     torch.manual_seed(0)
     batch_size = 32
     input_size = 28*28
@@ -670,6 +702,9 @@ def train_moe_mnist(device):
     plt.savefig(f'{name}_result.png')
 
 def train_moe_single_iteration(device, iter_idx, is_evaluation=0):
+    # Patch CompileEventLogger to avoid metric conflicts
+    patch_compile_event_logger()
+
     # Training moe with mnist dataset for sinlge iteration
     torch.manual_seed(0)
     batch_size = 128
