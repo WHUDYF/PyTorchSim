@@ -137,15 +137,13 @@ def decompose_native_multi_head_attention(
 
     # Step 4: Apply mask if provided
     if mask is not None:
-        scores = scores + mask
+        if mask.dtype == torch.bool:
+            attn_bias.masked_fill_(mask.logical_not(), float("-inf"))
+        else:
+            attn_bias = mask + attn_bias
 
     # Step 5: Softmax along the last dimension (seq_len dimension)
-    # Stable softmax: subtract max, exp, divide by sum
-    scores_max = scores.amax(dim=-1, keepdim=True)  # [batch, num_heads, seq_len, 1]
-    scores_shifted = scores - scores_max
-    scores_exp = scores_shifted.exp()
-    scores_sum = scores_exp.sum(dim=-1, keepdim=True)  # [batch, num_heads, seq_len, 1]
-    attn_weights = scores_exp / scores_sum  # [batch, num_heads, seq_len, seq_len]
+    attn_weights = F.softmax(scores, dim=-1)  # [batch, num_heads, seq_len, seq_len]
 
     # Step 6: Attention @ V
     # [batch, num_heads, seq_len, seq_len] @ [batch, num_heads, seq_len, head_dim]
