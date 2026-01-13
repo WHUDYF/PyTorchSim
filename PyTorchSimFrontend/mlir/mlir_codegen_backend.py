@@ -60,7 +60,7 @@ def reduction_partial_combine_vec(reduction_type, vector_value, init_value):
     if reduction_type == "min":
         return ops.minimum(vector_value, init_value)
     if reduction_type == "any":
-        return ops.logical_and(vector_value, init_value)
+        return ops.logical_or(vector_value, init_value)
     raise AssertionError(reduction_type)
 
 class ExtensionWrapperCodegen(wrapper.PythonWrapperCodegen):

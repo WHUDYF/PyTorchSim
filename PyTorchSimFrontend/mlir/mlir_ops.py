@@ -18,7 +18,7 @@ def reduction_combine_vec(reduction_type, vector_value, init_value, axis, shape,
     if reduction_type == "min":
         return f"vector.multi_reduction <minimumf>, %{vector_value}, %{init_value} [{axis}] : {shape} to {reduced_shape}"
     if reduction_type == "any":
-        return f"vector.multi_reduction <and>, %{vector_value}, %{init_value} [{axis}] : {shape} to {reduced_shape}"
+        return f"vector.multi_reduction <or>, %{vector_value}, %{init_value} [{axis}] : {shape} to {reduced_shape}"
     raise AssertionError(reduction_type)
 
 class ExtensionOverrides(common.OpOverrides):
@@ -995,10 +995,10 @@ class ExtensionOverrides(common.OpOverrides):
         if ret_type == "i1":
             return operand, [tile_size, ret_type]
 
-        const_one = ops.constant(0, ret_type)
+        const_zero = ops.constant(0, ret_type)
         if tile_size > 1:
-            const_one = ops.broadcast(const_one, tile_size)
-        ret = ops.ne(operand, const_one)
+            const_zero = ops.broadcast(const_zero, tile_size)
+        ret = ops.ne(operand, const_zero)
         return ret, [tile_size, "i1"]
     @staticmethod
     def step(size, dtype, *args, **kwargs):
