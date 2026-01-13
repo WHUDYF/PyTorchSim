@@ -20,7 +20,7 @@ from torch._inductor.utils import (
     is_welford_reduction,
     sympy_product
 )
-from torch.utils._sympy.functions import ModularIndexing, FloorDiv, Identity
+from torch.utils._sympy.functions import ModularIndexing, FloorDiv
 from PyTorchSimFrontend import extension_codecache
 from PyTorchSimFrontend import extension_config
 from . import mlir_common
@@ -364,13 +364,6 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         # Identity case
         if len(expr.args) == 0 and len(indirect_dims) == 0:
             return expr
-
-        # Replace Identity arguments with Identity.args[0]
-        for arg in expr.args:
-            if arg.is_Mul and arg.args[0].is_number and isinstance(arg.args[1], Identity):
-                expr = expr.replace(arg.args[1], arg.args[1].args[0])
-            if isinstance(arg, Identity):
-                expr = expr.replace(arg, arg.args[0] if arg.args else arg)
 
         if len(expr.args) == 0:
             args = [expr]
@@ -784,6 +777,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         return accum
 
     def index_expr(self, index, dtype):
+        index = self.rename_indexing(index)
         base_tile_desc = self.kernel_group.tile_desc
         if len(self.ranges) != self.reduction_depth:
             # FIXME. This is a temporary solution to get tile stride of the reduction case
@@ -1223,6 +1217,57 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 local_tile_desc.apply_divisor(dim_idx+offset, divisor, "pad")
                 local_tile_desc.apply_divisor(dim_idx+offset, divisor, "split")
                 offset = offset+1
+
+        # Support ModularIndexing pattern
+        # This pattern can be used to broadcast ex) torch.cat([a,a])
+        # ModularIndexing(x, y, z) means (x // y) % z
+        # tile_size must be: multiple of y (floorDiv divisor) and divisor of z (modular divisor)
+        if index.has(ModularIndexing):
+            for sub in sympy.preorder_traversal(index):
+                if isinstance(sub, ModularIndexing):
+                    if not str(sub.args[0]).startswith("index"):
+                        continue
+                    dim_idx = int((str(sub.args[0])[5:]))
+                    floor_divisor = sub.args[1]  # y: floorDiv divisor
+                    mod_divisor = sub.args[2]    # z: modular divisor
+                    current_tile_size = self.kernel_group.tile_desc.get_tile_size()[dim_idx]
+
+                    # Check if tile_size is multiple of floorDiv divisor
+                    if int(current_tile_size % floor_divisor) != 0:
+                        original_tile = self.kernel_group.tile_desc.get_tile_size()
+                        original_size = original_tile[dim_idx]
+                        divisor = floor_divisor * self.kernel_group.tile_desc.vmap.vlane_stride
+                        new_size = ((original_size + divisor - 1) // divisor) * divisor
+                        new_tile_sizes = list(self.kernel_group.tile_desc.get_tile_size())
+                        new_tile_sizes[dim_idx] = new_size
+                        self.kernel_group.tile_desc.set_tile_size(new_tile_sizes)
+                        self.kernel_group.tile_desc.tile_constraint[dim_idx].fixed = True
+
+                        self.reset("recompile")
+                        raise mlir_common.RecompileSignal(f"Tile size {current_tile_size} is not a multiple of floorDiv divisor {floor_divisor} in ModularIndexing")
+
+                    # Check if tile_size is a divisor of modular divisor
+                    if int((mod_divisor * floor_divisor) % current_tile_size) != 0:
+                        original_tile = self.kernel_group.tile_desc.get_tile_size()
+                        original_size = original_tile[dim_idx]
+                        # Find the largest divisor of mod_divisor that is <= original_size
+                        # and is a multiple of floor_divisor
+                        new_size = original_size
+                        while new_size > 0:
+                            if mod_divisor % new_size == 0 and new_size % floor_divisor == 0:
+                                break
+                            new_size -= floor_divisor
+
+                        if new_size <= 0:
+                            new_size = mod_divisor * floor_divisor
+
+                        new_tile_sizes = list(self.kernel_group.tile_desc.get_tile_size())
+                        new_tile_sizes[dim_idx] = new_size
+                        self.kernel_group.tile_desc.set_tile_size(new_tile_sizes)
+                        self.kernel_group.tile_desc.tile_constraint[dim_idx].fixed = True
+
+                        self.reset("recompile")
+                        raise mlir_common.RecompileSignal(f"Tile size {current_tile_size} is not a divisor of modular divisor {mod_divisor} in ModularIndexing")
 
         # FIXME. It will be nice to modify node instead of this exception handling...
         if len(self.itervars) == 1 and self.reduction_depth == 0:

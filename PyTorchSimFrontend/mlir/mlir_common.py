@@ -15,7 +15,7 @@ from torch._inductor.virtualized import V
 from torch._inductor.ir import MultiOutputLayout
 from torch._inductor.dependencies import MemoryDep, StarDep, WeakDep
 from torch._inductor.codegen.wrapper import KernelDefinitionLine
-from torch.utils._sympy.functions import ModularIndexing, FloorDiv, Mod
+from torch.utils._sympy.functions import ModularIndexing, FloorDiv, Mod, Identity
 import sympy
 import contextlib
 
@@ -838,6 +838,21 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         # and renames variables in index expressions to kernel arg names
         if isinstance(index, (list, tuple)):
             return [self.rename_indexing(x) for x in index]
+
+        # FIXME. This is a temporary solution to remove Identity wrappers from index expression.
+        # Remove Identity wrappers from index expression
+        # Check if index itself is Identity
+        if isinstance(index, Identity):
+            index = index.args[0] if index.args else index
+
+        # Replace Identity arguments with Identity.args[0]
+        if hasattr(index, 'args') and len(index.args) > 0:
+            for arg in index.args:
+                if arg.is_Mul and arg.args[0].is_number and isinstance(arg.args[1], Identity):
+                    index = index.replace(arg.args[1], arg.args[1].args[0] if arg.args[1].args else arg.args[1])
+                if isinstance(arg, Identity):
+                    index = index.replace(arg, arg.args[0] if arg.args else arg)
+
         index = V.graph.sizevars.simplify(index)
         sorted_symbols = sorted(index.free_symbols, key=lambda s: s.name)
         replacements = {
