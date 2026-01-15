@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     folder = int(args.size)
     print("Taget size: ", folder)
-    folder_path = os.environ.get("TORCHSIM_DUMP_PATH")
+    folder_path = os.environ.get("TORCHSIM_LOG_PATH")
     print(folder_path)
     os.makedirs(folder_path, exist_ok=True)
     test_matmul(device, folder, folder, folder)
