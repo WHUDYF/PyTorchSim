@@ -435,7 +435,6 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         return index
 
     def load(self, name: str, index: sympy.Expr):
-        index = self.rename_indexing(index)
         index, comptute_depedency = self.convert_indirect_indexing(index)
         padding = self.get_padding_type()
 
@@ -489,7 +488,6 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         return out
 
     def store(self, name: str, index: sympy.Expr, value, mode=None, *args, **kwargs):
-        index = self.rename_indexing(index)
         dtype = V.graph.get_dtype(name)
         mlir_dtype = mlir_common.DTYPE_TO_MLIR[dtype]
 
@@ -642,7 +640,6 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         dram_var = self.kernel_group.args.output(name)
         dtype = V.graph.get_dtype(name)
         mlir_dtype = mlir_common.DTYPE_TO_MLIR[dtype]
-        index = self.rename_indexing(index)
 
         with self.override_buffer_cse(cse=self.reduction_cse):
             # Tile is always reuduced in inner loop
@@ -779,7 +776,6 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         return accum
 
     def index_expr(self, index, dtype):
-        index = self.rename_indexing(index)
         base_tile_desc = self.kernel_group.tile_desc
         if len(self.ranges) != self.reduction_depth:
             # FIXME. This is a temporary solution to get tile stride of the reduction case

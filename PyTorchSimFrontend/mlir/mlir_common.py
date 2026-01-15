@@ -913,6 +913,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
 
             @staticmethod
             def load(name: str, index: sympy.Expr):
+                index = self.rename_indexing(index)
                 if name in self.cse.invalidated_stores:
                     # A load from an invalidated store requires us to
                     # keep the actual buffer around
@@ -937,6 +938,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                         for other_name in self.current_node.get_output(name).get_mutations():
                             self.cse.store_cache[other_name] = value
                 if name not in V.graph.removed_buffers:
+                    index = self.rename_indexing(index)
                     return self.store(name, index, value, mode=mode)
 
             @staticmethod
@@ -948,6 +950,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                         self.cse.store_cache[other_name] = value
 
                 if name not in V.graph.removed_buffers:
+                    index = self.rename_indexing(index)
                     return self.store_reduction(name, index, value)
 
             @staticmethod
@@ -960,6 +963,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
 
             @staticmethod
             def index_expr(index, dtype):
+                index = self.rename_indexing(index)
                 return self.index_expr(index, dtype)
 
             @staticmethod
