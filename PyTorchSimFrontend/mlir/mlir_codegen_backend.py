@@ -534,8 +534,8 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 value = ops.to_dtype(value, mlir_dtype)
 
             if compute_vec_size < self.var_info[value][0]:
-                value = self.cse.generate(self.stores, f"vector.extract_strided_slice  %{value} {{offsets = [0], sizes = [{compute_vec_size}], strides = [1]}}: vector<{self.var_info[value][0]}x{self.var_info[value][1]}> to {vshape}")
-                self.register_var_info(value, [compute_vec_size, mlir_dtype])
+                with self.override_buffer_cse(buffer=self.stores):
+                    value = ops.extract_strided_slice(value, compute_vec_size)
 
             with self.override_buffer_cse(buffer=self.stores):
                 ops._store(value, sram_var, compute_index_var, tile_shape, buffer_name=name)
@@ -729,9 +729,11 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 outer_dim = ops.remainder(ops.truncdiv(dim, vlane_stride_vec), vlane_outer_vec)
                 dim = ops.add(stride_dim, ops.mul(outer_dim, nr_vector_lane_vec))
 
-                vlane_offset = self.const_cse.generate(self.const_buffer, f"arith.addi %{vlane_vec}, %{vlane_vec} {{ vlane_offset={offset} }} : vector<{vlane_vec_size}xi64> // vlane offset")
-                self.register_var_info(vlane_offset, [vlane_vec_size, "i64"])
-                vlane_offset = ops.index_cast(vlane_offset, "index")
+                with self.override_buffer_cse(buffer=self.const_buffer, cse=self.const_cse):
+                    vlane_offset = ops.vlane_offset(vlane_vec, vlane_vec, attributes={"vlane_offset": offset}, comment="vlane offset")
+                    if compute_vec_size < self.var_info[vlane_offset][0]:
+                        vlane_offset = ops.extract_strided_slice(vlane_offset, compute_vec_size)
+                    vlane_offset = ops.index_cast(vlane_offset, "index")
                 dim = ops.add(dim, vlane_offset)
             dim_list.append(dim)
 
@@ -794,7 +796,6 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         else:
             tile_desc = base_tile_desc
         compute_vec_size = tile_desc.get_compute_vec_size()
-
 
         tile_shape = f"memref<{compute_vec_size*self.vector_lane}xindex, 1>"
         vshape = f"vector<{compute_vec_size}xindex>"
