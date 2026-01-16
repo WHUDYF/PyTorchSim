@@ -25,12 +25,47 @@ class MLIRScheduling(BaseScheduling):
     target_kernel = MLIRKernel
     def __init__(self, scheduler):
         self.scheduler = scheduler
-        #self.scheduler.enter_context = self.enter_context_fixed # FIXME. Monkey patch: For fixing the inductor bug
+        if scheduler is not None:
+            self.scheduler.can_fuse_origin = self.scheduler.can_fuse
+            self.scheduler.can_fuse = self.can_fuse_with_exceptions # FIXME. Monkey patch: For prolouge fusion
         self.kernel_group = mlir_common.MLIRWrapperKenrelGroup()
         self._ready_to_flush = False
         self.outer_function = set()
         config.inplace_buffers = False # FIXME. inout kernel makes trouble.. So disabled it!
         self.max_fusion_size = 5
+
+    def can_fuse_with_exceptions(self, node1: BaseSchedulerNode, node2: BaseSchedulerNode) -> bool:
+        if not extension_config.CONFIG_FUSION:
+            return False
+
+        # Extract base template node
+        base_template_node1 = [node for node in node1.get_nodes() if node.is_template()]
+        base_template_node2 = [node for node in node2.get_nodes() if node.is_template()]
+
+        # Case 3: Prologue(Pointwise) + Tempalte
+        if len(base_template_node1) == 0 and len(node1.get_nodes())==1 and not node1.is_reduction() and len(base_template_node2) == 1 and extension_config.CONFIG_FUSION_PROLOGUE:
+            from PyTorchSimFrontend.mlir.mlir_gemm_template import MLIRGemmTemplate
+            from PyTorchSimFrontend.mlir.mlir_bmm_template import MLIRBMMTemplate
+
+            target_node = base_template_node2[0].node
+            # Currently only BMM, MM support prologue fusion
+            if not isinstance(target_node.template, (MLIRBMMTemplate, MLIRGemmTemplate)):
+                return False
+
+            if len(node1.read_writes.writes) != 1:
+                return False
+            if node1.node not in target_node.inputs or any(["view" in str(ori) for ori in node1.node.origins]): #FIXME
+                return False
+
+            # We don't fuse this edge case...
+            if base_template_node2[0].group[1][0][0] == 1:
+                return False
+
+            if list(node1.read_writes.writes)[0].name in [dep.name for dep in node2.read_writes.reads]:
+                node1 = self.revert_group(node1)
+                return True
+        return self.scheduler.can_fuse_origin(node1, node2)
+
 
     def _set_flush_status(self, status: bool):
         self._ready_to_flush = status
@@ -43,6 +78,9 @@ class MLIRScheduling(BaseScheduling):
         return OrderedSet([BackendFeature.REDUCE_TO_SINGLE_ELEMENT])
 
     def can_fuse_vertical(self, node1, node2):
+        return self.can_fuse_horizontal(node1, node2)
+
+    def can_fuse_multi_outputs_template(self, node1, node2):
         return self.can_fuse_horizontal(node1, node2)
 
     def can_fuse_horizontal(self, node1, node2):
@@ -88,7 +126,7 @@ class MLIRScheduling(BaseScheduling):
             return same_iter and no_dependency
 
         # Case 1: Template + Pointwise fusion
-        if len(base_template_node1) == 1 and len(base_template_node2) == 0 and not node2.is_reduction():
+        if len(base_template_node1) == 1 and len(node1.get_nodes())==1 and len(base_template_node2) == 0 and not node2.is_reduction():
             # Don't fuse maxpool template code
             from PyTorchSimFrontend.mlir.mlir_maxpool_template import MLIRMaxPoolTemplate
             from PyTorchSimFrontend.mlir.mlir_bmm_template import MLIRBMMTemplate
@@ -132,9 +170,10 @@ class MLIRScheduling(BaseScheduling):
             return True
 
         # Case 2: Tempalte + Reduction fusion
-        if len(base_template_node1) == 1 and len(base_template_node2) == 0 and node2.is_reduction() and extension_config.CONFIG_FUSION_REDUCTION_EPILOGUE:
+        if len(base_template_node1) == 1 and len(node1.get_nodes())==1 and len(base_template_node2) == 0 and node2.is_reduction() and extension_config.CONFIG_FUSION_REDUCTION_EPILOGUE:
             from PyTorchSimFrontend.mlir.mlir_gemm_template import MLIRGemmTemplate
             from PyTorchSimFrontend.mlir.mlir_bmm_template import MLIRBMMTemplate
+            target_node = base_template_node1[0].node
             if not isinstance(target_node.template, (MLIRBMMTemplate, MLIRGemmTemplate)):
                 return False
 
@@ -149,7 +188,7 @@ class MLIRScheduling(BaseScheduling):
             # We can't fuse dim=-1
             layout_possible = stride != 1
             # Directed linked?
-            dependency_check = node2.get_nodes()[0] in [node.node for node in base_template_node1[0].users]# and len(node2.read_writes.reads)==1
+            dependency_check = writes1 & reads2
             dependency_size = all([i.get_numel() == node1.get_nodes()[0].node.get_numel() for i in node2.read_writes.reads])
             return size_match and layout_possible and dependency_check and dependency_size
 
@@ -177,8 +216,8 @@ class MLIRScheduling(BaseScheduling):
                 return True
 
         # Check elementwise fusion
-        if vars1 == vars2 and reduce1 == reduce2:
-            return True
+        if vars1 == vars2 and reduce1 == reduce2 and not node1.is_reduction() and not node2.is_reduction():
+            return writes1 & reads2
         return False
 
     def revert_group(self, act_nodes, args=None, var_ranges=None):

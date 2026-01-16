@@ -573,8 +573,8 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             with contextlib.ExitStack() as stack:
                 stack.enter_context(compute_body.indent(attribute="{inner_loop=false}",suffix=self.compute_body_loop.epilogue_line()))
                 if self.reduction_fusion:
-                    compute_body.writelines(self.reduction_body_loop.lines())
                     compute_body.splice(self.masks)
+                    compute_body.writelines(self.reduction_body_loop.lines())
                     stack.enter_context(compute_body.indent(attribute="{inner_loop=false}"))
                     compute_body.splice(self.loads)
                     compute_body.splice(self.compute)
@@ -848,7 +848,6 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return max(size, 2) # vector load/store
 
     def load_epilogue(self, name: str, index: sympy.Expr):
-        index = self.rename_indexing(index)
         dram_var = self.kernel_group.args.input(name)
         dram_shape = mlir_common.MLIRKernelArgs.get_mlir_shape(self.buffer_types[name])
         dtype = V.graph.get_dtype(name)
@@ -898,7 +897,6 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return out
 
     def store_epilogue(self, name: str, index: sympy.Expr, value, *args, **kwargs):
-        index = self.rename_indexing(index)
         dram_var = self.kernel_group.args.output(name)
         dram_shape = mlir_common.MLIRKernelArgs.get_mlir_shape(self.buffer_types[name])
         dtype = V.graph.get_dtype(name)
@@ -1000,7 +998,6 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return sram_var
 
     def store_reduction_epilogue(self, name, index, value):
-        index = self.rename_indexing(index)
         dram_var = self.kernel_group.args.output(name)
         dram_shape = mlir_common.MLIRKernelArgs.get_mlir_shape(self.buffer_types[name])
         dtype = V.graph.get_dtype(name)
@@ -1119,11 +1116,19 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return tile_desc
 
     def rename_indexing(self, index) -> sympy.Expr:
-        for dim_name, dim_aliased_name in self.dim_aliasing.items():
-            index = index.subs(sympy.Symbol(dim_name), sympy.Symbol("tmp_"+dim_aliased_name))
-        # To avoid this case ({"index0":"index1", "index1":"index0"})
-        for dim_aliased_name in self.dim_aliasing.values():
-            index = index.subs(sympy.Symbol("tmp_"+dim_aliased_name), sympy.Symbol(dim_aliased_name))
+        # First step: replace dim_name with tmp_+dim_aliased_name to avoid circular dependencies
+        # (e.g., {"index0":"index1", "index1":"index0"})
+        tmp_subs = {
+            sympy.Symbol(dim_name): sympy.Symbol("tmp_"+dim_aliased_name)
+            for dim_name, dim_aliased_name in self.dim_aliasing.items()
+        }
+        index = index.subs(tmp_subs)
+        # Second step: replace tmp_+dim_aliased_name with dim_aliased_name
+        final_subs = {
+            sympy.Symbol("tmp_"+dim_aliased_name): sympy.Symbol(dim_aliased_name)
+            for dim_aliased_name in self.dim_aliasing.values()
+        }
+        index = index.subs(final_subs)
         return index
 
 class MLIRTemplateCaller(CUDATemplateCaller):
