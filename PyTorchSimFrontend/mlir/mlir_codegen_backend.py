@@ -327,7 +327,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         #         return 1
         return 0
 
-    def convert_index(self, expr, buffer):
+    def convert_index(self, expr):
         if len(expr.free_symbols) != 1:
             raise NotImplementedError("Not supporting this view operation...!")
 
@@ -346,17 +346,37 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         first_arg = expr.args[0]
         if len(first_arg.free_symbols) != 1:
             raise NotImplementedError("What is this case?")
+
+        # Create affine.apply operation
         indices = [list(first_arg.free_symbols)[0]]
-        args = ", ".join(map(str, indices))
-        map_var = self.map_cse.generate(self.global_vars, f"affine_map<({args}) -> ({expr_str})>")
-        args = ", ".join([f"%{i}" for i in indices])
-        index = self.apply_cse.generate(buffer, f"affine.apply #{map_var}({args})")
+        with self.override_buffer_cse(buffer=self.global_vars, cse=self.map_cse):
+            map_var = ops.affine_map(indices, expr_str)
+        index = ops.affine_apply(map_var, indices)
         return index
 
-    def parse_indices(self, expr, buffer=None, comments="", indirect_dims=[]) -> common.CSEVariable:
-        if buffer is None:
-            buffer = self.applys
+    def _convert_sympy_to_mlir_expr(self, expr, sorted_args):
+        """
+        Convert sympy expression to MLIR affine map expression by replacing index variables.
+        """
+        indices = []
 
+        for arg in sorted_args:
+            if arg.is_Mul and arg.args[0].is_number:
+                target_arg = arg.args[1]
+            elif not arg.is_number:
+                target_arg = arg
+            else:
+                continue
+            new_arg = sympy.Symbol(str(self.convert_index(target_arg)))
+            expr = expr.replace(target_arg, new_arg)
+            indices.append(str(new_arg))
+
+        expr_str = str(expr)
+        if "//" in expr_str:
+            expr_str = expr_str.replace("//", " floordiv ")
+        return expr_str, indices
+
+    def parse_indices(self, expr, comments="", indices=None, indirect_dims=[]) -> common.CSEVariable:
         # Constant case
         if expr.is_number and len(indirect_dims) == 0:
             return self.get_const_cse(int(expr))
@@ -372,33 +392,25 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         # Sort index variable.. ex) (%index1, %index0)
         args_dict = {term: list(term.free_symbols)[0] for term in args if term.free_symbols}
         sorted_args = sorted(args_dict.keys(), key=lambda term: str(args_dict[term]))
-        indices = []
-        for arg in sorted_args:
-            if arg.is_Mul and arg.args[0].is_number:
-                new_arg = sympy.Symbol(str(self.convert_index(arg.args[1], buffer)))
-                expr = expr.replace(arg.args[1], new_arg)
-                indices.append(str(new_arg))
-            elif not arg.is_number:
-                new_arg = sympy.Symbol(str(self.convert_index(arg, buffer)))
-                expr = expr.replace(arg, new_arg)
-                indices.append(str(new_arg))
+
+        # Convert sympy expression to affine map expression
+        expr_str, indices = self._convert_sympy_to_mlir_expr(expr, sorted_args)
 
         # Extract index var
-        indirect_args = [f"%{i}" for i in indirect_dims]
-        if len(indirect_args):
+        if len(indirect_dims):
             comments = "{indirect_access} " + comments # Add indirect access attribute
-        expr_str = str(expr)
-        if "//" in expr_str:
-            expr_str = expr_str.replace("//", " floordiv ")
-        args = ", ".join(map(str, indices))
-        map_var = self.map_cse.generate(self.global_vars, f"affine_map<({args})[{','.join(indirect_dims)}] -> ({expr_str})>")
-        args = ", ".join([f"%{i}" for i in indices])
-        index = self.apply_cse.generate(buffer, f"affine.apply #{map_var}({args})[{','.join(indirect_args)}] {comments}")
+        indirect_args = [f"%{i}" for i in indirect_dims]
+        # Create affine.apply operation
+        with self.override_buffer_cse(buffer=self.global_vars, cse=self.map_cse):
+            map_var = ops.affine_map(indices, expr_str, symbol_names=indirect_dims)
+
+        if hasattr(self, "dim_aliasing"):
+            indices = [self.dim_aliasing.get(index, index) for index in indices]
+        index = ops.affine_apply(map_var, indices, indirect_dims=indirect_args, comment=comments)
         return index
 
-    def parse_index_list(self, expr_list:list, buffer=None, offset=sympy.Number(0)) -> common.CSEVariable:
-        if buffer is None:
-            buffer = self.applys
+    def parse_index_list(self, expr_list:list, offset=sympy.Number(0)) -> common.CSEVariable:
+        """ Need to override buffer and cse to use this function. """
         expr_list = [arg for arg in expr_list]
         dim_list = [f"d{i}" for i in range(len(expr_list))]
 
@@ -413,11 +425,11 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         new_expr_list = [0] * len(expr_list)
         for idx, arg in enumerate(expr_list):
             if arg.is_Mul and arg.args[0].is_number:
-                new_arg = sympy.Symbol(str(self.convert_index(arg.args[1], buffer)))
+                new_arg = sympy.Symbol(str(self.convert_index(arg.args[1])))
                 new_expr_list[idx] = arg.subs(arg.args[1], dim_list[idx])
                 indices.append(str(new_arg))
             elif not arg.is_number:
-                new_arg = sympy.Symbol(str(self.convert_index(arg, buffer)))
+                new_arg = sympy.Symbol(str(self.convert_index(arg)))
                 new_expr_list[idx] = new_arg.subs(new_arg, dim_list[idx])
                 indices.append(str(new_arg))
             else:
@@ -427,11 +439,11 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 indices.append(str(new_arg))
 
         # Extract index var
+        # Create affine.apply operation
         expr_str = str(sum(new_expr_list) + offset)
-        args = ", ".join(map(str, dim_list))
-        map_var = self.map_cse.generate(self.global_vars, f"affine_map<({args})[] -> ({expr_str})>")
-        args = ", ".join([f"%{i}" for i in indices])
-        index = self.apply_cse.generate(buffer, f"affine.apply #{map_var}({args})[]")
+        with self.override_buffer_cse(buffer=self.global_vars, cse=self.map_cse):
+            map_var = ops.affine_map(dim_list, expr_str)
+        index = ops.affine_apply(map_var, indices)
         return index
 
     def load(self, name: str, index: sympy.Expr):
@@ -1080,7 +1092,8 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         if broadcast and (total_dims != local_dims or (self.reduction_depth!=len(total_dims) and total_dims[:self.reduction_depth] == local_dims)):
             local_dims = total_dims # Brodatcast tile shape
 
-        index_var = self.parse_indices(index, buffer=buffer, indirect_dims=indirect_dims, comments=f"// store_reduction={store_reduction}")
+        with self.override_buffer_cse(buffer=buffer, cse=self.apply_cse):
+            index_var = self.parse_indices(index, indirect_dims=indirect_dims, comments=f"// store_reduction={store_reduction}")
 
         if kg_tile_desc.vmap.vlane_split_axis in local_dims:
             local_vlane_split_axis = local_dims.index(kg_tile_desc.vmap.vlane_split_axis)

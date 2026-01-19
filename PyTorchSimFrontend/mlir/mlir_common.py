@@ -612,6 +612,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         instance_id = id(self)
         self.target_buffer_override = contextvars.ContextVar(f"Handler_compute_override_{instance_id}", default=self.compute)
         self.target_cse_override = contextvars.ContextVar(f"Handler_cse_override_{instance_id}", default=self.cse)
+        self._nested_context_depth = 0
 
     def set_ranges(self, lengths, reduction_lengths):
         if self.call_ranges:
@@ -992,13 +993,20 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                     values, offsets_name, offsets_size, indexing_dtype, right
                 )
 
-        super().__enter__()
-        assert self.overrides
-        parent_handler = self.overrides()
-        self.exit_stack.enter_context(V.set_ops_handler(CSEProxy()))
-        self.exit_stack.enter_context(V.set_kernel_handler(self))
+        if self._nested_context_depth == 0:
+            self.exit_stack.__enter__()
+            assert self.overrides
+            parent_handler = self.overrides()
+
+            self.exit_stack.enter_context(V.set_ops_handler(CSEProxy()))
+            self.exit_stack.enter_context(V.set_kernel_handler(self))
+        self._nested_context_depth += 1
         return self
 
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._nested_context_depth -= 1
+        if self._nested_context_depth == 0:
+            super().__exit__(exc_type, exc_val, exc_tb)
 
 @dataclasses.dataclass
 class LoopLevel:

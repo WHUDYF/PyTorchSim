@@ -35,15 +35,15 @@ class MLIRScheduling(BaseScheduling):
         self.max_fusion_size = 5
 
     def can_fuse_with_exceptions(self, node1: BaseSchedulerNode, node2: BaseSchedulerNode) -> bool:
-        if not extension_config.CONFIG_FUSION:
-            return False
+        if not extension_config.CONFIG_FUSION_PROLOGUE:
+            return self.scheduler.can_fuse_origin(node1, node2)
 
         # Extract base template node
         base_template_node1 = [node for node in node1.get_nodes() if node.is_template()]
         base_template_node2 = [node for node in node2.get_nodes() if node.is_template()]
 
         # Case 3: Prologue(Pointwise) + Tempalte
-        if len(base_template_node1) == 0 and len(node1.get_nodes())==1 and not node1.is_reduction() and len(base_template_node2) == 1 and extension_config.CONFIG_FUSION_PROLOGUE:
+        if len(base_template_node1) == 0 and len(node1.get_nodes())==1 and len(node2.get_nodes())==1 and not node1.is_reduction() and len(base_template_node2) == 1 and extension_config.CONFIG_FUSION_PROLOGUE:
             from PyTorchSimFrontend.mlir.mlir_gemm_template import MLIRGemmTemplate
             from PyTorchSimFrontend.mlir.mlir_bmm_template import MLIRBMMTemplate
 
@@ -126,7 +126,7 @@ class MLIRScheduling(BaseScheduling):
             return same_iter and no_dependency
 
         # Case 1: Template + Pointwise fusion
-        if len(base_template_node1) == 1 and len(node1.get_nodes())==1 and len(base_template_node2) == 0 and not node2.is_reduction():
+        if len(base_template_node1) == 1 and len(node1.get_nodes())==1 and len(node2.get_nodes())==1 and len(base_template_node2) == 0 and not node2.is_reduction():
             # Don't fuse maxpool template code
             from PyTorchSimFrontend.mlir.mlir_maxpool_template import MLIRMaxPoolTemplate
             from PyTorchSimFrontend.mlir.mlir_bmm_template import MLIRBMMTemplate
@@ -170,7 +170,7 @@ class MLIRScheduling(BaseScheduling):
             return True
 
         # Case 2: Tempalte + Reduction fusion
-        if len(base_template_node1) == 1 and len(node1.get_nodes())==1 and len(base_template_node2) == 0 and node2.is_reduction() and extension_config.CONFIG_FUSION_REDUCTION_EPILOGUE:
+        if len(base_template_node1) == 1 and len(node1.get_nodes())==1 and len(node2.get_nodes())==1 and len(base_template_node2) == 0 and node2.is_reduction() and extension_config.CONFIG_FUSION_REDUCTION_EPILOGUE:
             from PyTorchSimFrontend.mlir.mlir_gemm_template import MLIRGemmTemplate
             from PyTorchSimFrontend.mlir.mlir_bmm_template import MLIRBMMTemplate
             target_node = base_template_node1[0].node
@@ -185,39 +185,35 @@ class MLIRScheduling(BaseScheduling):
             except:
                 return False
 
-            # We can't fuse dim=-1
-            layout_possible = stride != 1
+            # We can't fuse dim=-1 & N == 1
+            layout_possible = stride != 1 and (1 not in node1.node.get_size())
             # Directed linked?
             dependency_check = writes1 & reads2
             dependency_size = all([i.get_numel() == node1.get_nodes()[0].node.get_numel() for i in node2.read_writes.reads])
             return size_match and layout_possible and dependency_check and dependency_size
 
         # Case 3: Prologue(Pointwise) + Tempalte
-        if len(base_template_node1) == 0 and len(node1.get_nodes())==1 and not node1.is_reduction() and len(base_template_node2) == 1 and extension_config.CONFIG_FUSION_PROLOGUE:
-            from PyTorchSimFrontend.mlir.mlir_gemm_template import MLIRGemmTemplate
-            from PyTorchSimFrontend.mlir.mlir_bmm_template import MLIRBMMTemplate
+        # if len(base_template_node1) == 0 and len(node1.get_nodes())==1 and not node1.is_reduction() and len(base_template_node2) == 1 and extension_config.CONFIG_FUSION_PROLOGUE:
+        #     from PyTorchSimFrontend.mlir.mlir_gemm_template import MLIRGemmTemplate
+        #     from PyTorchSimFrontend.mlir.mlir_bmm_template import MLIRBMMTemplate
 
-            target_node = base_template_node2[0].node
-            # Currently only BMM, MM support prologue fusion
-            if not isinstance(target_node.template, (MLIRBMMTemplate, MLIRGemmTemplate)):
-                return False
+        #    target_node = base_template_node2[0].node
+        #    # Currently only BMM, MM support prologue fusion
+        #    if not isinstance(target_node.template, (MLIRBMMTemplate, MLIRGemmTemplate)):
+        #        return False
 
-            if len(node1.read_writes.writes) != 1:
-                return False
-            if node1.node not in target_node.inputs or any(["view" in str(ori) for ori in node1.node.origins]): #FIXME
-                return False
+        #    if len(node1.read_writes.writes) != 1:
+        #        return False
+        #    if node1.node not in target_node.inputs or any(["view" in str(ori) for ori in node1.node.origins]): #FIXME
+        #        return False
 
-            # We don't fuse this edge case...
-            if base_template_node2[0].group[1][0][0] == 1:
-                return False
+        #    # We don't fuse this edge case...
+        #    if base_template_node2[0].group[1][0][0] == 1:
+        #        return False
 
-            if list(node1.read_writes.writes)[0].name in [dep.name for dep in node2.read_writes.reads]:
-                node1 = self.revert_group(node1)
-                return True
-
-        # Check elementwise fusion
-        if vars1 == vars2 and reduce1 == reduce2 and not node1.is_reduction() and not node2.is_reduction():
-            return writes1 & reads2
+        #    if list(node1.read_writes.writes)[0].name in [dep.name for dep in node2.read_writes.reads]:
+        #        node1 = self.revert_group(node1)
+        #        return True
         return False
 
     def revert_group(self, act_nodes, args=None, var_ranges=None):
@@ -340,7 +336,7 @@ class MLIRScheduling(BaseScheduling):
         _, _, _, kernel.buffer_types = self.kernel_group.args.mlir_argdefs()
         src_code, meta_code = kernel.codegen_nodes(tile_candidates, render, template_node, prologue_nodes, epilogue_nodes)
 
-        with V.set_kernel_handler(kernel):
+        with kernel:
             kernel_name = self.define_kernel(src_code, meta_code, kernel.kernel_name, kernel.vector_lane, kernel.spad_info,
                                              kernel.loop_size, origins={str(i) for i in template_node.node.origins})
             self.define_function(kernel)

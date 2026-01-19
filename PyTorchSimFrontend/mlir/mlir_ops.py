@@ -1176,3 +1176,40 @@ class ExtensionOverrides(common.OpOverrides):
             return common.DeferredLine(buffer_name, line), [None, None]
         else:
             return line, [None, None]
+
+    @staticmethod
+    def affine_apply(map_var, indices, indirect_dims=None, comment=None, *args, **kwargs):
+        # Format indices arguments
+        indices_str = ", ".join([f"%{i}" for i in indices])
+        op_str = f"affine.apply #{map_var}({indices_str})"
+
+        # Add indirect dimensions if provided
+        if indirect_dims:
+            indirect_str = ", ".join(indirect_dims)
+            op_str += f"[{indirect_str}]"
+        if comment:
+            op_str += f" // {comment}"
+        return op_str, [1, "index"]
+
+    @staticmethod
+    def affine_map(dim_names, expr_str, symbol_names=None, comment=None, *args, **kwargs):
+        # Handle dim_names as list or string
+        if isinstance(dim_names, list):
+            dims_str = ", ".join([str(dim) for dim in dim_names])
+        else:
+            dims_str = dim_names
+
+        # Build the map string
+        if symbol_names:
+            if isinstance(symbol_names, list):
+                symbols_str = ", ".join(symbol_names)
+            else:
+                symbols_str = symbol_names
+            map_str = f"affine_map<({dims_str})[{symbols_str}] -> ({expr_str})>"
+        else:
+            map_str = f"affine_map<({dims_str}) -> ({expr_str})>"
+
+        if comment:
+            map_str += f" // {comment}"
+
+        return map_str, [1, "map"]
