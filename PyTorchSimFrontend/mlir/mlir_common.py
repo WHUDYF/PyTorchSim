@@ -614,7 +614,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         self.target_cse_override = contextvars.ContextVar(f"Handler_cse_override_{instance_id}", default=self.cse)
         self._nested_context_depth = 0
 
-    def set_ranges(self, lengths, reduction_lengths):
+    def set_ranges(self, lengths, reduction_lengths, index_names=None):
         if self.call_ranges:
             assert self.call_ranges == tuple(lengths) + tuple(
                 reduction_lengths
@@ -623,7 +623,12 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         else:
             self.call_ranges = tuple(lengths) + tuple(reduction_lengths)
             self.ranges = [self.rename_indexing(x) for x in self.call_ranges]
-            self.itervars = [sympy.Symbol(f"index{n}") for n in range(len(self.ranges))]
+            if index_names is None:
+                self.itervars = [sympy.Symbol(f"index{n}") for n in range(len(self.ranges))]
+            else:
+                assert len(index_names) == len(self.ranges), f"Index names length mismatch: {len(index_names)} != {len(self.ranges)}"
+                self.itervars = [sympy.Symbol(str(n)) for n in index_names]
+
             self.itervar_cses = {str(index) : self.register_var_cse(str(index), 1, "index") for index in self.itervars}
             self.reduction_depth = len(lengths)
         return (
@@ -867,18 +872,22 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
     def override_buffer_cse(self, *, buffer=None, cse=None):
         buffer_override = self.target_buffer_override
         cse_override = self.target_cse_override
-        target_buffer = target_cse = None
+        buffer_token = cse_token = None
         try:
+            # Store tokens for proper restoration in nested contexts
+            # contextvars.set() returns the previous value (token) which can be used for reset()
             if buffer is not None:
-                target_buffer = buffer_override.set(buffer)
+                buffer_token = buffer_override.set(buffer)
             if cse is not None:
-                target_cse = cse_override.set(cse)
+                cse_token = cse_override.set(cse)
             yield self
         finally:
-            if target_cse is not None:
-                cse_override.reset(target_cse)
-            if target_buffer is not None:
-                buffer_override.reset(target_buffer)
+            # Restore using tokens - contextvars automatically handles nested contexts
+            # Each level restores to its own previous value
+            if cse_token is not None:
+                cse_override.reset(cse_token)
+            if buffer_token is not None:
+                buffer_override.reset(buffer_token)
 
     def __enter__(self):
         class CSEProxy:

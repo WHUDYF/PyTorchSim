@@ -429,7 +429,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                     ).group
                     prologue_tile_desc = kernel.set_tile_size(kernel.prologue_info, prologue=True)
                     kernel.kernel_group.set_tile_info(prologue_tile_desc)
-                    vars, reduction_vars = kernel.set_ranges(group, reduction_group)
+                    vars, reduction_vars = kernel.set_ranges(group, reduction_group, list(self.dim_aliasing.values()))
                     for node in prologue_nodes:
                         # Reuse created spad
                         read_list = sorted([i.name for i in node.read_writes.reads])
@@ -469,10 +469,11 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                     _, (group, reduction_group) = max(
                         epilogue_nodes, key=lambda x: int(x.is_reduction())
                     ).group
-                    vars, reduction_vars = kernel.set_ranges(group, reduction_group)
+                    vars, reduction_vars = kernel.set_ranges(group, reduction_group, list(self.dim_aliasing.values()))
                     for node in epilogue_nodes:
                         node.codegen((vars, reduction_vars))
 
+        with self as kernel:
             src_code = (
                 partial_code
                 if isinstance(partial_code, str)
@@ -855,7 +856,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         # Want to use tile_desc from epilogue_info
         with self.override_buffer_cse(buffer=self.applys, cse=self.apply_cse):
             index_var = self.parse_indices(index)
-        dram_stride = [index.coeff(sympy.Symbol(val)) for val in self.dim_aliasing.keys()]
+        dram_stride = [index.coeff(sympy.Symbol(val)) for val in self.dim_aliasing.values()]
         vlane_split_axis = self.kernel_group.tile_desc.vmap.vlane_split_axis
         vlane_stride = self.kernel_group.tile_desc.vmap.vlane_stride
         tile_shape = self.kernel_group.tile_desc.get_mlir_shape(mlir_dtype)
@@ -892,7 +893,6 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                     map_var = ops.affine_map(["d0", "d1"], f"d0 + d1*{(self.r_tile_size)}")
                 with self.override_buffer_cse(buffer=self.loads):
                     offset = ops.affine_apply(map_var, [self.compute_idx, self.reduction_loop_idx])
-                #offset = self.cse.generate(self.loads, f"affine.apply affine_map<(d0, d1) -> (d0 + d1*{(self.r_tile_size)})>(%{self.compute_idx}, %{self.reduction_loop_idx})")
                 compute_index_var = ",".join([f"%{zero_var}"] * (self.kernel_group.tile_desc.get_nr_dim()-1) + [f"%{offset}"])
 
             with self.override_buffer_cse(buffer=self.loads):
@@ -908,7 +908,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
 
         with self.override_buffer_cse(buffer=self.applys, cse=self.apply_cse):
             index_var = self.parse_indices(index)
-        dram_stride = [index.coeff(sympy.Symbol(val)) for val in self.dim_aliasing.keys()]
+        dram_stride = [index.coeff(sympy.Symbol(val)) for val in self.dim_aliasing.values()]
         vlane_split_axis = self.kernel_group.tile_desc.vmap.vlane_split_axis
         vlane_stride = self.kernel_group.tile_desc.vmap.vlane_stride
         tile_shape = self.kernel_group.tile_desc.get_mlir_shape(mlir_dtype)
@@ -1012,7 +1012,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
 
         with self.override_buffer_cse(buffer=self.reductions_suffix, cse=self.apply_cse):
             index_var = self.parse_indices(index, comments="// Store reduction")
-        dram_stride = [index.coeff(sympy.Symbol(val)) for val in self.dim_aliasing.keys()][:-1] # Assume that there is only one reduction axis
+        dram_stride = [index.coeff(sympy.Symbol(val)) for val in self.dim_aliasing.values()][:-1] # Assume that there is only one reduction axis
         vlane_split_axis = self.kernel_group.tile_desc.vmap.vlane_split_axis
         vlane_stride = self.kernel_group.tile_desc.vmap.vlane_stride
 
@@ -1122,22 +1122,6 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                 self.compute_body_loop.size = tile_desc.get_numel_per_lane()
                 self.compute_body_loop.step = tile_desc.get_compute_vec_size()
         return tile_desc
-
-    def rename_indexing(self, index) -> sympy.Expr:
-        # First step: replace dim_name with tmp_+dim_aliased_name to avoid circular dependencies
-        # (e.g., {"index0":"index1", "index1":"index0"})
-        tmp_subs = {
-            sympy.Symbol(dim_name): sympy.Symbol("tmp_"+dim_aliased_name)
-            for dim_name, dim_aliased_name in self.dim_aliasing.items()
-        }
-        index = index.subs(tmp_subs)
-        # Second step: replace tmp_+dim_aliased_name with dim_aliased_name
-        final_subs = {
-            sympy.Symbol("tmp_"+dim_aliased_name): sympy.Symbol(dim_aliased_name)
-            for dim_aliased_name in self.dim_aliasing.values()
-        }
-        index = index.subs(final_subs)
-        return index
 
 class MLIRTemplateCaller(CUDATemplateCaller):
     def __str__(self):

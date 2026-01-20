@@ -313,7 +313,9 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         self.base_vector_initialized = False
 
     def reset(self, reason):
+        save = self.exit_stack, self._nested_context_depth
         self.__init__(self.kernel_group, reason=reason)
+        self.exit_stack, self._nested_context_depth = save
 
     # padding type 0: zero-padding 1: negative-padding(-inf) ...
     def get_padding_type(self):
@@ -395,17 +397,11 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
 
         # Convert sympy expression to affine map expression
         expr_str, indices = self._convert_sympy_to_mlir_expr(expr, sorted_args)
-
-        # Extract index var
-        if len(indirect_dims):
-            comments = "{indirect_access} " + comments # Add indirect access attribute
         indirect_args = [f"%{i}" for i in indirect_dims]
         # Create affine.apply operation
         with self.override_buffer_cse(buffer=self.global_vars, cse=self.map_cse):
             map_var = ops.affine_map(indices, expr_str, symbol_names=indirect_dims)
 
-        if hasattr(self, "dim_aliasing"):
-            indices = [self.dim_aliasing.get(index, index) for index in indices]
         index = ops.affine_apply(map_var, indices, indirect_dims=indirect_args, comment=comments)
         return index
 

@@ -178,7 +178,7 @@ class MLIRScheduling(BaseScheduling):
                 return False
 
             size_match = node1.get_nodes()[0].node.get_numel() == reduce(operator.mul, node2.get_nodes()[0].node.get_size(), 1) * reduce(operator.mul, node2.get_nodes()[0].node.get_reduction_size(), 1)
-            target_symbol = symbols("r0")
+            target_symbol = symbols("r0_0")
             try:
                 stride = [i.strip()[:-1].split(",")[-1].strip() for i in str(node2.get_nodes()[0].node).split("\n") if "r0" in i][1]
                 stride = int(sympify(stride).coeff(target_symbol))

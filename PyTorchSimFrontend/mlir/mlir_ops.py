@@ -1186,7 +1186,7 @@ class ExtensionOverrides(common.OpOverrides):
         # Add indirect dimensions if provided
         if indirect_dims:
             indirect_str = ", ".join(indirect_dims)
-            op_str += f"[{indirect_str}]"
+            op_str += f"[{indirect_str}] {{indirect_access}}"
         if comment:
             op_str += f" // {comment}"
         return op_str, [1, "index"]
