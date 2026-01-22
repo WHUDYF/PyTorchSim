@@ -637,9 +637,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     sys.path.append(os.environ.get("TORCHSIM_DIR", "/workspace/PyTorchSim"))
-    from Scheduler.scheduler import PyTorchSimRunner
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
 
     #test_upsample2d(device)
     #test_groupnorm(device)
