@@ -8,9 +8,6 @@ import importlib.util
 from PyTorchSimFrontend.extension_codecache import hash_prefix
 from Simulator.simulator import TOGSimulator
 from PyTorchSimFrontend import extension_config
-from PyTorchSimDevice.extension_device_interface import ExtensionDeviceInterface
-
-from torch._dynamo.device_interface import register_interface_for_device
 
 # Configure logger for Scheduler module
 logger = extension_config.setup_logger()
@@ -174,52 +171,24 @@ class PyTorchSimRunner:
     def setup_device(cls):
         if cls.NPU_MODULE is not None:
             return cls.NPU_MODULE
-        source_file_path = os.path.dirname(os.path.abspath(__file__))
-        source_file = os.path.join(
-            source_file_path, f"{extension_config.CONFIG_TORCHSIM_DIR}/PyTorchSimDevice/extension_device.cpp"
-        )
-        hook_file = os.path.join(source_file_path, f"{extension_config.CONFIG_TORCHSIM_DIR}/PyTorchSimDevice/extension_hooks.cpp")
 
-        import torch.utils.cpp_extension
-        module = torch.utils.cpp_extension.load(
-            name="npu",
-            sources=[
-                str(source_file),
-                str(hook_file),
-            ],
-            extra_cflags=["-g"],
-            verbose=True,
-        )
-
-        torch.utils.rename_privateuse1_backend("npu")
-        torch._register_device_module("npu", module)
-        from torch._inductor.codegen.common import (
-            get_scheduling_for_device,
-            get_wrapper_codegen_for_device,
-            register_backend_for_device,
-        )
-        from PyTorchSimFrontend.mlir.mlir_codegen_backend import (
-            ExtensionWrapperCodegen,
-        )
-        from PyTorchSimFrontend.mlir.mlir_scheduling import (
-            MLIRScheduling
-        )
+        try:
+            from torch._inductor.codegen.common import register_backend_for_device
+            from PyTorchSimFrontend.mlir.mlir_codegen_backend import ExtensionWrapperCodegen
+            from PyTorchSimFrontend.mlir.mlir_scheduling import MLIRScheduling
+        except ImportError as e:
+            logger.error(f"Failed to import torch_openreg: {e}")
+            logger.error("Please ensure PyTorchSimDevice2 is installed: pip install -e PyTorchSimDevice2")
+            raise
 
         register_backend_for_device(
             "npu",
             lambda scheduling: MLIRScheduling(scheduling),
             ExtensionWrapperCodegen
         )
-        import PyTorchSimDevice.extension_device_op_overrides
 
-        assert(
-        get_wrapper_codegen_for_device("npu")
-            == ExtensionWrapperCodegen
-        )
-        cls.NPU_MODULE = module
-        sys.modules['torch.npu'] = module
-        register_interface_for_device(module.custom_device(), ExtensionDeviceInterface)
-        return module
+        cls.NPU_MODULE = torch.npu
+        return cls.NPU_MODULE
 
     def submit(self, batched_req, partition_idx) -> List[RequestReturn]:
         # FIXME. Construct SchedulerDNNModel

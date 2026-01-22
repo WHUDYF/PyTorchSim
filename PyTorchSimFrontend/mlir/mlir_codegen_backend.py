@@ -111,7 +111,7 @@ class ExtensionWrapperCodegen(wrapper.PythonWrapperCodegen):
                 inductor_ops = torch.ops.inductor
                 assert_size_stride = torch._C._dynamo.guards.assert_size_stride
                 alloc_from_pool = torch.ops.inductor._alloc_from_pool
-                reinterpret_tensor = torch.ops.aten._reinterpret_tensor
+                reinterpret_tensor = torch.ops.inductor._reinterpret_tensor
                 custom_async_compile = CustomAsyncCompile()
                 async_compile = AsyncCompile()
                 os.environ["TORCHSIM_LAST_COMPILED_MODULE"] = __file__

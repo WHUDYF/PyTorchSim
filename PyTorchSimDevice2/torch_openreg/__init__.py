@@ -1,0 +1,24 @@
+import sys
+import torch
+
+
+if sys.platform == "win32":
+    from ._utils import _load_dll_libraries
+
+    _load_dll_libraries()
+    del _load_dll_libraries
+
+import torch_openreg._C  # type: ignore[misc]
+import torch_openreg.openreg
+
+
+torch.utils.rename_privateuse1_backend("npu")
+torch._register_device_module("npu", torch_openreg.openreg)
+torch.utils.generate_methods_for_privateuse1_backend(for_storage=True)
+
+torch_openreg.openreg.init()
+sys.modules['torch.npu'] = torch_openreg.openreg
+
+def _autoload():
+    # It is a placeholder function here to be registered as an entry point.
+    pass
