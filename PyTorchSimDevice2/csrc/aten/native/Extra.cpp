@@ -19,7 +19,7 @@ int64_t _fused_sdp_choice(
     bool is_causal,
     std::optional<double> scale,
     bool enable_gqa) {
-  auto backend = sdp::SDPBackend::overrideable;
+  auto backend = sdp::SDPBackend::math;
   return static_cast<int64_t>(backend);
 }
 
