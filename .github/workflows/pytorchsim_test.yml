@@ -703,7 +703,7 @@ jobs:
             -e TORCHSIM_DUMP_PATH=/dump \
             -e vpu_num_lanes="${{ inputs.vector_lane }}" \
             -e vpu_spad_size_kb_per_lane="${{ inputs.spad_size }}" \
-            ${{ inputs.image_name }} python3 PyTorchSim/tests/Llama/test_yolov5.py
+            ${{ inputs.image_name }} python3 PyTorchSim/tests/Yolov5/test_yolov5.py
 
   test_accuracy:
     name: Run test_accuracy
