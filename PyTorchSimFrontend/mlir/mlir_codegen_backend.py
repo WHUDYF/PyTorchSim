@@ -99,7 +99,7 @@ class ExtensionWrapperCodegen(wrapper.PythonWrapperCodegen):
 
                 from torch import device, empty, empty_strided
                 from {extension_codecache.__name__} import CustomAsyncCompile
-                from PyTorchSimFrontend.extension_config import CONFIG_SRAM_BUFFER_PLAN, CONFIG_TOGSIM_EAGER_MODE, setup_logger
+                from PyTorchSimFrontend.extension_config import CONFIG_SRAM_BUFFER_PLAN, setup_logger
                 from Simulator.simulator import TOGSimulator
                 from PyTorchSimFrontend.extension_op import sparse_mm_dummy_stonne_outer
                 from torch._inductor.select_algorithm import extern_kernels
@@ -1016,7 +1016,6 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 "spad_info": self.spad_info,
                 "vlen" : self.vlen,
                 "arg_attributes" : arg_attributes,
-                "validate" : extension_config.pytorchsim_functional_mode,
                 "autotune" : True,
             },
             source_code=src_code,

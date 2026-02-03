@@ -1,6 +1,8 @@
+import os
+import threading
+
 import torch
 from torch._dynamo.device_interface import register_interface_for_device
-
 import torch_openreg._C  # type: ignore[misc]
 
 from . import meta  # noqa: F401
@@ -8,7 +10,9 @@ from . import extension_device_op_overrides
 from .extension_device_interface import ExtensionDeviceInterface
 
 _initialized = False
-
+_default_streams = {}  # Dictionary to store default streams per device
+_tog_simulator = None  # Singleton TOGSimulator instance
+_launch_context = threading.local() # storage for launch_kernel context
 
 class device:
     r"""Context-manager that changes the selected device.
@@ -57,42 +61,27 @@ def is_initialized():
 
 
 def _lazy_init():
-    global _initialized
+    global _initialized, _tog_simulator
     if is_initialized():
         return
     torch_openreg._C._init()
     register_interface_for_device(custom_device(), ExtensionDeviceInterface)
     _initialized = True
 
+    # Create default streams for all devices
+    num_devices = device_count()
+    for device_idx in range(num_devices):
+        _default_streams[device_idx] = Stream()
 
 class Stream:
     """Wrapper for OpenReg stream."""
 
-    def __init__(self, priority=None, flags=0):
-        if priority is not None:
-            self._stream = torch_openreg._C._stream_create_with_priority(flags, priority)
-        else:
-            self._stream = torch_openreg._C._stream_create()
+    def __init__(self, flags=0):
+        self._stream = torch_openreg._C._stream_create()
 
     def __del__(self):
         if hasattr(self, '_stream'):
             torch_openreg._C._stream_destroy(self._stream)
-
-    def synchronize(self):
-        """Wait for all operations in the stream to complete."""
-        torch_openreg._C._stream_synchronize(self._stream)
-
-    def query(self):
-        """Check if all operations in the stream have completed."""
-        return torch_openreg._C._stream_query(self._stream)
-
-    def wait_event(self, event):
-        """Make this stream wait for an event."""
-        torch_openreg._C._stream_wait_event(self._stream, event._event)
-
-    def get_priority(self):
-        """Get the priority of the stream."""
-        return torch_openreg._C._stream_get_priority(self._stream)
 
     def launch_kernel(self, task):
         """Add a Python callable kernel to this stream.
@@ -107,75 +96,149 @@ class Stream:
         """Get the underlying stream pointer (for internal use)."""
         return self._stream
 
+def stream(flags=0):
+    return Stream(flags=flags)
 
-class Event:
-    """Wrapper for OpenReg event."""
+def default_stream(device=None):
+    _lazy_init()
+    if device is None:
+        device_idx = current_device()
+    else:
+        device_idx = torch.accelerator._get_device_index(device, optional=True)
+        if device_idx < 0:
+            device_idx = current_device()
 
-    def __init__(self, enable_timing=False):
-        if enable_timing:
-            # orEventEnableTiming = 0x1
-            self._event = torch_openreg._C._event_create_with_flags(0x1)
-        else:
-            self._event = torch_openreg._C._event_create()
+    if device_idx not in _default_streams:
+        # Create default stream if it doesn't exist
+        _default_streams[device_idx] = Stream()
 
-    def __del__(self):
-        if hasattr(self, '_event'):
-            torch_openreg._C._event_destroy(self._event)
+    return _default_streams[device_idx]
 
-    def record(self, stream=None):
-        """Record the event in a stream."""
-        if stream is None:
-            # Use default stream (stream 0)
-            stream = Stream()
-        torch_openreg._C._event_record(self._event, stream._stream)
 
-    def synchronize(self):
-        """Wait for the event to complete."""
-        torch_openreg._C._event_synchronize(self._event)
+def launch_kernel(tog_path, attribute_path):
+    """Launch a kernel on TOGSimulator.
 
-    def query(self):
-        """Check if the event has completed."""
-        return torch_openreg._C._event_query(self._event)
+    Args:
+        tog_path: Path to TOG file
+        attribute_path: Path to attribute file
 
-    def elapsed_time(self, start_event):
-        """Get the elapsed time between two events in milliseconds."""
-        return torch_openreg._C._event_elapsed_time(start_event._event, self._event)
+    Returns:
+        int: The kernel ID assigned to this launch
 
-    @property
-    def cdata(self):
-        """Get the underlying event pointer (for internal use)."""
-        return self._event
+    """
+    # Get TOGSimulator instance
+    sim = get_tog_simulator()
+    if sim is None:
+        raise RuntimeError("[torch.npu] TOGSimulator is not initialized. Call torch.npu.init() first.")
 
+    device_idx = current_device()
+    stream_index, timestamp = get_launch_context()
+    # Create a task function that calls TOGSimulator.launch_kernel
+    def launch_task():
+        return sim.launch_kernel(device_idx, stream_index, tog_path, attribute_path, timestamp)
+
+    stream = default_stream()
+    stream.launch_kernel(launch_task)
 
 def synchronize():
-    """Synchronize all streams on the current device."""
+    """Synchronize all streams on the current device.
+
+    This function:
+    1. Registers TOGSimulator.device_synchronize as a task on the default stream
+    2. Calls the underlying device_synchronize to wait for all tasks to complete
+    """
+    # Get TOGSimulator instance
+    sim = get_tog_simulator()
+    if sim is not None:
+        # Get current device index
+        device_idx = current_device()
+
+        # Create a task function that calls TOGSimulator.device_synchronize
+        def sync_task():
+            return sim.device_synchronize(device_idx)
+
+        # Register as task on default stream
+        stream = default_stream()
+        stream.launch_kernel(sync_task)
+
+    # Call underlying device_synchronize to wait for all tasks to complete
     torch_openreg._C._device_synchronize()
 
+def get_tog_simulator():
+    return _tog_simulator
 
-def stream(priority=None, flags=0):
-    """Create a new stream.
-
-    Args:
-        priority: Stream priority (optional)
-        flags: Stream flags (optional)
-
-    Returns:
-        Stream: A new stream object
-    """
-    return Stream(priority=priority, flags=flags)
-
-
-def event(enable_timing=False):
-    """Create a new event.
+def set_tog_simulator(simulator):
+    """Set the global TOGSimulator instance.
 
     Args:
-        enable_timing: Whether to enable timing for the event
+        simulator: TOGSimulator instance or None
+    """
+    global _tog_simulator
+    _tog_simulator = simulator
+
+def set_launch_context(stream_index=0, timestamp=0):
+    _launch_context.stream_index = stream_index
+    _launch_context.timestamp = timestamp
+
+def get_launch_context():
+    stream_index = getattr(_launch_context, 'stream_index', 0)
+    timestamp = getattr(_launch_context, 'timestamp', 0)
+    return stream_index, timestamp
+
+class launch_context:
+    """Context manager for setting launch_kernel parameters.
+
+    Args:
+        stream_index: Stream index (partition ID) to use for launch_kernel
+        timestamp: Timestamp in nanoseconds to use for launch_kernel
+
+    Example:
+        with torch.npu.launch_context(stream_index=1, timestamp=1000):
+            model(input)
+    """
+
+    def __init__(self, stream_index=0, timestamp=0):
+        self.stream_index = stream_index
+        self.timestamp = timestamp
+        self.prev_stream_index = None
+        self.prev_timestamp = None
+
+    def __enter__(self):
+        # Save previous context values
+        self.prev_stream_index = getattr(_launch_context, 'stream_index', 0)
+        self.prev_timestamp = getattr(_launch_context, 'timestamp', 0)
+        # Set new context values
+        set_launch_context(self.stream_index, self.timestamp)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Restore previous context values
+        _launch_context.stream_index = self.prev_stream_index
+        _launch_context.timestamp = self.prev_timestamp
+        return False
+
+def launch_model(model, *args, stream_index=0, timestamp=0, **kwargs):
+    """Launch a compiled model on TOGSimulator.
+
+    Args:
+        model: Compiled model (torch.compile())
+        *args: Model input arguments
+        stream_index: Stream index (partition ID). If None, uses context value.
+        timestamp: Timestamp in nanoseconds. If None, uses context value.
+        **kwargs: Additional keyword arguments for model execution
 
     Returns:
-        Event: A new event object
-    """
-    return Event(enable_timing=enable_timing)
+        Model output (same as calling model(*args, **kwargs))
 
+    Note:
+        This function executes the compiled model and automatically launches
+        the generated kernels with the specified stream_index and timestamp.
+        If stream_index or timestamp are not provided, values from the current
+        context (set via launch_context() or set_launch_context()) are used.
+    """
+    # Get stream_index and timestamp from parameters or context
+    with launch_context(stream_index=stream_index, timestamp=timestamp):
+        return model(*args, **kwargs)
 
 from .random import *  # noqa: F403
 from .amp import *
@@ -200,9 +263,10 @@ __all__ = [
     "get_autocast_dtype",
     "set_autocast_dtype",
     "get_amp_supported_dtype",
-    "Stream",
-    "Event",
     "stream",
-    "event",
+    "launch_kernel",
+    "launch_model",
     "synchronize",
+    "get_tog_simulator",
+    "set_tog_simulator",
 ]

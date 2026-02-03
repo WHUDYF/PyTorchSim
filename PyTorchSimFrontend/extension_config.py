@@ -106,9 +106,6 @@ def __getattr__(name):
     if name == "CONFIG_TORCHSIM_LOG_PATH":
         return os.environ.get('TORCHSIM_LOG_PATH', default = os.path.join(CONFIG_TORCHSIM_DIR, "togsim_results"))
 
-    if name == "CONFIG_TOGSIM_EAGER_MODE":
-        return int(os.environ.get("TOGSIM_EAGER_MODE", default=False))
-
 # SRAM Buffer allocation plan
 def load_plan_from_module(module_path):
     if module_path is None:

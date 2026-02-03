@@ -280,11 +280,6 @@ class MLIRScheduling(BaseScheduling):
         ex_kernel.call_kernel(kernel_name)
         _, args, _, _ = ex_kernel.args.mlir_argdefs()
         args = ", ".join(args)
-        eager_mode = int(os.environ.get('TOGSIM_EAGER_MODE', default=False))
-        if (eager_mode):
-            V.graph.wrapper_code.writeline(
-                f"yield ({kernel_name}, ({args}))"
-            )
         self._set_flush_status(True)
 
     def ready_to_flush(self):
@@ -344,13 +339,6 @@ class MLIRScheduling(BaseScheduling):
         kernel.call_kernel(kernel_name)
         V.graph.removed_buffers |= kernel.removed_buffers
         _, args, _, _ = self.kernel_group.args.mlir_argdefs()
-        eager_mode = int(os.environ.get('TOGSIM_EAGER_MODE', default=False))
-        if (eager_mode):
-            target_kernel_name = kernel_name if kernel.outer_func_name is None else kernel.outer_func_name + f"_{len(args)}"
-            args = ", ".join(args)
-            V.graph.wrapper_code.writeline(
-                f"yield ({target_kernel_name}, ({args}))"
-            )
         self._set_flush_status(True)
 
     def enter_context_fixed(self, node):

@@ -343,8 +343,7 @@ class Scheduler:
             self.request_queue.append([])
         self.finish_queue : List[Request] = []
 
-        togsim_path = os.path.join(extension_config.CONFIG_TORCHSIM_DIR, "TOGSim")
-        self.tog_simulator = TOGSimulator(togsim_path, togsim_config)
+        self.tog_simulator = TOGSimulator(togsim_config)
         if self.tog_simulator.config_yaml['pytorchsim_timing_mode'] == 0:
             # Scheduler requires timing mode to be enabled (pytorchsim_timing_mode != 0).
             logger.error(f"pytorchsim_timing_mode is set to 0 in config file '{togsim_config}'. ")

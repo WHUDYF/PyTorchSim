@@ -125,9 +125,6 @@ def {{ FUNC_NAME }}{{kernel.def_wrapper()}}:
 
     # Launch kernel
     {{ KERNEL_NAME }}<DEF_CONV_WRAPPER>
-    {%- if TOGSIM_EAGER_MODE %}
-    yield ({{KERNEL_NAME}}, <DEF_CONV_WRAPPER>)
-    {%- endif %}
 """
     def __init__(self, input_nodes, layout, input_reorder=None, **kwargs):
         super().__init__(input_nodes, layout, input_reorder, **kwargs)
