@@ -39,6 +39,11 @@ void process_trace_file(Simulator* simulator, std::string trace_file_path, const
       continue;
     }
 
+    // Skip comment lines starting with #
+    if (line[0] == '#') {
+      continue;
+    }
+
     // Parse command: command_type,kernel_id,device_index,stream_index,tog_path,attribute_path,timestamp
     std::istringstream iss(line);
     std::string token;
@@ -119,14 +124,14 @@ int main(int argc, char** argv) {
 
   /* Create simulator */
   cmd_parser.set_if_defined("config", &config_path);
-  
+
   // Load config once for reuse
   YAML::Node config_yaml;
   if (!loadConfig(config_path, config_yaml)) {
     spdlog::error("[TOGSim] Failed to load config file: {}", config_path);
     exit(1);
   }
-  
+
   auto simulator = create_simulator(config_yaml);
 
   // Get trace file path

@@ -238,7 +238,7 @@ class TOGSimulator():
         self.fifo_dir = os.path.join("/tmp", f"togsim_fifo_{os.getpid()}")
         os.makedirs(self.fifo_dir, exist_ok=True)
         self.trace_file_path = os.path.join(self.fifo_dir, "cmd_fifo")
-        self.trace_log = ""
+        self.trace_log = "# command_type, kernel_id, device_index, stream_index, tog_path, attribute_path, timestamp\n"
 
         # Create FIFOs if they don't exist
         if os.path.exists(self.trace_file_path):
