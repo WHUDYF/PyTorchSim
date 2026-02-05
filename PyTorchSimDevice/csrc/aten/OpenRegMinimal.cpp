@@ -158,12 +158,4 @@ TORCH_LIBRARY_IMPL(_, PrivateUse1, m) {
 }
 // LITERALINCLUDE END: FALLBACK GLOBAL
 
-// LITERALINCLUDE START: FALLBACK SINGLE
-TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
-  m.impl(
-      "sub.Tensor",
-      torch::CppFunction::makeFromBoxedFunction<&wrapper_cpu_fallback>());
-}
-// LITERALINCLUDE END: FALLBACK SINGLE
-
 } // namespace at::openreg
