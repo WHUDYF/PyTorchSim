@@ -4,7 +4,7 @@ Scheduler::Scheduler(SimulationConfig config, const cycle_type* core_cycle, cons
     : _id(id), _config(config), _core_cycle(core_cycle), _core_time(core_time) {
 }
 
-void Scheduler::schedule_graph(std::unique_ptr<TileGraph> tile_graph) {
+void Scheduler::enqueue_graph(std::unique_ptr<TileGraph> tile_graph) {
   _tile_graph.push_back(std::move(tile_graph));
   refresh_status();
 }

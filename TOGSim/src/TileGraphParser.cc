@@ -706,7 +706,7 @@ TileGraphParser::TileGraphParser(std::string onnx_path, std::string attribute_pa
       uint64_t value = it->second.as<uint64_t>();
 
       _arg_to_address[key] = value;
-      spdlog::info("[TOGParser/Attribute] Address Attribute key: {} address: 0x{:x}", key, value);
+      spdlog::trace("[TOGParser/Attribute] Address Attribute key: {} address: 0x{:x}", key, value);
     }
   }
 
@@ -719,7 +719,7 @@ TileGraphParser::TileGraphParser(std::string onnx_path, std::string attribute_pa
       for (const auto& val : value_list) {
         _arg_numa_stride[key].push_back(val.as<uint32_t>());
       }
-      spdlog::info("[TOGParser/Attribute] Address numa info key: {} numa stride : {}", key, fmt::join(_arg_numa_stride[key], ", "));
+      spdlog::trace("[TOGParser/Attribute] Address numa info key: {} numa stride : {}", key, fmt::join(_arg_numa_stride[key], ", "));
     }
   }
 
@@ -754,7 +754,7 @@ TileGraphParser::TileGraphParser(std::string onnx_path, std::string attribute_pa
 
   /* Get meta data from graph */
   for (const auto& meta : model_proto.metadata_props()) {
-    spdlog::info("[TOGParser] Register Metadata \"{}\": \"{}\"", meta.key(), meta.value());
+    spdlog::trace("[TOGParser] Register Metadata \"{}\": \"{}\"", meta.key(), meta.value());
     _tog_meta[meta.key()] = meta.value();
   }
 

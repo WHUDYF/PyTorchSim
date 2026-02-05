@@ -24,8 +24,15 @@ namespace fs = std::filesystem;
 class Simulator {
  public:
   Simulator(SimulationConfig config);
-  void schedule_graph(int partion_id, std::unique_ptr<TileGraph> tile_graph) {
-    _partition_scheduler.at(partion_id)->schedule_graph(std::move(tile_graph));
+  void enqueue_graph(int partion_id, std::unique_ptr<TileGraph> tile_graph) {
+    if (partion_id < 0 || static_cast<uint32_t>(partion_id) >= _config.num_partition) {
+      spdlog::error("[Enqueue_graph] Invalid partition_id: {} (valid range: 0 to {}). "
+                  "Total partitions: {}", partion_id, _config.num_partition - 1, _config.num_partition);
+      throw std::runtime_error(
+          fmt::format("[Enqueue_graph] Invalid partition_id: {} (valid range: 0 to {}). "
+                    "Total partitions: {}", partion_id, _config.num_partition - 1, _config.num_partition));
+    }
+    _partition_scheduler.at(partion_id)->enqueue_graph(std::move(tile_graph));
   }
   void run_simulator();
   cycle_type get_core_cycle() { return _core_cycles; }

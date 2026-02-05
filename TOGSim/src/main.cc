@@ -18,8 +18,8 @@ void launchKernel(Simulator* simulator, unsigned int kernel_id, std::string onnx
   std::unique_ptr<TileGraph>& tile_graph = graph_praser.get_tile_graph();
   tile_graph->set_arrival_time(request_time ? request_time : simulator->get_core_cycle());
   tile_graph->set_kernel_id(kernel_id);
-  spdlog::info("[Scheduler {}] Enqueued kernel id: {} tog: {} operation: {} request_time: {}", partiton_id, kernel_id, onnx_path, tile_graph->get_name(), request_time);
-  simulator->schedule_graph(partiton_id, std::move(tile_graph));
+  spdlog::info("[Scheduler {}] Enqueued kernel id: {}, tog_path: {}, operation: {}, request_time: {}", partiton_id, kernel_id, onnx_path, tile_graph->get_name(), request_time);
+  simulator->enqueue_graph(partiton_id, std::move(tile_graph));
 }
 
 void process_trace_file(Simulator* simulator, std::string trace_file_path, const YAML::Node& config_yaml) {

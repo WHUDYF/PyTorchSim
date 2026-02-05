@@ -8,7 +8,7 @@
 class Scheduler {
  public:
   Scheduler(SimulationConfig config, const cycle_type* core_cycle, const uint64_t* core_time, int id);
-  void schedule_graph(std::unique_ptr<TileGraph> tile_graph);
+  void enqueue_graph(std::unique_ptr<TileGraph> tile_graph);
   void finish_tile(std::shared_ptr<Tile> tile) { tile->get_owner()->finish_tile(tile); }
 
   /* For other schedulers */
