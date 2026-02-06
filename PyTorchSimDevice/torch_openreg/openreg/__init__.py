@@ -243,6 +243,43 @@ def launch_model(model, *args, stream_index=0, timestamp=0, **kwargs):
 from .random import *  # noqa: F403
 from .amp import *
 
+def eager_to_compile(op_name):
+    """
+    Register an eager mode operation as a graph-based implementation using torch.compile().
+
+    Args:
+        op_name: Operator name (e.g., "aten::mul.Tensor")
+
+    Example:
+        torch.npu.eager_to_compile("aten::mul.Tensor")
+    """
+    def wrapper(*args, **kwargs):
+        @torch.compile(dynamic=False)
+        def dummy_graph(*args, **kwargs):
+            # Convert "aten::mul.Tensor" -> torch.ops.aten.mul.Tensor
+            namespace, op_path = op_name.split("::", 1)
+            op_path_parts = op_path.split(".")
+            op = torch.ops
+            for part in [namespace] + op_path_parts:
+                op = getattr(op, part)
+            return op(*args, **kwargs)
+        return dummy_graph(*args, **kwargs)
+
+    torch.library.impl(op_name, "npu", wrapper)
+
+def register_eager_to_compile(ops):
+    """
+    Register multiple operators at once using eager_to_compile.
+
+    Args:
+        ops: List of operator names (e.g., ["aten::mul.Tensor", "aten::add.Tensor"])
+
+    Example:
+        torch.npu.register_eager_to_compile(["aten::mul.Tensor", "aten::add.Tensor"])
+    """
+    for op_name in ops:
+        eager_to_compile(op_name)
+
 __all__ = [
     "device",
     "device_count",
@@ -269,4 +306,6 @@ __all__ = [
     "synchronize",
     "get_tog_simulator",
     "set_tog_simulator",
+    "eager_to_compile",
+    "register_eager_to_compile",
 ]
