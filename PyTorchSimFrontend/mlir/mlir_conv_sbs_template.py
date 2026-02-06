@@ -105,7 +105,7 @@ def {{ FUNC_NAME }}{{kernel.def_wrapper()}}:
     padded_shape = list(X.shape)
     padded_shape[2] += 2 * {{ PADDING_H }}
     padded_shape[3] += 2 * {{ PADDING_W }}
-    X_padding = torch.zeros(padded_shape, device=X.device)
+    X_padding = torch.zeros(padded_shape).to(device=X.device)
     X_padding[:, :, {{ PADDING_H }}:X.shape[2] + {{ PADDING_H }}, {{ PADDING_W }}:X.shape[3] + {{ PADDING_W }}] = X
 
     # Tanspose inputs
