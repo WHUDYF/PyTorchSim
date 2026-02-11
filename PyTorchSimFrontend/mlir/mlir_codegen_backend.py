@@ -470,7 +470,6 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         tile_numel_per_lane = local_tile_desc.get_numel_per_lane()
         tile_shape = local_tile_desc.get_mlir_shape(mlir_dtype)
         tile_stride = local_tile_desc.get_tile_stride()
-
         # Compute vector unit size
         vshape = self.kernel_group.tile_desc.get_mlir_vshape(mlir_dtype)
         compute_vec_size = self.kernel_group.tile_desc.get_compute_vec_size()
@@ -697,7 +696,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             self.reset("recompile")
             raise mlir_common.RecompileSignal(f"Index access (tile size {prior_tile_size} is not divisible by {prior_ranges})")
 
-        tile_size = tile_desc.get_tile_size_per_lane()
+        tile_size_per_lane = tile_desc.get_tile_size_per_lane()
         compute_vec_size = tile_desc.get_compute_vec_size()
         strides = tile_desc.get_tile_stride_per_lane()
 
@@ -707,13 +706,13 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
 
         # Create tile_dim index
         dim_list = []
-        for idx in range(len(tile_size)):
+        for idx in range(len(tile_size_per_lane)):
             # Prepare initial values
             offset = tile_desc.vmap.vlane_stride #* strides[idx]
-            outer_sz = tile_size[idx] // tile_desc.vmap.vlane_stride
+            outer_sz = tile_desc.get_tile_size()[idx] // tile_desc.vmap.vlane_stride
             with self.override_buffer_cse(buffer=self.const_buffer, cse=self.const_cse):
                 div_coeff = self.get_const_cse(strides[idx], "index")
-                mod_coeff = self.get_const_cse(tile_size[idx], "index")
+                mod_coeff = self.get_const_cse(tile_size_per_lane[idx], "index")
                 vlane_stride_coeff = self.get_const_cse(tile_desc.vmap.vlane_stride, "index")
                 vlane_outer_coeff = self.get_const_cse(outer_sz, "index")
                 nr_vector_lane = self.get_const_cse(self.vector_lane, "index")

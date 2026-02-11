@@ -154,8 +154,8 @@ class MLIRScheduling(BaseScheduling):
             }
             # Buffers still required by the activation node (unmet) or read by it
             epilogue_unmet = { dep for dep in epilogue_node.unmet_dependencies }
-            has_depedency = bool(template_writes) and epilogue_unmet.issubset(template_writes)
-            if not has_depedency:
+            has_dependency = bool(template_writes) and epilogue_unmet.issubset(template_writes) and not bool(reads1 & writes2)
+            if not has_dependency:
                 return False
 
             # Revert act_node.group : simplify_and_reorder() modified _body, _size, group

@@ -85,7 +85,7 @@ class MLIRConvCommonTemplate(MLIRTemplate):
         options = dict(
             kernel=self.kernel,
             KERNEL_NAME=kernel_name,
-            FUNC_NAME=self.function_name + f"_{len(input_args)}",
+            FUNC_NAME="wrapper_" + kernel_name,
             INPUT=X,
             WEIGHT=W,
             BIAS=Bias,
@@ -96,7 +96,7 @@ class MLIRConvCommonTemplate(MLIRTemplate):
             input_reorder=self.input_reorder
         )
         code = self._template_from_string(self.WRAPPER_TEMPLATE).render(**options)
-        return code, self.function_name + f"_{len(input_args)}"
+        return code, "wrapper_" + kernel_name
 
     def get_arg_attributes(self):
         arg_attributes = []

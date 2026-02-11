@@ -403,7 +403,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         _, call_args, _, _ = self.kernel_group.args.mlir_argdefs()
         # generate the code to call this
         wrapper.generate_kernel_call(
-            kernel_name if self.outer_func_name is None else self.outer_func_name + f"_{len(call_args)}", call_args)
+            kernel_name if self.outer_func_name is None else "wrapper_" + kernel_name, call_args)
 
     def codegen_template_code(self, render, template_node, prologue_nodes, epilogue_nodes, tile_info):
         with self as kernel:
