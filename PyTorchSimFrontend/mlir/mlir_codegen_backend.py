@@ -1432,10 +1432,10 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 self.spad_buffer_dict[target_dim] = [sram_var, local_tile_desc.get_tile_size(), tile_numel_per_lane, sram_index_var, tile_shape, vshape]
 
                 # Store the indirect index variable
-                opeartion = "affine.vector_store"
+                target_var = self.cse.varname_map[target_dim]
                 compute_index_var = ",".join(sram_index_var.split(",")[:-1] + [f"%{self.compute_idx}"])
-                line = f"{opeartion} %{target_dim}, %{sram_var}[{compute_index_var}] : {tile_shape}, {vshape}"
-                self.stores.writeline(line)
+                with self.override_buffer_cse(buffer=self.stores):
+                    ops._store(target_var, sram_var, compute_index_var, tile_shape)
             mlir_dtype = vshape.split("x")[1][:-1]
             with self.override_buffer_cse(buffer=target_dma_buffers):
                 out = ops._load(tile_numel_per_lane, mlir_dtype, sram_var, sram_index_var, tile_shape)
