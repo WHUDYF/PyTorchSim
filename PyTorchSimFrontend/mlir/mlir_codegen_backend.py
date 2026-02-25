@@ -1,5 +1,6 @@
 import contextlib
 import sympy
+import sys
 import re
 import os
 from functools import reduce
@@ -375,13 +376,51 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             expr = expr.replace(target_arg, new_arg)
             indices.append(str(new_arg))
 
-        expr_str = str(expr)
-        if "ModularIndexing" in expr_str:
-            def _replace_mod(m):
-                return f"({m.group(1)} floordiv {m.group(2)}) mod {m.group(3)}"
-            expr_str = re.sub(r"ModularIndexing\(([^,]+), ([^,]+), ([^)]+)\)", _replace_mod, expr_str)
-        if "//" in expr_str:
-            expr_str = expr_str.replace("//", " floordiv ")
+        # Convert ModularIndexing and FloorDiv to sympy expressions
+        # ModularIndexing(x, y, z) means (x // y) % z -> Mod(FloorDiv(x, y), z)
+        # FloorDiv(x, y) means x // y -> will be converted to floordiv in string representation
+        # Use preorder_traversal to find all instances
+        replacements = {}
+        for sub in sympy.preorder_traversal(expr):
+            if isinstance(sub, ModularIndexing):
+                # Convert ModularIndexing to Mod(FloorDiv(...), ...)
+                if sub.args[1] != 1:
+                    floor_div = FloorDiv(sub.args[0], sub.args[1])
+                else:
+                    floor_div = sub.args[0]
+                mod_expr = sympy.Mod(floor_div, sub.args[2])
+                replacements[sub] = mod_expr
+            elif isinstance(sub, FloorDiv):
+                # Keep FloorDiv as is, will be handled in custom string conversion
+                # We need to mark it for special handling
+                pass
+
+        # Apply replacements
+        for old_expr, new_expr in replacements.items():
+            expr = expr.subs(old_expr, new_expr)
+
+        # Custom string conversion for MLIR affine expressions
+        def mlir_str(expr):
+            """Convert sympy expression to MLIR affine expression string"""
+            if isinstance(expr, FloorDiv):
+                return f"({mlir_str(expr.args[0])} floordiv {mlir_str(expr.args[1])})"
+            elif isinstance(expr, sympy.Mod):
+                return f"({mlir_str(expr.args[0])} mod {mlir_str(expr.args[1])})"
+            elif isinstance(expr, sympy.Add):
+                terms = [mlir_str(term) for term in expr.args]
+                return " + ".join(terms)
+            elif isinstance(expr, sympy.Mul):
+                factors = [mlir_str(factor) for factor in expr.args]
+                return " * ".join(factors)
+            elif isinstance(expr, sympy.Symbol):
+                return str(expr)
+            elif expr.is_number:
+                return str(expr)
+            else:
+                # Fallback to string representation
+                return str(expr)
+
+        expr_str = mlir_str(expr)
         return expr_str, indices
 
     def parse_indices(self, expr, comments="", indices=None, indirect_dims=[]) -> common.CSEVariable:
@@ -1174,17 +1213,30 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         elif index.is_Number:
             pass
         else:
-            dram_dict = defaultdict(lambda: 0)
+
+            dram_dict = defaultdict(list)
+            implicit_dim_divisors = defaultdict(lambda: sys.maxsize)
             # Assume that div will have high priority than mod
             for arg in index.as_ordered_terms():
                 coeff, dim = arg.as_coeff_mul()
                 if len(dim) == 0:
                     continue
                 real_dim = list(dim[0].free_symbols)[0]
-                real_dim_name = str(real_dim)
-                if real_dim_name.startswith("index"):
-                    dram_dict[int(real_dim_name[5:])] += int(coeff)
-            dram_stride = [dram_dict[dim] for dim in local_dims]
+                if dim[0].has(ModularIndexing):
+                    if dim[0].args[1] < implicit_dim_divisors[str(real_dim)]:
+                        implicit_dim_divisors[str(real_dim)] = dim[0].args[1]
+                        dram_dict[str(real_dim)] = [coeff]
+                else:
+                    dram_dict[str(real_dim)].append(coeff)
+
+            # Add missing dims if not added
+            max_dim = len(self.ranges) if not store_reduction else len(self.ranges) - 1
+            for i in range(max_dim):
+                target_dim = f"index{i}"
+                if sympy.Symbol(target_dim) not in index.free_symbols:
+                    dram_dict[target_dim] = [0]
+            sorted_keys = sorted(dram_dict.keys())
+            dram_stride = sum((dram_dict[key] for key in sorted_keys), [])
 
         # Support floordiv pattern
         # FIXME. How to integrate implicit dims and floordiv?

@@ -924,6 +924,10 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 return self.indirect_indexing(index_var, size, check, wrap_neg)
 
             @staticmethod
+            def check_bounds(index, size, lower, upper):
+                return self.check_bounds(index, size, lower, upper)
+
+            @staticmethod
             def load(name: str, index: sympy.Expr):
                 index = self.rename_indexing(index)
                 if name in self.cse.invalidated_stores:
