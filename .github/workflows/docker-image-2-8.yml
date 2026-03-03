@@ -1,8 +1,8 @@
 name: Docker image CI (PyTorch 2.8)
 
 on:
-  push:
-    branches: [ "torch_v2.8" ]
+  pull_request:
+    branches: [ "master", "develop" ]
   workflow_dispatch:
 
 jobs:
