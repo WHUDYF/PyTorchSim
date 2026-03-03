@@ -1,7 +1,5 @@
 import copy
 import torch
-import torch._dynamo
-import torch.utils.cpp_extension
 
 def test_result(name, out, cpu_out, rtol=1e-4, atol=1e-4):
     if torch.allclose(out.cpu(), cpu_out, rtol=rtol, atol=atol):
@@ -69,13 +67,7 @@ def test_matmul_activation(device, batch_size=16, input_size=32, output_size=8, 
         print("CPU output > ", cpu_y)
 
 if __name__ == "__main__":
-    import os
-    import sys
-    sys.path.append(os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim'))
-
-    from Scheduler.scheduler import PyTorchSimRunner
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
     test_matmul_activation(device)
     test_matmul_activation(device, batch_size=32, input_size=32, output_size=32, activation_fn="sigmoid")
     test_matmul_activation(device, batch_size=42, input_size=42, output_size=42, activation_fn="sigmoid")

@@ -49,6 +49,9 @@ class MLIRBenchmarkRequest():
         self.extra_args = extra_args
         #self.hash_key, self.source_file = CUDACodeCache.write(self.source_code, "so")
 
+    def __str__(self) -> str:
+        return f"{self.kernel_name=}, {self.source_file=}, {self.hash_key=}"
+
     def make_run_fn(
         self, input_tensors: torch.Tensor, output_tensors: torch.Tensor
     ) -> Callable[[], None]:
@@ -58,12 +61,24 @@ class MLIRBenchmarkRequest():
         # Check already cached result.
         write_path = get_write_path(self.source_code)
         key,  _ = write(self.source_code, "mlir", specified_dir=write_path)
-        result_path = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(key), "togsim_result/0")
-        if os.path.exists(result_path):
-            result = TOGSimulator.get_result_from_file(result_path)
-            def cached_run_fn(*args, **kwargs):
-                return result
-            return cached_run_fn
+        result_dir = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(key), "togsim_result")
+
+        # Find the most recent .log file in the result directory
+        if os.path.exists(result_dir) and os.path.isdir(result_dir):
+            log_files = [f for f in os.listdir(result_dir) if f.endswith('.log')]
+            if log_files:
+                # Sort by modification time, get the most recent file
+                log_files_with_time = [
+                    (f, os.path.getmtime(os.path.join(result_dir, f)))
+                    for f in log_files
+                ]
+                log_files_with_time.sort(key=lambda x: x[1], reverse=True)
+                latest_log_file = log_files_with_time[0][0]
+                result_path = os.path.join(result_dir, latest_log_file)
+                result = TOGSimulator.get_result_from_file(result_path)
+                def cached_run_fn(*args, **kwargs):
+                    return result
+                return cached_run_fn
 
         # Run a candidate code
         run_method = custom_async_compile.mlir(
@@ -71,7 +86,7 @@ class MLIRBenchmarkRequest():
             loop_size=None, spad_info=self.extra_args["spad_info"],
             vlen=self.extra_args["vlen"], arg_attributes=self.extra_args["arg_attributes"],
             origins="Unknown", silent_mode=True,
-            validate=self.extra_args['validate'], autotune=self.extra_args['autotune'])
+            autotune=self.extra_args['autotune'])
 
         args = [
             tensor
@@ -84,5 +99,6 @@ class MLIRBenchmarkRequest():
             *args,
         )
 
-    def __str__(self) -> str:
-        return f"{self.kernel_name=}, {self.source_file=}, {self.hash_key=}"
+    def update_workspace_size(self) -> None:
+        # FIXME: Not implemented yet. Checkout torch/_inductor/codegen/rocm/rocm_benchmark_request.py
+        return

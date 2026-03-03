@@ -14,7 +14,8 @@ from torch._inductor.codegen import cpp
 from torch._inductor.virtualized import V
 from torch._inductor.ir import MultiOutputLayout
 from torch._inductor.dependencies import MemoryDep, StarDep, WeakDep
-from torch.utils._sympy.functions import ModularIndexing, FloorDiv, Mod
+from torch._inductor.codegen.wrapper import KernelDefinitionLine
+from torch.utils._sympy.functions import ModularIndexing, FloorDiv, Mod, Identity
 import sympy
 import contextlib
 
@@ -22,18 +23,21 @@ from typing import Callable
 
 import sympy
 
-import torch.fx
 from torch.utils._sympy.value_ranges import ValueRanges
 from torch._inductor.utils import (
-    free_symbol_startswith,
     get_sympy_Expr_dtype,
     IndentedBuffer,
     sympy_subs,
-    sympy_symbol,
     unique,
 )
 from PyTorchSimFrontend import extension_config
 from PyTorchSimFrontend import extension_codecache
+
+from PyTorchSimFrontend.extension_utils import (
+    free_symbol_startswith,
+    sympy_symbol
+)
+
 schedule_log = torch._logging.getArtifactLogger(__name__, "schedule")
 
 DTYPE_TO_MLIR = {
@@ -500,7 +504,7 @@ class MLIRMultiDimTile(TileAdjustMixin):
             vlane_stride=vlane_stride
         )
 
-        self.implicit_dim_size = None
+        self.implicit_dim_size = {}
         self.nr_rdim = 0
         self.offset = sympy.Integer(0) # Dram offset
 
@@ -605,11 +609,12 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         self.recodegen = reason # spad overflow, tile size, vlane stride
         self.stop_autotune = False
 
-        # Context var for codegen
-        self.target_buffer_override = contextvars.ContextVar("Handler_compute_override", default=self.compute)
-        self.target_cse_override = contextvars.ContextVar("Handler_cse_override", default=self.cse)
+        instance_id = id(self)
+        self.target_buffer_override = contextvars.ContextVar(f"Handler_compute_override_{instance_id}", default=self.compute)
+        self.target_cse_override = contextvars.ContextVar(f"Handler_cse_override_{instance_id}", default=self.cse)
+        self._nested_context_depth = 0
 
-    def set_ranges(self, lengths, reduction_lengths):
+    def set_ranges(self, lengths, reduction_lengths, index_names=None):
         if self.call_ranges:
             assert self.call_ranges == tuple(lengths) + tuple(
                 reduction_lengths
@@ -618,7 +623,12 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         else:
             self.call_ranges = tuple(lengths) + tuple(reduction_lengths)
             self.ranges = [self.rename_indexing(x) for x in self.call_ranges]
-            self.itervars = [sympy.Symbol(f"index{n}") for n in range(len(self.ranges))]
+            if index_names is None:
+                self.itervars = [sympy.Symbol(f"index{n}") for n in range(len(self.ranges))]
+            else:
+                assert len(index_names) == len(self.ranges), f"Index names length mismatch: {len(index_names)} != {len(self.ranges)}"
+                self.itervars = [sympy.Symbol(str(n)) for n in index_names]
+
             self.itervar_cses = {str(index) : self.register_var_cse(str(index), 1, "index") for index in self.itervars}
             self.reduction_depth = len(lengths)
         return (
@@ -641,9 +651,14 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
     def reduction(self, dtype, src_dtype, reduction_type, value):
         raise NotImplementedError()
 
-    def indirect_indexing(self, index_var, size, check):
+    def indirect_indexing(self, index_var, size, check, wrap_neg):
         raise NotImplementedError()
 
+    def check_bounds(self, expr, size, lower, upper):
+        # MLIR backend currently relies on masked paths for out-of-bounds handling.
+        # Keep this hook as a no-op to satisfy Inductor's check_bounds callback.
+        return
+    
     def codegen_global_init(self):
         raise NotImplementedError()
 
@@ -654,7 +669,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         wrapper = V.graph.wrapper_code
         _, call_args, _, _ = self.kernel_group.args.mlir_argdefs()
        # generate the code to call this
-        wrapper.generate_kernel_call(kernel_name, call_args, cuda=False)
+        wrapper.generate_kernel_call(kernel_name, call_args, triton=False)
 
     def is_modular_indexing(self, expr):
         return "ModularIndexing" in str(expr)
@@ -688,7 +703,9 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             }
             new_index = operand.index.subs(subs_map)
             for arg in new_index.args:
-                if len(arg.free_symbols) != 1:
+                if arg.is_number:
+                    continue
+                if len(arg.free_symbols) > 1:
                     raise NotImplementedError("Not supporting this view operation...!")
                 if arg.is_Mul and arg.args[0].is_number:
                     arg = arg.args[1]
@@ -778,8 +795,8 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             V.graph.removed_buffers |= self.removed_buffers
             # V.graph.inplaced_to_remove |= self.inplaced_to_remove
             src_code = self.codegen_kernel(kernel_name=kernel_name)
-            self.meta_kernel()
-            return src_code
+            meta_code = self.meta_kernel()
+            return src_code, meta_code
 
     def codegen_kernel(self, kernel_name):
         arg_defs, _, _, _ = self.kernel_group.args.mlir_argdefs()
@@ -797,12 +814,9 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         return code.getvalue()
 
     def meta_kernel(self):
-        wrapper = V.graph.wrapper_code
         _, _, arg_attributes, _ = self.kernel_group.args.mlir_argdefs()
-        wrapper.add_import_once('\nprint(f\'Wrapper Codegen Path = {__file__}\')')
-        # Dump loop and load/store information
-        wrapper.add_import_once(f"arg_attributes = {arg_attributes}")
-        return arg_attributes
+        meta_code = arg_attributes
+        return meta_code
 
     def get_constant_vector(self, expr):
         constant_vector = [[int(expr.coeff(var)),None] for var in self.itervars]
@@ -835,6 +849,18 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         # and renames variables in index expressions to kernel arg names
         if isinstance(index, (list, tuple)):
             return [self.rename_indexing(x) for x in index]
+
+        # FIXME. This is a temporary solution to remove Identity wrappers from index expression.
+        # Remove Identity wrappers from index expression
+        # Check if index itself is Identity
+        if isinstance(index, Identity):
+            index = index.args[0] if index.args else index
+
+        # Replace Identity arguments with Identity.args[0]
+        Identity_args = [expr for expr in sympy.preorder_traversal(index) if isinstance(expr, Identity)]
+        for expr in Identity_args:
+            index = index.replace(expr, expr.args[0] if expr.args else expr)
+
         index = V.graph.sizevars.simplify(index)
         sorted_symbols = sorted(index.free_symbols, key=lambda s: s.name)
         replacements = {
@@ -846,18 +872,24 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
 
     @contextmanager
     def override_buffer_cse(self, *, buffer=None, cse=None):
-        target_buffer = target_cse = None
+        buffer_override = self.target_buffer_override
+        cse_override = self.target_cse_override
+        buffer_token = cse_token = None
         try:
+            # Store tokens for proper restoration in nested contexts
+            # contextvars.set() returns the previous value (token) which can be used for reset()
             if buffer is not None:
-                target_buffer = self.target_buffer_override.set(buffer)
+                buffer_token = buffer_override.set(buffer)
             if cse is not None:
-                target_cse = self.target_cse_override.set(cse)
+                cse_token = cse_override.set(cse)
             yield self
         finally:
-            if target_cse is not None:
-                self.target_cse_override.reset(target_cse)
-            if target_buffer is not None:
-                self.target_buffer_override.reset(target_buffer)
+            # Restore using tokens - contextvars automatically handles nested contexts
+            # Each level restores to its own previous value
+            if cse_token is not None:
+                cse_override.reset(cse_token)
+            if buffer_token is not None:
+                buffer_override.reset(buffer_token)
 
     def __enter__(self):
         class CSEProxy:
@@ -866,7 +898,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             @staticmethod
             def __getattr__(name: str) -> Callable[..., common.CSEVariable]:  # type: ignore[misc]
                 def inner(*args, **kwargs):
-                    code, ret_info = getattr(parent_handler, name)(*args, var_info=self.var_info, **kwargs)
+                    code, ret_info = getattr(parent_handler, name)(*args, **kwargs)
                     target_buffer = self.target_buffer_override.get()
                     target_cse = self.target_cse_override.get()
                     if isinstance(code, common.DeferredLine):
@@ -887,12 +919,17 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 return inner
 
             @staticmethod
-            def indirect_indexing(index_var, size, check=True):
+            def indirect_indexing(index_var, size, check=True, wrap_neg=True):
                 # Skip CSE since this doesn't return an expression
-                return self.indirect_indexing(index_var, size, check)
+                return self.indirect_indexing(index_var, size, check, wrap_neg)
+
+            @staticmethod
+            def check_bounds(index, size, lower, upper):
+                return self.check_bounds(index, size, lower, upper)
 
             @staticmethod
             def load(name: str, index: sympy.Expr):
+                index = self.rename_indexing(index)
                 if name in self.cse.invalidated_stores:
                     # A load from an invalidated store requires us to
                     # keep the actual buffer around
@@ -903,10 +940,10 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 if name in store_cache:
                     return store_cache[name]
                 key = name+str(index)
-                if key not in self.cse.cache:
+                if key not in self.cse._cache:
                     result = self.load(name, index)
-                    self.cse.cache[key] = result
-                return self.cse.cache[key]
+                    self.cse._cache[key] = result
+                return self.cse._cache[key]
 
             @staticmethod
             def store(name, index, value, mode=None):
@@ -914,9 +951,10 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 if mode is None:
                     self.cse.store_cache[name] = value
                     if self.current_node:
-                        for other_name in self.current_node.get_mutations():
+                        for other_name in self.current_node.get_output(name).get_mutations():
                             self.cse.store_cache[other_name] = value
                 if name not in V.graph.removed_buffers:
+                    index = self.rename_indexing(index)
                     return self.store(name, index, value, mode=mode)
 
             @staticmethod
@@ -924,10 +962,11 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 self.store_buffer_names.add(name)
                 self.cse.store_cache[name] = value
                 if self.current_node:
-                    for other_name in self.current_node.get_mutations():
+                    for other_name in self.current_node.get_output(name).get_mutations():
                         self.cse.store_cache[other_name] = value
 
                 if name not in V.graph.removed_buffers:
+                    index = self.rename_indexing(index)
                     return self.store_reduction(name, index, value)
 
             @staticmethod
@@ -935,11 +974,16 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 return self.reduction(dtype, src_dtype, reduction_type, value)
 
             @staticmethod
+            def check_bounds(index, size, lower, upper):
+                return self.check_bounds(index, size, lower, upper)
+
+            @staticmethod
             def _index_expr(tile_size, buffer, renamed_expression, index):
                 return self._index_expr(tile_size, buffer, renamed_expression, index)
 
             @staticmethod
             def index_expr(index, dtype):
+                index = self.rename_indexing(index)
                 return self.index_expr(index, dtype)
 
             @staticmethod
@@ -968,13 +1012,20 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                     values, offsets_name, offsets_size, indexing_dtype, right
                 )
 
-        super().__enter__()
-        assert self.overrides
-        parent_handler = self.overrides(V.get_ops_handler())
-        self.exit_stack.enter_context(V.set_ops_handler(CSEProxy()))
-        self.exit_stack.enter_context(V.set_kernel_handler(self))
+        if self._nested_context_depth == 0:
+            self.exit_stack.__enter__()
+            assert self.overrides
+            parent_handler = self.overrides()
+
+            self.exit_stack.enter_context(V.set_ops_handler(CSEProxy()))
+            self.exit_stack.enter_context(V.set_kernel_handler(self))
+        self._nested_context_depth += 1
         return self
 
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._nested_context_depth -= 1
+        if self._nested_context_depth == 0:
+            super().__exit__(exc_type, exc_val, exc_tb)
 
 @dataclasses.dataclass
 class LoopLevel:

@@ -1,5 +1,6 @@
 from typing import List
 import os
+import sys
 import numpy as np
 import torch
 from pathlib import Path
@@ -7,6 +8,10 @@ import importlib.util
 from PyTorchSimFrontend.extension_codecache import hash_prefix
 from Simulator.simulator import TOGSimulator
 from PyTorchSimFrontend import extension_config
+
+# Configure logger for Scheduler module
+logger = extension_config.setup_logger()
+
 
 def import_module_from_path(module_name, path):
     module_path = Path(path)  # Convert to Path object for safety
@@ -166,46 +171,24 @@ class PyTorchSimRunner:
     def setup_device(cls):
         if cls.NPU_MODULE is not None:
             return cls.NPU_MODULE
-        source_file_path = os.path.dirname(os.path.abspath(__file__))
-        source_file = os.path.join(
-            source_file_path, f"{extension_config.CONFIG_TORCHSIM_DIR}/PyTorchSimFrontend/extension_device.cpp"
-        )
 
-        import torch.utils.cpp_extension
-        module = torch.utils.cpp_extension.load(
-            name="npu",
-            sources=[
-                str(source_file),
-            ],
-            extra_cflags=["-g"],
-            verbose=True,
-        )
+        try:
+            from torch._inductor.codegen.common import register_backend_for_device
+            from PyTorchSimFrontend.mlir.mlir_codegen_backend import ExtensionWrapperCodegen
+            from PyTorchSimFrontend.mlir.mlir_scheduling import MLIRScheduling
+        except ImportError as e:
+            logger.error(f"Failed to import torch_openreg: {e}")
+            logger.error("Please ensure PyTorchSimDevice2 is installed: pip install -e PyTorchSimDevice2")
+            raise
 
-        torch.utils.rename_privateuse1_backend("npu")
-        torch._register_device_module("npu", module)
-        from torch._inductor.codegen.common import (
-            get_scheduling_for_device,
-            get_wrapper_codegen_for_device,
-            register_backend_for_device,
-        )
-        from PyTorchSimFrontend.mlir.mlir_codegen_backend import (
-            ExtensionWrapperCodegen,
-        )
-        from PyTorchSimFrontend.mlir.mlir_scheduling import (
-            MLIRScheduling
-        )
         register_backend_for_device(
-            "npu", MLIRScheduling, ExtensionWrapperCodegen
+            "npu",
+            lambda scheduling: MLIRScheduling(scheduling),
+            ExtensionWrapperCodegen
         )
-        assert(
-            get_scheduling_for_device("npu") == MLIRScheduling
-        )
-        assert(
-        get_wrapper_codegen_for_device("npu")
-            == ExtensionWrapperCodegen
-        )
-        cls.NPU_MODULE = module
-        return module
+
+        cls.NPU_MODULE = torch.npu
+        return cls.NPU_MODULE
 
     def submit(self, batched_req, partition_idx) -> List[RequestReturn]:
         # FIXME. Construct SchedulerDNNModel
@@ -360,8 +343,13 @@ class Scheduler:
             self.request_queue.append([])
         self.finish_queue : List[Request] = []
 
-        togsim_path = os.path.join(extension_config.CONFIG_TORCHSIM_DIR, "TOGSim")
-        self.tog_simulator = TOGSimulator(togsim_path, togsim_config)
+        self.tog_simulator = TOGSimulator(togsim_config)
+        if self.tog_simulator.config_yaml['pytorchsim_timing_mode'] == 0:
+            # Scheduler requires timing mode to be enabled (pytorchsim_timing_mode != 0).
+            logger.error(f"pytorchsim_timing_mode is set to 0 in config file '{togsim_config}'. ")
+            logger.error(f"Scheduler requires timing mode to be enabled (pytorchsim_timing_mode != 0).")
+            exit(0)
+
         os.environ['TOGSIM_CONFIG'] = togsim_config
         self.tog_simulator.interactive_simulation()
         if engine_select == Scheduler.FIFO_ENGINE:
@@ -369,7 +357,7 @@ class Scheduler:
         elif engine_select == Scheduler.RR_ENGINE:
             self.execution_engine = RoundRobinRunner(self.tog_simulator, self.num_request_queue)
         else:
-            print(f"Not supporetd engine type {engine_select}")
+            logger.error(f"Not supported engine type {engine_select}")
             exit(1)
 
     def add_request(self, request: Request, request_time=-1):
@@ -430,9 +418,11 @@ class Scheduler:
         self.finish_queue.append(req)
         self.request_queue[req.request_queue_idx].remove(req)
         turnaround_time, response_time, tbt_time = req.get_latency()
-        print(f"[Request-{req.id} finished] partition: {req.request_queue_idx} arrival_time: "
-              f"{req.arrival_time} start_time: {req.start_time[0]} turnaround latency: {turnaround_time}, "
-              f"response time: {response_time} tbt_time: {tbt_time}")
+        logger.info(
+            f"[Request-{req.id} finished] partition: {req.request_queue_idx} arrival_time: "
+            f"{req.arrival_time} start_time: {req.start_time[0]} turnaround latency: {turnaround_time}, "
+            f"response time: {response_time} tbt_time: {tbt_time}"
+        )
 
     def per_schedule(self, request_queue_idx):
         # Wait partition is idle
@@ -443,11 +433,13 @@ class Scheduler:
         if not request_list:
             return False
 
-        print(f"[Request issue] partition: {request_queue_idx} batch size: {len(request_list)}", flush=True)
+        logger.info(f"[Request issue] partition: {request_queue_idx} batch size: {len(request_list)}")
         for req in request_list:
             req.set_start(self.current_time())
-            print(f"[Request-{req.id} issue] partition: {req.request_queue_idx} "
-                f"arrival_time: {req.arrival_time} start_time: {req.start_time[0]}", flush=True)
+            logger.info(
+                f"[Request-{req.id} issue] partition: {req.request_queue_idx} "
+                f"arrival_time: {req.arrival_time} start_time: {req.start_time[0]}"
+            )
         # Submit batched request
         self.execution_engine.submit(request_list, request_queue_idx)
 

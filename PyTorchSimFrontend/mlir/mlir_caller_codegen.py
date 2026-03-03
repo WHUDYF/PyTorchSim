@@ -101,7 +101,7 @@ class MLIRKernelCallerCodeGen():
                     bits = 8
                 else:
                     bits = torch.iinfo(arg_type).bits
-                buffer_size = int(math.ceil(arg_size * bits // 8 / 64) * 64) # Round up to 64 bytes
+                buffer_size = int(math.ceil(arg_size * bits // 8 / 64) * 64) * 2 # Round up to 64 bytes + Add some padding for safety
                 self.writeline(f'{DTYPE_TO_C[arg_type]}* c_{arg_name} = malloc({buffer_size}ULL){self.ending}')
                 name_set.add(arg_name)
         self.writeline(self.newline)

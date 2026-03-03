@@ -2,12 +2,17 @@ import os
 import re
 import shlex
 import subprocess
+import torch
 
-from torch._inductor.codecache import AsyncCompile, get_lock_dir, get_hash, write
+from torch._inductor.codecache import get_lock_dir, get_hash, write
+from torch._inductor.async_compile import AsyncCompile
 from AsmParser.tog_generator import tog_generator
 from PyTorchSimFrontend.mlir.mlir_caller_codegen import MLIRKernelCallerCodeGen
 from PyTorchSimFrontend import extension_config
 from Simulator.simulator import FunctionalSimulator, CycleSimulator, TOGSimulator
+
+# Configure logger for extension_codecache module (WARNING level by default)
+logger = extension_config.setup_logger()
 
 LOCK_TIMEOUT = 600
 
@@ -140,7 +145,9 @@ class MLIRCodeCache:
         key, input_path = write(source_code, "mlir", specified_dir=write_path)
         new_input_path = os.path.splitext(input_path)[0]
         raw_tog_path = new_input_path + "_tog.py"
+        tog_path = os.path.join(write_path, "tile_graph.onnx")
         sample_mlir_path = new_input_path + "_sample"
+        validation_binary_path = os.path.join(write_path, validation_binary_name)
         gem5_cmds = mlir_gem5_compile_command(new_input_path, sample_mlir_path, raw_tog_path, vectorlane_size)
 
         from filelock import FileLock
@@ -165,22 +172,28 @@ class MLIRCodeCache:
                     subprocess.check_call(translate_cmd)
                     subprocess.check_call(llc_cmd)
                 except subprocess.CalledProcessError as e:
-                    print("Command failed with exit code", e.returncode)
-                    print("Error output:", e.output)
+                    logger.error(f"Command failed with exit code {e.returncode}")
+                    logger.error(f"Error output: {e.output.decode() if isinstance(e.output, bytes) else e.output}")
                     assert(0)
 
                 val_llvm_caller = MLIRKernelCallerCodeGen(extension_config.pytorchsim_functional_mode, arg_attributes)
                 val_llvm_caller.generate_wrapper_file(write_path, validation_wrapper_name)
                 val_llvm_caller.compile_wih_kernel(write_path, key, validation_wrapper_name,
                                                    validation_binary_name, new_link_option)
-                target = os.path.join(write_path, validation_binary_name)
+
                 stack_size = val_llvm_caller.parse_stack_sizes(f"{write_path}/{key}.s", vlenb=vlenb)
-                spad_size =  val_llvm_caller.get_spad_size(target)
+                spad_size =  val_llvm_caller.get_spad_size(validation_binary_path)
                 spad_usage = stack_size + spad_size # Spad usage per lane
                 if extension_config.CONFIG_SPAD_INFO["spad_size"] < spad_usage:
-                    print(f"[Warning] Scratchpad size exceeded: required {spad_usage} bytes, "
-                        f"but only {extension_config.CONFIG_SPAD_INFO['spad_size']} bytes available.")
+                    logger.debug(
+                        f"Scratchpad size exceeded: required {spad_usage} bytes, "
+                        f"but only {extension_config.CONFIG_SPAD_INFO['spad_size']} bytes available."
+                    )
                     raise SpadOverflowError()
+
+        # Skip if TOG file already exists
+        if os.path.isfile(tog_path):
+            return key
 
         # Launch tile graph generator
         gem5_sample_cmd = shlex.split(gem5_cmds[0])
@@ -196,8 +209,8 @@ class MLIRCodeCache:
                 subprocess.check_call(gem5_translate_cmd)
                 subprocess.check_call(gem5_llc_cmd)
             except subprocess.CalledProcessError as e:
-                print("Command failed with exit code", e.returncode)
-                print("Error output:", e.output)
+                logger.error(f"Command failed with exit code {e.returncode}")
+                logger.error(f"Error output: {e.output.decode() if isinstance(e.output, bytes) else e.output}")
                 assert(0)
 
             if not extension_config.pytorchsim_timing_mode:
@@ -207,13 +220,10 @@ class MLIRCodeCache:
             cycle_llvm_caller = MLIRKernelCallerCodeGen(False, arg_attributes, cycle_sim=True)
             cycle_llvm_caller.generate_wrapper_file(write_path, cycle_wrapper_name)
             cycle_llvm_caller.compile_wih_kernel(write_path, key + "_sample", cycle_wrapper_name, cycle_binary_name, link_option)
-            array_size = []
-            for (arg_name, arg_attribute) in arg_attributes:
-                array_size.append(str(arg_attribute[2]))
 
             # Run cyclesim
             cyclesim = CycleSimulator()
-            cycle_list = cyclesim.compile_and_simulate(os.path.join(write_path, cycle_binary_name), " ".join(array_size), vectorlane_size, silent_mode=silent_mode)
+            cycle_list = cyclesim.compile_and_simulate(os.path.join(write_path, cycle_binary_name), vectorlane_size, silent_mode=silent_mode)
 
             # Create TOG
             w_offset, x_offset = vectorlane_size, vectorlane_size
@@ -225,7 +235,7 @@ class MLIRCodeCache:
             tile_graph_generator = tog_generator(origins)
             tile_graph_generator.load_file(raw_tog_path)
             tile_graph_generator.generate_tile_graph(
-                os.path.join(write_path, "tile_graph.onnx"),
+                tog_path,
                 cycle_list=cycle_list,
                 x_offset=x_offset, # FIXME.
                 w_offset=w_offset, # FIXME.
@@ -241,25 +251,18 @@ class CustomAsyncCompile(AsyncCompile):
         self.cycle_binary_name = "cycle_binary"
 
     def mlir(self, source_code, arg_attributes=[], vectorlane_size=16, tile_size=[], spad_info=None, origins=None, silent_mode=False, **kwargs):
+        autotune = kwargs.get('autotune', False)
         def task():
             key = MLIRCodeCache.load(source_code,
                                           valdiation_wrapper_name=self.validation_binary_name,
                                           validation_binary_name=self.validation_binary_name,
                                           arg_attributes=arg_attributes, vectorlane_size=vectorlane_size,
                                           tile_size=tile_size, spad_info=spad_info, origins=origins,
-                                          silent_mode=silent_mode, **kwargs)
+                                          silent_mode=autotune, **kwargs)
             return key
         future = self.submit(task)
-        if "loop_size" in kwargs:
-            loop_size = kwargs["loop_size"]
-        else:
-            loop_size = []
 
-        # In the autotune mode, skip validation to speed up
-        autotune = kwargs.get('autotune', False)
-        validate = kwargs.get('validate', False) if not autotune else False
-
-        def dummy_simulator(*args, **kwargs):
+        def run_kernel_simulation(*args, **kwargs):
             # Wait for compilation
             key = future.result()
             from filelock import FileLock
@@ -271,47 +274,27 @@ class CustomAsyncCompile(AsyncCompile):
                 # Dump arguments and meta data
                 dump_metadata(args, arg_attributes, result_path)
                 runtime_path = FunctionalSimulator.get_runtime_dump_path(result_path)
-                if not autotune and (extension_config.pytorchsim_functional_mode or validate):
+                if extension_config.pytorchsim_functional_mode and not autotune:
                     funcsim = FunctionalSimulator(result_path, key)
                     funcsim.run_spike(args, arg_attributes,
                                     runtime_path, self.validation_binary_name,
                                     vectorlane_size=vectorlane_size, spad_info=spad_info,
-                                    silent_mode=silent_mode)
+                                    silent_mode=autotune)
+
                 if not extension_config.pytorchsim_timing_mode:
                     return [float("inf")]
 
+                # Prepare arguments for launch kernel
                 onnx_path = os.path.join(result_path, "tile_graph.onnx")
                 attribute_path = os.path.join(runtime_path, "attribute")
-                togsim_path = os.path.join(extension_config.CONFIG_TORCHSIM_DIR, "TOGSim")
-                TOGSim = TOGSimulator(togsim_path, extension_config.CONFIG_TOGSIM_CONFIG)
-                TOGSim.vectorlane_size = vectorlane_size
-                attribute_path = TOGSim.create_attribute_file(attribute_path, args, loop_size=loop_size)
-                result_path = TOGSim.simulation(onnx_path, attribute_path, silent_mode=silent_mode, autotune_mode=autotune)
-                result = TOGSimulator.get_result_from_file(result_path)
+
+                TOGSim = torch.npu.get_tog_simulator()
+                if not autotune and TOGSim is not None:
+                    attribute_path = TOGSim.create_attribute_file(attribute_path, args)
+                    torch.npu.launch_kernel(onnx_path, attribute_path)
+                    result = None # No result for non-autotune mode
+                else:
+                    result_path = TOGSimulator.run_standalone(onnx_path, attribute_path, autotune_mode=autotune)
+                    result = TOGSimulator.get_result_from_file(result_path)
                 return result
-
-        def dryrun_simulator(*args, **kwargs):
-            key = future.result()
-            from filelock import FileLock
-            lock_dir = get_lock_dir()
-            lock = FileLock(os.path.join(lock_dir, key + ".lock"), timeout=LOCK_TIMEOUT)
-            with lock:
-                # Run simulator pass
-                result_path = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(key))
-                # Dump arguments and meta data
-                dump_metadata(args, arg_attributes, result_path)
-                runtime_path = FunctionalSimulator.get_runtime_dump_path(result_path)
-
-                # Todo. Support valude dependent mode for graph mode
-                if False: # extension_config.pytorchsim_functional_mode:
-                    funcsim = FunctionalSimulator(result_path, key)
-                    funcsim.run_spike(args, arg_attributes,
-                                    runtime_path, self.validation_binary_name,
-                                    vectorlane_size=vectorlane_size, spad_info=spad_info)
-            return result_path, runtime_path, None
-
-        is_dryrun = int(os.environ.get('TOGSIM_EAGER_MODE', default=False)) and not autotune
-        target_simulator = dryrun_simulator if is_dryrun else dummy_simulator
-        target_simulator.arg_attributes = arg_attributes
-        target_simulator.future = future
-        return target_simulator
+        return run_kernel_simulation

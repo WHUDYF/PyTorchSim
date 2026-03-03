@@ -1,10 +1,7 @@
 import os
 import yaml
-import shutil
 import argparse
 import torch
-import torch._dynamo
-import torch.utils.cpp_extension
 
 def test_result(name, out, cpu_out, rtol=1e-4, atol=1e-4):
     if torch.allclose(out.cpu(), cpu_out, rtol=rtol, atol=atol):
@@ -60,20 +57,14 @@ def modify_file(dump_path, name, address_numa_stride=None, subgraph_map=None):
     print(f"Modified file saved to {output_file}")
 
 if __name__ == "__main__":
-    import os
-    import sys
-    sys.path.append(os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim'))
-
-    from Scheduler.scheduler import PyTorchSimRunner
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
     parser = argparse.ArgumentParser(description='Process folder argument.')
     parser.add_argument('size', type=int, help='Folder value', default=256)
     args = parser.parse_args()
 
     folder = int(args.size)
     print("Taget size: ", folder)
-    folder_path = os.environ.get("TORCHSIM_DUMP_PATH")
+    folder_path = os.environ.get("TORCHSIM_LOG_PATH")
     print(folder_path)
     os.makedirs(folder_path, exist_ok=True)
     test_matmul(device, folder, folder, folder)

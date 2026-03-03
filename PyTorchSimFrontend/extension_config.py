@@ -2,6 +2,7 @@ import os
 import sys
 import importlib
 import yaml
+import logging
 
 CONFIG_TORCHSIM_DIR = os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim')
 CONFIG_GEM5_PATH = os.environ.get('GEM5_PATH', default="/workspace/gem5/build/RISCV/gem5.opt")
@@ -105,9 +106,6 @@ def __getattr__(name):
     if name == "CONFIG_TORCHSIM_LOG_PATH":
         return os.environ.get('TORCHSIM_LOG_PATH', default = os.path.join(CONFIG_TORCHSIM_DIR, "togsim_results"))
 
-    if name == "CONFIG_TOGSIM_EAGER_MODE":
-        return int(os.environ.get("TOGSIM_EAGER_MODE", default=False))
-
 # SRAM Buffer allocation plan
 def load_plan_from_module(module_path):
     if module_path is None:
@@ -135,3 +133,42 @@ CONFIG_TLS_MODE = int(os.environ.get('TORCHSIM_TLS_MODE', default=1))
 CONFIG_USE_TIMING_POOLING = int(os.environ.get('TORCHSIM_USE_TIMING_POOLING', default=0))
 
 CONFIG_DEBUG_MODE = int(os.environ.get('TORCHSIM_DEBUG_MODE', default=0))
+
+
+def setup_logger(name=None, level=None):
+    """
+    Setup a logger with consistent formatting across all modules.
+
+    Args:
+        name: Logger name (default: __name__ of calling module)
+        level: Logging level (default: DEBUG if CONFIG_DEBUG_MODE else INFO)
+
+    Returns:
+        Logger instance
+    """
+    if name is None:
+        import inspect
+        # Get the calling module's name
+        frame = inspect.currentframe().f_back
+        name = frame.f_globals.get('__name__', 'PyTorchSim')
+
+    # Convert logger name to lowercase
+    name = name.lower()
+    logger = logging.getLogger(name)
+
+    # Only configure if not already configured (avoid duplicate handlers)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            fmt='[%(asctime)s.%(msecs)03d] [%(levelname)s] [%(name)s] %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
+        # Set log level
+        if level is None:
+            level = logging.DEBUG if CONFIG_DEBUG_MODE else logging.INFO
+        logger.setLevel(level)
+
+    return logger

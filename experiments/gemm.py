@@ -31,7 +31,7 @@ if __name__ == "__main__":
     import os
     import sys
     base_dir = os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim')
-    config = os.environ.get('TORCHSIM_CONFIG', default=f'{base_dir}/configs/systolic_ws_128x128_c2_simple_noc_tpuv4.yml)
+    config = os.environ.get('TORCHSIM_CONFIG', default=f'{base_dir}/configs/systolic_ws_128x128_c2_simple_noc_tpuv4.yml')
     config_prefix = config.split('/')[-1].split('.')[0][9:] # extract config name from config path
     sys.path.append(base_dir)
     args = argparse.ArgumentParser()
@@ -42,13 +42,10 @@ if __name__ == "__main__":
     size_str = "x".join([str(i) for i in size])
     result_path = os.path.join(base_dir, args.dump_path, config_prefix, f"GEMM_{size_str}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}")
     # setting environment variables
-    os.environ['TORCHSIM_DUMP_PATH'] = result_path
+    os.environ['TORCHSIM_LOG_PATH'] = result_path
     # only timing simulation
     os.environ['TORCHSIM_VALIDATION_MODE'] = "0"
     if 'pytorchsim_functional_mode' in os.environ:
         del os.environ['pytorchsim_functional_mode']
 
-    from Scheduler.scheduler import PyTorchSimRunner
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
     run_matmul(size[0], size[1], size[2], config)

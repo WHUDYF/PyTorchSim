@@ -109,7 +109,7 @@ def {{ FUNC_NAME }}{{kernel.def_wrapper()}}:
     padded_shape = list(X.shape)
     padded_shape[2] += 2 * {{ PADDING_H }}
     padded_shape[3] += 2 * {{ PADDING_W }}
-    X_padding = torch.zeros(padded_shape, device=X.device)
+    X_padding = torch.zeros(padded_shape).to(device=X.device)
     X_padding[:, :, {{ PADDING_H }}:X.shape[2] + {{ PADDING_H }}, {{ PADDING_W }}:X.shape[3] + {{ PADDING_W }}] = X
 
     # Tanspose inputs
@@ -125,9 +125,6 @@ def {{ FUNC_NAME }}{{kernel.def_wrapper()}}:
 
     # Launch kernel
     {{ KERNEL_NAME }}<DEF_CONV_WRAPPER>
-    {%- if TOGSIM_EAGER_MODE %}
-    yield ({{KERNEL_NAME}}, <DEF_CONV_WRAPPER>)
-    {%- endif %}
 """
     def __init__(self, input_nodes, layout, input_reorder=None, **kwargs):
         super().__init__(input_nodes, layout, input_reorder, **kwargs)

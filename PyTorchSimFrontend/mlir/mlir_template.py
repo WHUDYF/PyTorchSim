@@ -13,8 +13,8 @@ from collections import OrderedDict
 from typing import List, Optional
 from unittest.mock import patch
 
-from torch._inductor.codegen.common import KernelTemplate, ChoiceCaller, CSE, DeferredLine
-from torch._inductor.ir import Buffer, IRNode, TemplateBuffer
+from torch._inductor.codegen.common import KernelTemplate, CSE, DeferredLine
+from torch._inductor.ir import Buffer, IRNode, TemplateBuffer, ChoiceCaller
 from torch._inductor.select_algorithm import PartialRender
 from torch._inductor.codegen.cuda.cuda_kernel import CUDATemplateCaller
 from torch._inductor.autotune_process import TensorMeta
@@ -31,6 +31,9 @@ from torch._inductor.codegen import common
 
 from PyTorchSimFrontend import extension_config
 from . import mlir_common
+
+# Configure logger for mlir_template module
+logger = extension_config.setup_logger()
 
 class IndentedBufferGroup:
     def __init__(self, kernel: 'MLIRTemplateKernel', prefix=""):
@@ -386,7 +389,6 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return tile_candidates
 
     def meta_kernel(self):
-        wrapper = V.graph.wrapper_code
         kernel_arg_attributes = self.kernel_arg_attributes
         _, _, arg_attributes, _ = self.kernel_group.args.mlir_argdefs()
         if kernel_arg_attributes is not None:
@@ -394,18 +396,14 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                 for idx in range(len(arg_attributes)):
                     if arg_attributes[idx][0] == name:
                         arg_attributes[idx][1] = attr
-        wrapper.add_import_once('\nprint(f\'Wrapper Codegen Path = {__file__}\')')
-        # Dump loop and load/store information
-        wrapper.add_import_once(f"loop_info = {self.loop_info}")
-        wrapper.add_import_once(f"arg_attributes = {arg_attributes}")
+        return arg_attributes
 
     def call_kernel(self, kernel_name):
         wrapper = V.graph.wrapper_code
         _, call_args, _, _ = self.kernel_group.args.mlir_argdefs()
         # generate the code to call this
         wrapper.generate_kernel_call(
-            kernel_name if self.outer_func_name is None else self.outer_func_name + f"_{len(call_args)}",
-            call_args, cuda=False)
+            kernel_name if self.outer_func_name is None else "wrapper_" + kernel_name, call_args)
 
     def codegen_template_code(self, render, template_node, prologue_nodes, epilogue_nodes, tile_info):
         with self as kernel:
@@ -431,7 +429,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                     ).group
                     prologue_tile_desc = kernel.set_tile_size(kernel.prologue_info, prologue=True)
                     kernel.kernel_group.set_tile_info(prologue_tile_desc)
-                    vars, reduction_vars = kernel.set_ranges(group, reduction_group)
+                    vars, reduction_vars = kernel.set_ranges(group, reduction_group, list(self.dim_aliasing.values()))
                     for node in prologue_nodes:
                         # Reuse created spad
                         read_list = sorted([i.name for i in node.read_writes.reads])
@@ -471,15 +469,15 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                     _, (group, reduction_group) = max(
                         epilogue_nodes, key=lambda x: int(x.is_reduction())
                     ).group
-                    vars, reduction_vars = kernel.set_ranges(group, reduction_group)
+                    vars, reduction_vars = kernel.set_ranges(group, reduction_group, list(self.dim_aliasing.values()))
                     for node in epilogue_nodes:
                         node.codegen((vars, reduction_vars))
 
-        with V.set_kernel_handler(kernel):
+        with self as kernel:
             src_code = (
                 partial_code
                 if isinstance(partial_code, str)
-                else partial_code.finalize()
+                else partial_code.finalize_all()
             )
 
             # For consistency, white space could make wrong write_path
@@ -487,38 +485,36 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             buffer.splice(src_code)
             src_code = buffer.getvalue()
             self._prepare_simulator_headers(src_code)
-        return src_code
+        meta_code = self.meta_kernel()
+        return src_code, meta_code
 
     def make_choices(self, tile_candidates, render, template_node, prologue_nodes, epilogue_nodes):
         choices = []
         for tile_info in tile_candidates:
-            if extension_config.CONFIG_DEBUG_MODE:
-                # Compute Tile M, N, K DMA Tile M, N, K
-                print(f"[Auto-tune] Trying tile size: {list(tile_info)}")
-            src_code = self.codegen_template_code(render, template_node, prologue_nodes, epilogue_nodes, tile_info)
+            # Compute Tile M, N, K DMA Tile M, N, K
+            logger.debug(f"Auto-tune: Trying tile size: {list(tile_info)}")
+            src_code, meta_code = self.codegen_template_code(render, template_node, prologue_nodes, epilogue_nodes, tile_info)
             bench_runner = self.run_bench([template_node], self.kernel_name, src_code)
-            choices.append((bench_runner, src_code, tile_info, self.loop_size))
+            choices.append((bench_runner, src_code, meta_code, tile_info, self.loop_size))
             self.reset(reason=None)
         return choices
 
     def _log_autotune_result(self, best_choice, best_cycle):
-        tile_size = best_choice[2]
-        print(
-            f"[Auto-tune] Optimal tile size: {list(tile_size)}, "
+        tile_size = best_choice[3]
+        logger.debug(
+            f"Auto-tune: Optimal tile size: {list(tile_size)}, "
             f"cycles: {best_cycle}"
         )
 
     def codegen_nodes(self, tile_candidates, render, template_node, prologue_nodes, epilogue_nodes):
         if "autotune" in extension_config.codegen_mapping_strategy and len(tile_candidates):
-            src_code, loop_size = self.autotune(tile_candidates, render, template_node, prologue_nodes, epilogue_nodes)
+            src_code, meta_code, loop_size = self.autotune(tile_candidates, render, template_node, prologue_nodes, epilogue_nodes)
             self.loop_size = loop_size
         else:
             tile_info = tile_candidates[0] if tile_candidates else None
-            src_code = self.codegen_template_code(render, template_node, prologue_nodes, epilogue_nodes, tile_info)
+            src_code, meta_code = self.codegen_template_code(render, template_node, prologue_nodes, epilogue_nodes, tile_info)
 
-        with V.set_kernel_handler(self):
-            self.meta_kernel()
-        return src_code
+        return src_code, meta_code
 
     def _prepare_simulator_headers(self, src_code):
         spad_end_symbol = f"int spad_end[0] __attribute__ ((section(\".spad\")));\n"
@@ -577,8 +573,8 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             with contextlib.ExitStack() as stack:
                 stack.enter_context(compute_body.indent(attribute="{inner_loop=false}",suffix=self.compute_body_loop.epilogue_line()))
                 if self.reduction_fusion:
-                    compute_body.writelines(self.reduction_body_loop.lines())
                     compute_body.splice(self.masks)
+                    compute_body.writelines(self.reduction_body_loop.lines())
                     stack.enter_context(compute_body.indent(attribute="{inner_loop=false}"))
                     compute_body.splice(self.loads)
                     compute_body.splice(self.compute)
@@ -753,7 +749,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return "<REDUCTION_OUTPUT>"
 
     def def_function(self):
-        _, call_args, _ = self.kernel_group.args.python_argdefs()
+        _, call_args, _, _ = self.kernel_group.args.python_argdefs()
         if self.outer_func_render is not None:
             partial_code, function_name = self.outer_func_render(input_args=call_args)
             return PartialRender(
@@ -789,8 +785,8 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                    subtile_size:list=[], async_type=None, indent_size=0):
         # Prepare code block
         local_code = IndentedBuffer()
-        with V.set_kernel_handler(self):
-            index_var = self.parse_index_list(index_list, local_code, offset=tile_desc.offset)
+        with self, self.override_buffer_cse(buffer=local_code, cse=self.apply_cse):
+            index_var = self.parse_index_list(index_list, offset=tile_desc.offset)
             node_layout = self.named_nodes[dram_var].get_layout()
             if dram_var in self.exception_nodes:
                 numel = self.exception_nodes[dram_var]["numel"]
@@ -830,7 +826,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
 
     def def_sram_buffer(self, dram_name, tile_desc, id=0, indent_size=0):
         # Prepare code block
-        with V.set_kernel_handler(self):
+        with self:
             dtype = self.named_nodes[dram_name].get_layout().dtype
             tile_shape = tile_desc.get_mlir_shape(mlir_common.DTYPE_TO_MLIR[dtype])
             buffer_name = self.allocate_sram_buffer(dtype, dram_name, tile_desc, id, forced_name=dram_name)
@@ -852,19 +848,21 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return max(size, 2) # vector load/store
 
     def load_epilogue(self, name: str, index: sympy.Expr):
-        index = self.rename_indexing(index)
         dram_var = self.kernel_group.args.input(name)
         dram_shape = mlir_common.MLIRKernelArgs.get_mlir_shape(self.buffer_types[name])
         dtype = V.graph.get_dtype(name)
         mlir_dtype = mlir_common.DTYPE_TO_MLIR[dtype]
 
         # Want to use tile_desc from epilogue_info
-        index_var = self.parse_indices(index)
+        with self.override_buffer_cse(buffer=self.applys, cse=self.apply_cse):
+            index_var = self.parse_indices(index)
         dram_stride = [index.coeff(sympy.Symbol(val)) for val in self.dim_aliasing.values()]
         vlane_split_axis = self.kernel_group.tile_desc.vmap.vlane_split_axis
         vlane_stride = self.kernel_group.tile_desc.vmap.vlane_stride
         tile_shape = self.kernel_group.tile_desc.get_mlir_shape(mlir_dtype)
         tile_stride = self.kernel_group.tile_desc.get_tile_stride()
+        tile_rank = self.kernel_group.tile_desc.get_nr_dim()
+        dram_stride = dram_stride[:tile_rank] + [0] * max(tile_rank - len(dram_stride), 0)
 
         # Compute vector unit size
         vshape = self.kernel_group.tile_desc.get_mlir_vshape(mlir_dtype)
@@ -893,7 +891,10 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             vsize = compute_vec_size//reduce_size
 
             if compute_vec_size > 1:
-                offset = self.cse.generate(self.loads, f"affine.apply affine_map<(d0, d1) -> (d0 + d1*{(self.r_tile_size)})>(%{self.compute_idx}, %{self.reduction_loop_idx})")
+                with self.override_buffer_cse(buffer=self.global_vars, cse=self.map_cse):
+                    map_var = ops.affine_map(["d0", "d1"], f"d0 + d1*{(self.r_tile_size)}")
+                with self.override_buffer_cse(buffer=self.loads):
+                    offset = ops.affine_apply(map_var, [self.compute_idx, self.reduction_loop_idx])
                 compute_index_var = ",".join([f"%{zero_var}"] * (self.kernel_group.tile_desc.get_nr_dim()-1) + [f"%{offset}"])
 
             with self.override_buffer_cse(buffer=self.loads):
@@ -902,18 +903,20 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return out
 
     def store_epilogue(self, name: str, index: sympy.Expr, value, *args, **kwargs):
-        index = self.rename_indexing(index)
         dram_var = self.kernel_group.args.output(name)
         dram_shape = mlir_common.MLIRKernelArgs.get_mlir_shape(self.buffer_types[name])
         dtype = V.graph.get_dtype(name)
         mlir_dtype = mlir_common.DTYPE_TO_MLIR[dtype]
 
-        index_var = self.parse_indices(index)
+        with self.override_buffer_cse(buffer=self.applys, cse=self.apply_cse):
+            index_var = self.parse_indices(index)
         dram_stride = [index.coeff(sympy.Symbol(val)) for val in self.dim_aliasing.values()]
         vlane_split_axis = self.kernel_group.tile_desc.vmap.vlane_split_axis
         vlane_stride = self.kernel_group.tile_desc.vmap.vlane_stride
         tile_shape = self.kernel_group.tile_desc.get_mlir_shape(mlir_dtype)
         tile_stride = self.kernel_group.tile_desc.get_tile_stride()
+        tile_rank = self.kernel_group.tile_desc.get_nr_dim()
+        dram_stride = dram_stride[:tile_rank] + [0] * max(tile_rank - len(dram_stride), 0)
 
         if name not in self.buffer_names:
             sram_var, sram_index_var = self.get_scratchpad_buffer(dtype, name, self.kernel_group.tile_desc, index)
@@ -929,7 +932,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
 
         _, operand_type = self.var_info[value]
         if mlir_dtype != operand_type:
-            value = ops.to_dtype(value, mlir_dtype, var_info=self.var_info)
+            value = ops.to_dtype(value, mlir_dtype)
         compute_index_var = ",".join([f"%{zero_var}"] * (self.kernel_group.tile_desc.get_nr_dim()-1) + [f"%{self.compute_idx}"])
         # Generate vector load instruction
         buffer_name = name if not store_force else None
@@ -987,15 +990,17 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         compute_index_var = ", ".join(zero_var_list)
         with self.override_buffer_cse(buffer=self.loads):
             out = ops._load(vec_size, type_name, sram_var, compute_index_var, tile_shape)
-
         # Reduction body codegen
         with self.override_buffer_cse(buffer=self.const_buffer, cse=self.const_cse):
             init = ops.constant(reduction_init(reduction_type, dtype), type_name)
             init_vec = ops.broadcast(init, compute_vec_size)
+            init_vec2 = ops.broadcast(init, local_tile_desc.get_numel_per_lane())
+            ops._store(init_vec2, sram_var, ", ".join([f"%{self.get_const_cse(0)}"] * local_tile_desc.get_nr_dim()), tile_shape)
 
         mask_shape, mask_var = self.get_mask()
         if mask_var is not None:
             value = ops.where(mask_var, value, init_vec)
+
         result = reduction_partial_combine_vec(reduction_type, value, out)
 
         # Store partial result
@@ -1004,13 +1009,13 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return sram_var
 
     def store_reduction_epilogue(self, name, index, value):
-        index = self.rename_indexing(index)
         dram_var = self.kernel_group.args.output(name)
         dram_shape = mlir_common.MLIRKernelArgs.get_mlir_shape(self.buffer_types[name])
         dtype = V.graph.get_dtype(name)
         mlir_dtype = mlir_common.DTYPE_TO_MLIR[dtype]
 
-        index_var = self.parse_indices(index, self.reductions_suffix, comments="// Store reduction")
+        with self.override_buffer_cse(buffer=self.reductions_suffix, cse=self.apply_cse):
+            index_var = self.parse_indices(index, comments="// Store reduction")
         dram_stride = [index.coeff(sympy.Symbol(val)) for val in self.dim_aliasing.values()][:-1] # Assume that there is only one reduction axis
         vlane_split_axis = self.kernel_group.tile_desc.vmap.vlane_split_axis
         vlane_stride = self.kernel_group.tile_desc.vmap.vlane_stride
@@ -1107,7 +1112,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             self.r_tile_size = tile_desc.get_tile_size()[-1]
             self.r_dim_size = template_fusion_info['r_dim_size']
             self.reduction_nr_outer_loop = nr_outer_loop
-            self.reduction_loop_idx = "reduce_loop_idx"
+            self.reduction_loop_idx = self.register_var_cse("reduce_loop_idx", 1, "index")
             self.compute_body_loop.size = r_tile_size
             self.compute_body_loop.step = tile_desc.get_compute_vec_size() // nr_outer_loop
             self.reduction_body_loop = mlir_common.LoopLevel(self.reduction_loop_idx, nr_outer_loop)
@@ -1121,14 +1126,6 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                 self.compute_body_loop.size = tile_desc.get_numel_per_lane()
                 self.compute_body_loop.step = tile_desc.get_compute_vec_size()
         return tile_desc
-
-    def rename_indexing(self, index) -> sympy.Expr:
-        for dim_name, dim_aliased_name in self.dim_aliasing.items():
-            index = index.subs(sympy.Symbol(dim_name), sympy.Symbol("tmp_"+dim_aliased_name))
-        # To avoid this case ({"index0":"index1", "index1":"index0"})
-        for dim_aliased_name in self.dim_aliasing.values():
-            index = index.subs(sympy.Symbol("tmp_"+dim_aliased_name), sympy.Symbol(dim_aliased_name))
-        return index
 
 class MLIRTemplateCaller(CUDATemplateCaller):
     def __str__(self):
@@ -1153,7 +1150,7 @@ class MLIRTemplate(KernelTemplate):
         """
         super().__init__(name)
         self.input_nodes = [node for node in input_nodes if node is not None]
-        self.output_node: Buffer = Buffer("buf_out", layout)
+        self.output_node: Buffer = Buffer(name="buf_out", layout=layout)
         self.input_reorder = input_reorder
         self.layout = layout
 
@@ -1218,7 +1215,10 @@ class MLIRTemplate(KernelTemplate):
             self.output_node.get_layout(),
             make_kernel_render,
             bmreq,
+            False,  # supports_epilogue_fusion
             self,
+            kwargs,
+            "" # Currently Empty description
         )
 
     def get_tile_candidates(self, **kwargs):

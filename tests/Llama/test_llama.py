@@ -101,7 +101,8 @@ def run_rotary_embedding_test(
         vocab_size=8192,
         _attn_implementation = "sdpa"
     )
-    base_rope = LlamaRotaryEmbedding(cfg)
+    # Pass dim explicitly to avoid config parsing issues
+    base_rope = LlamaRotaryEmbedding(dim=head_dim, max_position_embeddings=cfg.max_position_embeddings, base=cfg.rope_theta, config=cfg)
 
     cpu_rope = copy.deepcopy(base_rope)
 
@@ -368,21 +369,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     sys.path.append(os.environ.get("PYTORCHSIM_ROOT_PATH", "/workspace/PyTorchSim"))
-    from Scheduler.scheduler import PyTorchSimRunner
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
     #test_triu(device, size=(32, 128), diagonal=1)
     torch.compiler.is_compiling = lambda: True # FIXME. How to fix this?
     #run_rmsnorm_test(device)
     #run_rotary_embedding_test(device)
-    #run_decoder_layer_test(
-    #    device=device,
-    #    batch=args.batch,
-    #    seq_len=args.seq_len,
-    #    dtype=args.dtype,
-    #    rtol=args.rtol,
-    #    atol=args.atol,
-    #)
+    run_decoder_layer_test(
+        device=device,
+        batch=args.batch,
+        seq_len=args.seq_len,
+        dtype=args.dtype,
+        rtol=args.rtol,
+        atol=args.atol,
+    )
     run_llama_model_test(device)
     #run_custom_llama_test(
     #    device=device,

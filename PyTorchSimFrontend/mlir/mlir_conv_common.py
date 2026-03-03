@@ -82,11 +82,10 @@ class MLIRConvCommonTemplate(MLIRTemplate):
         Y = self.output_node
         Bias = None if len(self.input_nodes) == 2 else self.input_nodes[2]
 
-        eager_mode = int(os.environ.get('TOGSIM_EAGER_MODE', default=False))
         options = dict(
             kernel=self.kernel,
             KERNEL_NAME=kernel_name,
-            FUNC_NAME=self.function_name + f"_{len(input_args)}",
+            FUNC_NAME="wrapper_" + kernel_name,
             INPUT=X,
             WEIGHT=W,
             BIAS=Bias,
@@ -94,11 +93,10 @@ class MLIRConvCommonTemplate(MLIRTemplate):
             PADDING_H=self.padding[0],
             PADDING_W=self.padding[1],
             VALIDATION_MODE=extension_config.pytorchsim_functional_mode,
-            TOGSIM_EAGER_MODE=eager_mode,
             input_reorder=self.input_reorder
         )
         code = self._template_from_string(self.WRAPPER_TEMPLATE).render(**options)
-        return code, self.function_name + f"_{len(input_args)}"
+        return code, "wrapper_" + kernel_name
 
     def get_arg_attributes(self):
         arg_attributes = []

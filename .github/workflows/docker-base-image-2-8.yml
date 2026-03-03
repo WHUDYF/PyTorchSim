@@ -2,7 +2,7 @@ name: Docker Base Image CI (PyTorch 2.8)
 
 on:
   push:
-    branches: [ "base" ]
+    branches: [ "base_v2.8" ]
   workflow_dispatch:
   repository_dispatch:
     types: [ build_base ]
@@ -63,7 +63,7 @@ jobs:
           file: ./Dockerfile.base
           push: true
           build-args: |
-            PYTORCH_IMAGE=pytorch/pytorch:2.8.0-cuda12.6-cudnn9-runtime
+            PYTORCH_IMAGE=pytorch/pytorch:2.8.0-cuda12.6-cudnn9-devel
             GEM5_ASSET_ID=${{ env.GEM5_ASSET_ID }}
             LLVM_ASSET_ID=${{ env.LLVM_ASSET_ID }}
             SPIKE_ASSET_ID=${{ env.SPIKE_ASSET_ID }}

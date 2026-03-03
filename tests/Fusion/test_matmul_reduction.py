@@ -85,13 +85,7 @@ def test_matmul_add_var_mean(device, M=768, N=512, K=3072):
     test_result("Matmul+residual+var_mean Fusion reduction", res[2], y[2])
 
 if __name__ == "__main__":
-    import os
-    import sys
-    sys.path.append(os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim'))
-
-    from Scheduler.scheduler import PyTorchSimRunner
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
     test_matmul_reduce(device, 3072, 512, 768)
     test_matmul_var_mean(device)
     test_matmul_add_var_mean(device)
