@@ -202,123 +202,15 @@ def _cat_layout(tensors: Sequence[TensorBox], dim: int) -> ir.Layout:
         stride,
     )
 
-
-def _can_use_cat_template(tensors: Sequence[TensorBox], dim: int) -> bool:
-    # Current template specialization: 2 inputs, rank-2, dim in {0, 1}.
-    if len(tensors) != 2:
-        return False
-    if not all(hasattr(t, "get_size") and hasattr(t, "get_dtype") and hasattr(t, "realize") for t in tensors):
-        return False
-    if tensors[0].get_dtype() != tensors[1].get_dtype():
-        return False
-    rank0 = len(tensors[0].get_size())
-    rank1 = len(tensors[1].get_size())
-    if rank0 != 2 or rank1 != 2:
-        return False
-    if dim < 0:
-        dim += rank0
-    if dim not in (0, 1):
-        return False
-
-    if dim == 0:
-        cols0 = tensors[0].get_size()[1]
-        cols1 = tensors[1].get_size()[1]
-        return V.graph.sizevars.statically_known_equals(cols0, cols1)
-
-    rows0 = tensors[0].get_size()[0]
-    rows1 = tensors[1].get_size()[0]
-    return V.graph.sizevars.statically_known_equals(rows0, rows1)
-
-
-def _cat_fallback(reason: str, tensors: Sequence[TensorBox], dim: int):
-    # Non-template cases delegate to the original lowering path.
-    return _orig_cat_default_lowering(tensors, dim)
-
-
-def _custom_cat_impl(tensors: Sequence[TensorBox], dim: int = 0):
-    if _orig_cat_default_lowering is None:
-        raise RuntimeError("Original aten.cat.default lowering is missing")
-    if len(tensors) > 0:
-        rank = len(tensors[0].get_size())
-        if dim < 0:
-            dim += rank
-    if not _can_use_cat_template(tensors, dim):
-        return _cat_fallback("default-path", tensors, dim)
+def custom_cat_default(tensors: Sequence[TensorBox], dim: int = 0):
+    if tensors and dim < 0:
+        dim += len(tensors[0].get_size())
 
     for t in tensors:
         t.realize()
     layout = _cat_layout(tensors, dim)
     mlir_template = MLIRCatTemplate(list(tensors), layout, dim=dim)
     return mlir_template.generate().output_node()
-
-
-def custom_cat_default(tensors: Sequence[TensorBox], dim: int = 0):
-    return _custom_cat_impl(tensors, dim)
-
-
-def custom_cat_out(tensors: Sequence[TensorBox], dim: int = 0, out: Optional[TensorBox] = None):
-    if _orig_cat_out_lowering is None:
-        raise RuntimeError("Original aten.cat.out lowering is missing")
-    if out is None:
-        return _orig_cat_out_lowering(tensors, dim, out)
-
-    copy_default_lowering = lowerings.get(aten.copy_.default)
-    slice_tensor_lowering = lowerings.get(aten.slice.Tensor)
-    if copy_default_lowering is None or slice_tensor_lowering is None:
-        raise RuntimeError("cat.out lowering requires aten.copy_.default and aten.slice.Tensor lowerings")
-
-    # Lower cat.out as a sequence of slice+copy ops so each piece still runs
-    # through the existing compiled/simulated kernel path.
-    if len(tensors) == 0:
-        raise RuntimeError("cat.out requires at least one input tensor")
-    if not all(hasattr(t, "get_size") and hasattr(t, "get_dtype") and hasattr(t, "realize") for t in tensors):
-        raise RuntimeError("cat.out inputs must be tensor-like values")
-    rank = len(tensors[0].get_size())
-    if rank == 0:
-        raise RuntimeError("cat.out does not support scalar inputs")
-    if dim < 0:
-        dim = dim + rank
-    if dim < 0 or dim >= rank:
-        raise RuntimeError(f"cat.out dim out of range: dim={dim}, rank={rank}")
-    if any(len(t.get_size()) != rank for t in tensors):
-        raise RuntimeError("cat.out inputs must have the same rank")
-    if any(t.get_dtype() != tensors[0].get_dtype() for t in tensors):
-        raise RuntimeError("cat.out inputs must have the same dtype")
-    # cat semantics: all non-cat dimensions must be equal.
-    for i in range(rank):
-        if i == dim:
-            continue
-        base = tensors[0].get_size()[i]
-        if any(not V.graph.sizevars.statically_known_equals(base, t.get_size()[i]) for t in tensors[1:]):
-            raise RuntimeError(f"cat.out non-concatenated dimension mismatch at dim={i}")
-
-    # Output shape must match concatenated shape.
-    if not hasattr(out, "get_size"):
-        raise RuntimeError("cat.out output must be tensor-like")
-    out_sizes = list(out.get_size())
-    if len(out_sizes) != rank:
-        raise RuntimeError("cat.out output rank mismatch")
-    for i in range(rank):
-        if i == dim:
-            continue
-        if not V.graph.sizevars.statically_known_equals(out_sizes[i], tensors[0].get_size()[i]):
-            raise RuntimeError(f"cat.out output shape mismatch at dim={i}")
-    expected_cat = sum(t.get_size()[dim] for t in tensors)
-    if not V.graph.sizevars.statically_known_equals(out_sizes[dim], expected_cat):
-        raise RuntimeError(f"cat.out output concatenated dimension mismatch at dim={dim}")
-
-    if isinstance(out, TensorBox):
-        out.realize()
-
-    offset = 0
-    for src in tensors:
-        src.realize()
-        end = offset + src.get_size()[dim]
-        dst_view = slice_tensor_lowering(out, dim, offset, end, 1)
-        copy_default_lowering(dst_view, src)
-        offset = end
-    return out
-
 
 def _custom_sort_values_impl(
     self: TensorBox,
@@ -459,9 +351,7 @@ lowerings.update({getattr(aten.convolution, overload): convolution for overload 
 lowerings.update({getattr(aten.bmm, overload): tuned_bmm for overload in aten.bmm.overloads()})
 lowerings.update({getattr(aten._sparse_addmm, overload): sparse_addmm for overload in aten._sparse_addmm.overloads()})
 lowerings.update({getattr(aten._unsafe_index, overload): custom_unsafe_index for overload in aten._unsafe_index.overloads()})
-
-lowerings.update({aten.cat.default: custom_cat_default})
-lowerings.update({aten.cat.out: custom_cat_out})
+lowerings.update({getattr(aten.cat, overload): custom_cat_default for overload in aten.cat.overloads()})
 
 lowerings.update({aten.sort.stable: custom_sort_stable})
 lowerings.update({aten.sort.values_stable: custom_sort_values_stable})

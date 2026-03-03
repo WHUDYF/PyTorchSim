@@ -12,6 +12,9 @@ class MLIRConvCommonTemplate(MLIRTemplate):
     WRAPPER_TEMPLATE = None
     def __init__(self, input_nodes, layout, input_reorder=None, **kwargs):
         super().__init__("kernel", input_nodes, layout, input_reorder)
+        self.support_epilogue_fusion = True
+        self.support_prologue_fusion = False
+        self.support_reduction_fusion = False
         self.stride = kwargs["stride"]
         self.padding = kwargs["padding"]
         self.dilation = kwargs["dilation"]

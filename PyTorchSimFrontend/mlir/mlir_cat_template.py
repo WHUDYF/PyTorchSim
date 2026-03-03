@@ -1,8 +1,9 @@
-from typing import List, Optional, cast
+from typing import List, Optional
+import math
+import itertools
 
 import sympy
-from torch._inductor.ir import Buffer, IRNode
-from torch._inductor.virtualized import V
+from torch._inductor.ir import IRNode
 
 from PyTorchSimFrontend.mlir import mlir_common
 from PyTorchSimFrontend.mlir.mlir_template import MLIRTemplate, MLIRTemplateKernel
@@ -10,40 +11,28 @@ from PyTorchSimFrontend.mlir.mlir_template import MLIRTemplate, MLIRTemplateKern
 
 TEMPLATE = r"""
 {{kernel.def_global_vars()}}
-
-func.func @{{ KERNEL_NAME }} {{kernel.def_kernel(inputs=[X0, X1], outputs=[Y], names_str=NAMES_STR, input_reorder=input_reorder)}} {
-  {{ kernel.def_sram_buffer("X0", X0_TILE_DESC, id=0, indent_size=2) }}
-  {{ kernel.def_sram_buffer("X1", X1_TILE_DESC, id=1, indent_size=2) }}
-  {{ kernel.def_sram_buffer(OUT_DVAR, Y_TILE_DESC, id=2, indent_size=2) }}
+func.func @{{ KERNEL_NAME }} {{kernel.def_kernel(inputs=INPUT_NAMES, outputs=[Y], names_str=NAMES_STR, input_reorder=input_reorder)}} {
+{%- for buffer_name, tile_desc in UNIQUE_BUFFER_TILE_DESCS.items() %}
+  {{ kernel.def_sram_buffer(buffer_name, tile_desc, indent_size=2) }}
+{%- endfor %}
   {{ kernel.def_local_vars(indent_size=2) }}
 
   affine.for %cat_block = 0 to 1 step 1 {
-{% if DIM == 0 %}
-    affine.for %index0 = 0 to {{ X0_ROWS }} step 1 {
-      affine.for %index1 = 0 to {{ COLS }} step 1 {
-        {{ kernel.def_dma_op("MVIN", "X0", X0_IDX, X0_TILE_DESC, indent_size=8) }}
-        {{ kernel.def_dma_op("MVOUT", OUT_DVAR, Y0_IDX, X0_TILE_DESC, indent_size=8) }}
-      }
-    }
+{%- for d in range(RANK-1) %}
+    affine.for %index{{ OUTPUT_DIM[d] }} = 0 to {{ OUTPUT_SIZES[d] }} step {{ TILE_SIZES[d] }} {
+{%- endfor %}
+{%- for i in range(NUM_INPUTS) %}
+      // Input tensor{{ i }}
+      affine.for %index_local{{ DIM }}_{{ i }} = 0 to {{ INPUT_SIZES[i][DIM] }} step {{ INPUT_TILE_SIZES_DIM[i] }} {
+        %index{{ DIM }}_{{i}} = affine.apply affine_map<(d0) -> (d0 + {{ CUMULATIVE_OFFSETS[i] }})> (%index_local{{ DIM }}_{{ i }})
+        {{ kernel.def_dma_op("MVIN", INPUT_BUFFER_NAMES[i], INPUT_IDXS[i], INPUT_TILE_DESCS[i], indent_size=INDENT_SIZE) }}
+        {{ kernel.def_dma_op("MVOUT", OUT_DVAR, OUTPUT_IDXS[i], INPUT_TILE_DESCS[i], indent_size=INDENT_SIZE) }}
+      } { inner_loop=true }
+{%- endfor %}
 
-    affine.for %index2 = 0 to {{ X1_ROWS }} step 1 {
-      affine.for %index3 = 0 to {{ COLS }} step 1 {
-        {{ kernel.def_dma_op("MVIN", "X1", X1_IDX, X1_TILE_DESC, indent_size=8) }}
-        {{ kernel.def_dma_op("MVOUT", OUT_DVAR, Y1_IDX, X1_TILE_DESC, indent_size=8) }}
-      }
-    }
-{% else %}
-    affine.for %index0 = 0 to {{ ROWS }} step 1 {
-      affine.for %index1 = 0 to {{ X0_COLS }} step 1 {
-        {{ kernel.def_dma_op("MVIN", "X0", X0_IDX, X0_TILE_DESC, indent_size=8) }}
-        {{ kernel.def_dma_op("MVOUT", OUT_DVAR, Y0_IDX, X0_TILE_DESC, indent_size=8) }}
-      }
-      affine.for %index3 = 0 to {{ X1_COLS }} step 1 {
-        {{ kernel.def_dma_op("MVIN", "X1", X1_IDX, X1_TILE_DESC, indent_size=8) }}
-        {{ kernel.def_dma_op("MVOUT", OUT_DVAR, Y1_IDX, X1_TILE_DESC, indent_size=8) }}
-      }
-    }
-{% endif %}
+{%- for d in range(RANK-1) %}
+    } { outer_loop=true }
+{%- endfor %}
   } { outer_loop=true }
   return
 }
@@ -51,8 +40,8 @@ func.func @{{ KERNEL_NAME }} {{kernel.def_kernel(inputs=[X0, X1], outputs=[Y], n
 
 
 class MLIRCatTemplate(MLIRTemplate):
-    def __init__(self, input_nodes, layout, dim, input_reorder=None):
-        super().__init__("kernel", input_nodes, layout, input_reorder)
+    def __init__(self, input_nodes, layout, dim):
+        super().__init__("kernel", input_nodes, layout)
         self.dim = dim
 
     def render(
@@ -66,87 +55,248 @@ class MLIRCatTemplate(MLIRTemplate):
         is_out_variant = template_buffer_node is not None
         if is_out_variant:
             self.output_node = template_buffer_node
-        # cat template currently emits a single output buffer and does not
-        # support epilogue output remapping.
 
-        def _unwrap_node(n):
-            return n.node if hasattr(n, "node") else n
+        # Extract info
+        input_nodes = self.input_nodes
+        y = self.output_node
+        num_inputs = len(self.input_nodes)
+        rank = len(y.get_size())
 
-        x0 = _unwrap_node(self.input_nodes[0])
-        x1 = _unwrap_node(self.input_nodes[1])
-        y = _unwrap_node(self.output_node)
+        input_sizes = [x.get_size() for x in input_nodes]
+        output_sizes = [sz for dim, sz in enumerate(y.get_size()) if dim != self.dim]
+        output_dim = [dim for dim, sz in enumerate(y.get_size()) if dim != self.dim]
+        tile_sizes = tile_info if tile_info is not None else [1] * len(output_sizes)
+        output_strides = y.get_layout().stride
 
-        def _as_int(v):
-            try:
-                return int(v)
-            except Exception:
-                return int(V.graph.sizevars.size_hint(v))
+        # Calculate input tile sizes
+        input_tile_sizes_dim = self._calculate_input_tile_sizes(
+            kernel, input_sizes, tile_sizes, num_inputs, rank
+        )
+        buffer_name_to_template_name, input_buffer_names = self._build_buffer_mapping(input_nodes)
+        input_tile_descs, unique_tile_descs = self._build_tile_descriptors(
+            kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank, input_buffer_names
+        )
+        y_tile_desc = self._build_output_tile_desc(
+            kernel, input_tile_sizes_dim, tile_sizes, rank
+        )
 
-        x0_rows = _as_int(x0.get_size()[0])
-        x1_rows = _as_int(x1.get_size()[0])
-        x0_cols = _as_int(x0.get_size()[1])
-        x1_cols = _as_int(x1.get_size()[1])
-        y_cols = _as_int(y.get_size()[1])
-        kernel.loop_size = None
+        input_idxs, output_idxs, cumulative_offsets = self._build_index_expressions(
+            input_nodes, input_sizes, output_strides, rank, num_inputs
+        )
 
-        # 2D cat template with contiguous layout.
-        x0_tile_desc = mlir_common.MLIRMultiDimTile([1, 1], kernel.vector_lane, vlane_split_axis=1, vlane_stride=1)
-        x0_tile_desc.set_tile_size_stride([1, 1], [1, 1])
-        x0_tile_desc.set_name("x0_cat_tile")
-        x1_tile_desc = mlir_common.MLIRMultiDimTile([1, 1], kernel.vector_lane, vlane_split_axis=1, vlane_stride=1)
-        x1_tile_desc.set_tile_size_stride([1, 1], [1, 1])
-        x1_tile_desc.set_name("x1_cat_tile")
-        y_tile_desc = mlir_common.MLIRMultiDimTile([1, 1], kernel.vector_lane, vlane_split_axis=1, vlane_stride=1)
-        y_tile_desc.set_tile_size_stride([1, 1], [1, 1])
-        y_tile_desc.set_name("y_cat_tile")
+        # Map unique buffer names to their tile descriptors for template
+        unique_buffer_tile_descs = {}
+        for actual_name, template_name in buffer_name_to_template_name.items():
+            if actual_name in unique_tile_descs:
+                unique_buffer_tile_descs[template_name] = unique_tile_descs[actual_name]
 
-        if self.dim == 0:
-            # Flattened offsets for dim=0 cat.
-            x0_idx = [sympy.Symbol("index0") * x0_cols, sympy.Symbol("index1")]
-            x1_idx = [sympy.Symbol("index2") * x1_cols, sympy.Symbol("index3")]
-            y0_idx = [sympy.Symbol("index0") * y_cols, sympy.Symbol("index1")]
-            y1_idx = [(sympy.Symbol("index2") + x0_rows) * y_cols, sympy.Symbol("index3")]
-        else:
-            # Flattened offsets for dim=1 cat.
-            x0_idx = [sympy.Symbol("index0") * x0_cols, sympy.Symbol("index1")]
-            x1_idx = [sympy.Symbol("index0") * x1_cols, sympy.Symbol("index3")]
-            y0_idx = [sympy.Symbol("index0") * y_cols, sympy.Symbol("index1")]
-            y1_idx = [sympy.Symbol("index0") * y_cols, sympy.Symbol("index3") + x0_cols]
+        names_str = ", ".join(input_buffer_names + ["out_ptr1" if is_out_variant else "Y"])
+        indent_size = 2 + (rank - 1) * 2 + 4
 
         kernel.render_options = dict(
             KERNEL_NAME=self.name,
             kernel=kernel,
-            X0=x0,
-            X1=x1,
             Y=y,
             OUT_DVAR="out_ptr1" if is_out_variant else "Y",
-            NAMES_STR="X0, X1, out_ptr1" if is_out_variant else "X0, X1, Y",
+            NAMES_STR=names_str,
+            INPUT_NAMES=input_nodes,
+            INPUT_BUFFER_NAMES=input_buffer_names,
+            NUM_INPUTS=num_inputs,
+            RANK=rank,
             DIM=self.dim,
-            X0_ROWS=x0_rows,
-            X1_ROWS=x1_rows,
-            ROWS=x0_rows,
-            X0_COLS=x0_cols,
-            X1_COLS=x1_cols,
-            COLS=x0_cols,
-            X0_TILE_DESC=x0_tile_desc,
-            X1_TILE_DESC=x1_tile_desc,
-            Y_TILE_DESC=y_tile_desc,
-            X0_IDX=x0_idx,
-            X1_IDX=x1_idx,
-            Y0_IDX=y0_idx,
-            Y1_IDX=y1_idx,
+            INPUT_SIZES=input_sizes,
+            OUTPUT_SIZES=output_sizes,
+            OUTPUT_DIM=output_dim,
+            TILE_SIZES=tile_sizes,
+            INPUT_TILE_SIZES_DIM=input_tile_sizes_dim,
+            INPUT_TILE_DESCS=input_tile_descs,
+            UNIQUE_BUFFER_TILE_DESCS=unique_buffer_tile_descs,
+            INPUT_IDXS=input_idxs,
+            OUTPUT_IDXS=output_idxs,
+            CUMULATIVE_OFFSETS=cumulative_offsets,
+            INDENT_SIZE=indent_size,
             input_reorder=self.input_reorder,
         )
-        # Needed when epilogue fusion requests set_ranges().
-        kernel.dim_aliasing = {"index0": "index0", "index1": "index1"}
 
-        if hasattr(self.output_node, "node") and hasattr(self.output_node.node, "get_name"):
-            output_node_name = self.output_node.node.get_name()
-        elif hasattr(self.output_node, "get_name"):
-            output_node_name = self.output_node.get_name()
-        else:
-            output_node_name = self.output_node.name
+        self._setup_epilogue_info(kernel, y)
+        code = self._template_from_string(TEMPLATE).render(**kernel.render_options)
+        return code
 
+    def get_tile_candidates(
+        self,
+        kernel: MLIRTemplateKernel,
+        template_buffer_node=None,
+        epilogue_nodes: Optional[List[IRNode]] = None,
+        **kwargs,
+    ):
+        """Generate tile candidates for cat operation. Concat dimension always has tile size 1."""
+        if template_buffer_node is not None:
+            self.output_node = template_buffer_node
+
+        y = self.output_node
+        num_inputs = len(self.input_nodes)
+        output_sizes = [sz for dim, sz in enumerate(y.get_size()) if dim != self.dim]
+        num_non_dim_dims = len(output_sizes)
+
+        if num_non_dim_dims == 0:
+            return [[1]]
+
+        tile_candidates = []
+        dim_tile_candidates = []
+
+        for dim_size in output_sizes:
+            dim_candidates = []
+            max_tile = min(dim_size, kernel.spad_info["spad_size"] // (kernel.vector_lane * kernel.precision * 2 * num_inputs))
+
+            for mult in range(1, max_tile // kernel.vector_lane + 1):
+                tile = mult * kernel.vector_lane
+                if tile <= dim_size:
+                    dim_candidates.append(tile)
+
+            if max_tile > 0:
+                for exp in range(int(math.log2(max_tile)) + 1):
+                    tile = 2 ** exp
+                    if tile <= dim_size and tile not in dim_candidates:
+                        dim_candidates.append(tile)
+
+            if dim_size not in dim_candidates:
+                dim_candidates.append(dim_size)
+
+            dim_tile_candidates.append(sorted(set(dim_candidates))[:5])
+
+        for tile_combo in itertools.product(*dim_tile_candidates):
+            total_elements = math.prod(tile_combo)
+            total_spad_needed = total_elements * (num_inputs + 1) * kernel.precision
+
+            if total_spad_needed <= kernel.spad_info["spad_size"] * kernel.vector_lane:
+                tile_candidates.append(list(tile_combo))
+
+        if not tile_candidates:
+            tile_candidates = [[1] * num_non_dim_dims]
+
+        tile_candidates.sort(key=lambda x: -math.prod(x))
+        return tile_candidates[:4]
+
+    def _calculate_input_tile_sizes(
+        self, kernel, input_sizes, tile_sizes, num_inputs, rank
+    ):
+        """Calculate tile sizes for concat dimension for each input."""
+        non_dim_tile_elements = math.prod(tile_sizes) if tile_sizes else 1
+        non_dim_tile_spad = non_dim_tile_elements * kernel.precision
+        max_spad_per_input = kernel.spad_info["spad_size"] * kernel.vector_lane // 2
+        extra_concat_input = math.ceil(max_spad_per_input / non_dim_tile_spad) - num_inputs
+
+        input_tile_sizes_dim = []
+        for i in range(num_inputs):
+            input_dim_size = input_sizes[i][self.dim]
+            if extra_concat_input > 0 and non_dim_tile_elements > 0:
+                max_tile_dim = min(input_dim_size, extra_concat_input)
+                extra_concat_input -= max_tile_dim
+            else:
+                max_tile_dim = 1
+            input_tile_sizes_dim.append(max_tile_dim)
+        return input_tile_sizes_dim
+
+    def _build_buffer_mapping(self, input_nodes):
+        """Map actual buffer names to template buffer names """
+        buffer_name_to_template_name = {}
+        input_buffer_names = []
+        for x in input_nodes:
+            actual_name = x.get_name()
+            template_name = buffer_name_to_template_name.setdefault(
+                actual_name, f"X{len(buffer_name_to_template_name)}"
+            )
+            input_buffer_names.append(template_name)
+        return buffer_name_to_template_name, input_buffer_names
+
+    def _build_tile_descriptors(
+        self, kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank, input_buffer_names
+    ):
+        """Build tile descriptors for each input."""
+        input_tile_descs = []
+        unique_tile_descs = {}
+
+        for i, x in enumerate(input_nodes):
+            # Build full tile size list for this input
+            full_tile_sizes = []
+            tile_size_idx = 0
+            for d in range(rank):
+                if d != self.dim:
+                    full_tile_sizes.append(tile_sizes[tile_size_idx])
+                    tile_size_idx += 1
+                else:
+                    full_tile_sizes.append(input_tile_sizes_dim[i])
+
+            tile_desc = mlir_common.MLIRMultiDimTile(
+                full_tile_sizes,
+                kernel.vector_lane,
+                vlane_split_axis=rank - 1,
+                vlane_stride=1
+            )
+            tile_desc.set_tile_size(full_tile_sizes)
+            template_buffer_name = input_buffer_names[i]
+            tile_desc.set_name(f"{template_buffer_name.lower()}_cat_tile")
+            input_tile_descs.append(tile_desc)
+
+            # Store unique tile desc by actual buffer name
+            actual_name = x.get_name()
+            if actual_name not in unique_tile_descs:
+                unique_tile_descs[actual_name] = tile_desc
+
+        return input_tile_descs, unique_tile_descs
+
+    def _build_index_expressions(
+        self, input_nodes, input_sizes, output_strides, rank, num_inputs
+    ):
+        """Build index expressions for input and output."""
+        input_idxs = []
+        output_idxs = []
+        cumulative_offsets = [0]
+        for i in range(num_inputs - 1):
+            cumulative_offsets.append(cumulative_offsets[-1] + input_sizes[i][self.dim])
+
+        for i, x in enumerate(input_nodes):
+            x_stride = x.get_layout().stride
+            input_idx = []
+            output_idx = []
+            for d in range(rank):
+                if d != self.dim:
+                    input_idx_symbol = sympy.Symbol(f"index{d}")
+                    output_idx_symbol = sympy.Symbol(f"index{d}")
+                else:
+                    input_idx_symbol = sympy.Symbol(f"index_local{self.dim}_{i}")
+                    output_idx_symbol = sympy.Symbol(f"index{self.dim}_{i}")
+                input_idx.append(input_idx_symbol * x_stride[d])
+                output_idx.append(output_idx_symbol * output_strides[d])
+            input_idxs.append(input_idx)
+            output_idxs.append(output_idx)
+
+        return input_idxs, output_idxs, cumulative_offsets
+
+    def _build_output_tile_desc(self, kernel, input_tile_sizes_dim, tile_sizes, rank):
+        """Build output tile descriptor."""
+        max_output_tile_dim = max(input_tile_sizes_dim) if input_tile_sizes_dim else 1
+        output_full_tile_sizes = []
+        tile_size_idx = 0
+        for d in range(rank):
+            if d != self.dim:
+                output_full_tile_sizes.append(tile_sizes[tile_size_idx])
+                tile_size_idx += 1
+            else:
+                output_full_tile_sizes.append(max_output_tile_dim)
+
+        y_tile_desc = mlir_common.MLIRMultiDimTile(
+            output_full_tile_sizes,
+            kernel.vector_lane,
+            vlane_split_axis=rank - 1,
+            vlane_stride=1
+        )
+        y_tile_desc.set_tile_size(output_full_tile_sizes)
+        y_tile_desc.set_name("y_cat_tile")
+        return y_tile_desc
+
+    def _setup_epilogue_info(self, kernel, y):
+        """Setup epilogue information."""
         if hasattr(y, "get_numel"):
             y_numel = y.get_numel()
         elif hasattr(y, "node") and hasattr(y.node, "get_numel"):
@@ -154,14 +304,5 @@ class MLIRCatTemplate(MLIRTemplate):
         else:
             y_numel = None
 
-        kernel.epilogue_info = dict(
-            output_node=output_node_name,
-            sram_var="y_cat_tile",
-            dram_var=kernel.render_options["OUT_DVAR"],
-            dram_tile_desc=y_tile_desc,
-        )
         if y_numel is not None:
             kernel.exception_nodes[kernel.render_options["OUT_DVAR"]] = {"numel": y_numel}
-
-        code = self._template_from_string(TEMPLATE).render(**kernel.render_options)
-        return code

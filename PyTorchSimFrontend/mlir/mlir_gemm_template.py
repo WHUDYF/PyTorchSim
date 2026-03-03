@@ -105,6 +105,9 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_kernel(inputs=[X, W, Bias], outputs=[Y]
 class MLIRGemmTemplate(MLIRTemplate):
     def __init__(self, input_nodes, layout, input_reorder=None):
         super().__init__("kernel", input_nodes, layout, input_reorder)
+        self.support_epilogue_fusion = True
+        self.support_prologue_fusion = True
+        self.support_reduction_fusion = True
 
     def render(self,
                kernel: MLIRTemplateKernel,

@@ -14,7 +14,7 @@ from typing import List, Optional
 from unittest.mock import patch
 
 from torch._inductor.codegen.common import KernelTemplate, CSE, DeferredLine
-from torch._inductor.ir import Buffer, IRNode, TemplateBuffer, ChoiceCaller
+from torch._inductor.ir import Buffer, IRNode, TemplateBuffer, ChoiceCaller, ir_node_to_tensor
 from torch._inductor.select_algorithm import PartialRender
 from torch._inductor.codegen.cuda.cuda_kernel import CUDATemplateCaller
 from torch._inductor.autotune_process import TensorMeta
@@ -124,6 +124,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         self.epilogue_buffer_group = IndentedBufferGroup(self, prefix="epilogue_")
         self.global_vars = IndentedBuffer()
         self.exception_nodes = {}
+        self.epilogue_info = {}
         # Reduction data structure
         self.reduction_epilogue_suffix = IndentedBuffer()
         self.reduction_fusion = False
@@ -403,7 +404,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         _, call_args, _, _ = self.kernel_group.args.mlir_argdefs()
         # generate the code to call this
         wrapper.generate_kernel_call(
-            kernel_name if self.outer_func_name is None else self.outer_func_name + f"_{len(call_args)}", call_args)
+            kernel_name if self.outer_func_name is None else "wrapper_" + kernel_name, call_args)
 
     def codegen_template_code(self, render, template_node, prologue_nodes, epilogue_nodes, tile_info):
         with self as kernel:
@@ -460,11 +461,11 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                         }
                         node.codegen((vars, reduction_vars))
 
-            # Codegen epilogue nodes
-            tile_desc = kernel.set_tile_size(kernel.epilogue_info)
-            kernel.kernel_group.set_tile_info(tile_desc)
-            kernel.call_ranges = None
             if epilogue_nodes:
+                # Codegen epilogue nodes
+                tile_desc = kernel.set_tile_size(kernel.epilogue_info)
+                kernel.kernel_group.set_tile_info(tile_desc)
+                kernel.call_ranges = None
                 with kernel.epilogue_buffer_group.as_local():
                     _, (group, reduction_group) = max(
                         epilogue_nodes, key=lambda x: int(x.is_reduction())
@@ -625,7 +626,9 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                     extra_node[node.get_name()] = node.node
                 else:
                     extra_node[node.get_name()] = node
-                self.buffer_names[node.get_name()] = self.epilogue_info['sram_var']
+
+                if 'sram_var' in self.epilogue_info:
+                    self.buffer_names[node.get_name()] = self.epilogue_info['sram_var']
 
         def hook():
             arg_defs, call_args, *_ = self.kernel_group.args.mlir_argdefs(extra_node=extra_node)
@@ -688,7 +691,8 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                 self.kernel_group.args.output_buffers[node.get_name()] = name
                 self.store_buffer_names.add(node.get_name())    #TODO: Is this enough not calling store() in mlir_common.py?
                 self.extra_node[node.get_name()] = node
-                self.buffer_names[node.get_name()] = self.epilogue_info['sram_var']   #TODO: Buffer name fixed
+                if 'sram_var' in self.epilogue_info:
+                    self.buffer_names[node.get_name()] = self.epilogue_info['sram_var']   #TODO: Buffer name fixed
 
         def kernel_hook():
             arg_defs, *_ = self.kernel_group.args.mlir_argdefs(extra_node=self.extra_node)
@@ -1146,6 +1150,15 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return tile_desc
 
 class MLIRTemplateCaller(CUDATemplateCaller):
+    def __init__(self, name, category, input_nodes, layout, make_kernel_render, supports_epilogue_fusion, template, info_kwargs, description):
+        bmreq = MLIRBenchmarkRequest(
+            kernel_name=name,
+            input_tensor_meta=list(),
+            output_tensor_meta=list(),
+            extra_args=[],
+            source_code="",
+        )
+        super().__init__(name, category, input_nodes, layout, make_kernel_render, bmreq, supports_epilogue_fusion, template, info_kwargs, description)
     def __str__(self):
         return f"MLIRTemplateCaller(source_file={self.bmreq.source_file})"
 
@@ -1173,6 +1186,10 @@ class MLIRTemplate(KernelTemplate):
         self.output_nodes = [self.output_node]
         self.input_reorder = input_reorder
         self.layout = layout
+        # Fusion support flags (default to False)
+        self.support_epilogue_fusion = False
+        self.support_prologue_fusion = False
+        self.support_reduction_fusion = False
 
     def generate(self, **kwargs) -> ChoiceCaller:
         kernel_name = f"mlir_{self.name}"
@@ -1184,17 +1201,8 @@ class MLIRTemplate(KernelTemplate):
             code = self.render(kernel=kernel, **kwargs)
 
         kernel_hash_name = f"mlir_{self.name}_{next(self.index_counter)}"
-        extra_args = []
         # create the BenchmarkRequest
         output_nodes = getattr(self, "output_nodes", None) or [self.output_node]
-
-        bmreq = MLIRBenchmarkRequest(
-            kernel_name=kernel_name,
-            input_tensor_meta=TensorMeta.from_irnodes(self.input_nodes),
-            output_tensor_meta=TensorMeta.from_irnodes(output_nodes),
-            extra_args=extra_args,
-            source_code=code,
-        )
 
         def make_kernel_render(
             template_node: TemplateBuffer,
@@ -1236,7 +1244,6 @@ class MLIRTemplate(KernelTemplate):
             self.input_nodes,
             self.output_node.get_layout(),
             make_kernel_render,
-            bmreq,
             False,  # supports_epilogue_fusion
             self,
             kwargs,
