@@ -26,7 +26,7 @@ func.func @{{ KERNEL_NAME }} {{kernel.def_kernel(inputs=INPUT_NAMES, outputs=[Y]
       affine.for %index_local{{ DIM }}_{{ i }} = 0 to {{ INPUT_SIZES[i][DIM] }} step {{ INPUT_TILE_SIZES_DIM[i] }} {
         %index{{ DIM }}_{{i}} = affine.apply affine_map<(d0) -> (d0 + {{ CUMULATIVE_OFFSETS[i] }})> (%index_local{{ DIM }}_{{ i }})
         {{ kernel.def_dma_op("MVIN", INPUT_BUFFER_NAMES[i], INPUT_IDXS[i], INPUT_TILE_DESCS[i], indent_size=INDENT_SIZE) }}
-        {{ kernel.def_dma_op("MVOUT", OUT_DVAR, OUTPUT_IDXS[i], INPUT_TILE_DESCS[i], indent_size=INDENT_SIZE) }}
+        {{ kernel.def_dma_op("MVOUT", OUT_DVAR, OUTPUT_IDXS[i], OUTPUT_TILE_DESCS[i], indent_size=INDENT_SIZE) }}
       } { inner_loop=true }
 {%- endfor %}
 
@@ -52,10 +52,6 @@ class MLIRCatTemplate(MLIRTemplate):
         tile_info=None,
         **kwargs,
     ):
-        is_out_variant = template_buffer_node is not None
-        if is_out_variant:
-            self.output_node = template_buffer_node
-
         # Extract info
         input_nodes = self.input_nodes
         y = self.output_node
@@ -73,11 +69,8 @@ class MLIRCatTemplate(MLIRTemplate):
             kernel, input_sizes, tile_sizes, num_inputs, rank
         )
         buffer_name_to_template_name, input_buffer_names = self._build_buffer_mapping(input_nodes)
-        input_tile_descs, unique_tile_descs = self._build_tile_descriptors(
-            kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank, input_buffer_names
-        )
-        y_tile_desc = self._build_output_tile_desc(
-            kernel, input_tile_sizes_dim, tile_sizes, rank
+        input_tile_descs, output_tile_descs, unique_tile_descs = self._build_tile_descriptors(
+            kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank, input_buffer_names, y
         )
 
         input_idxs, output_idxs, cumulative_offsets = self._build_index_expressions(
@@ -90,14 +83,14 @@ class MLIRCatTemplate(MLIRTemplate):
             if actual_name in unique_tile_descs:
                 unique_buffer_tile_descs[template_name] = unique_tile_descs[actual_name]
 
-        names_str = ", ".join(input_buffer_names + ["out_ptr1" if is_out_variant else "Y"])
+        names_str = ", ".join(input_buffer_names + ["Y"])
         indent_size = 2 + (rank - 1) * 2 + 4
 
         kernel.render_options = dict(
             KERNEL_NAME=self.name,
             kernel=kernel,
             Y=y,
-            OUT_DVAR="out_ptr1" if is_out_variant else "Y",
+            OUT_DVAR="Y",
             NAMES_STR=names_str,
             INPUT_NAMES=input_nodes,
             INPUT_BUFFER_NAMES=input_buffer_names,
@@ -110,6 +103,7 @@ class MLIRCatTemplate(MLIRTemplate):
             TILE_SIZES=tile_sizes,
             INPUT_TILE_SIZES_DIM=input_tile_sizes_dim,
             INPUT_TILE_DESCS=input_tile_descs,
+            OUTPUT_TILE_DESCS=output_tile_descs,
             UNIQUE_BUFFER_TILE_DESCS=unique_buffer_tile_descs,
             INPUT_IDXS=input_idxs,
             OUTPUT_IDXS=output_idxs,
@@ -209,14 +203,16 @@ class MLIRCatTemplate(MLIRTemplate):
         return buffer_name_to_template_name, input_buffer_names
 
     def _build_tile_descriptors(
-        self, kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank, input_buffer_names
+        self, kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank, input_buffer_names, output_node
     ):
-        """Build tile descriptors for each input."""
+        """Build tile descriptors for each input and output."""
         input_tile_descs = []
+        output_tile_descs = []
         unique_tile_descs = {}
+        output_offset = output_node.get_layout().offset
 
         for i, x in enumerate(input_nodes):
-            # Build full tile size list for this input
+            x_offset = x.get_layout().offset
             full_tile_sizes = []
             tile_size_idx = 0
             for d in range(rank):
@@ -226,23 +222,37 @@ class MLIRCatTemplate(MLIRTemplate):
                 else:
                     full_tile_sizes.append(input_tile_sizes_dim[i])
 
-            tile_desc = mlir_common.MLIRMultiDimTile(
+            # Input tile descriptor
+            input_tile_desc = mlir_common.MLIRMultiDimTile(
                 full_tile_sizes,
                 kernel.vector_lane,
                 vlane_split_axis=rank - 1,
                 vlane_stride=1
             )
-            tile_desc.set_tile_size(full_tile_sizes)
+            input_tile_desc.set_tile_size(full_tile_sizes)
             template_buffer_name = input_buffer_names[i]
-            tile_desc.set_name(f"{template_buffer_name.lower()}_cat_tile")
-            input_tile_descs.append(tile_desc)
+            input_tile_desc.set_name(f"{template_buffer_name.lower()}_cat_tile")
+            input_tile_desc.offset = x_offset
+            input_tile_descs.append(input_tile_desc)
+
+            # Output tile descriptor (same as input but with output offset)
+            output_tile_desc = mlir_common.MLIRMultiDimTile(
+                full_tile_sizes,
+                kernel.vector_lane,
+                vlane_split_axis=rank - 1,
+                vlane_stride=1
+            )
+            output_tile_desc.set_tile_size(full_tile_sizes)
+            output_tile_desc.set_name(f"{template_buffer_name.lower()}_cat_tile")
+            output_tile_desc.offset = output_offset
+            output_tile_descs.append(output_tile_desc)
 
             # Store unique tile desc by actual buffer name
             actual_name = x.get_name()
             if actual_name not in unique_tile_descs:
-                unique_tile_descs[actual_name] = tile_desc
+                unique_tile_descs[actual_name] = input_tile_desc
 
-        return input_tile_descs, unique_tile_descs
+        return input_tile_descs, output_tile_descs, unique_tile_descs
 
     def _build_index_expressions(
         self, input_nodes, input_sizes, output_strides, rank, num_inputs
@@ -256,6 +266,12 @@ class MLIRCatTemplate(MLIRTemplate):
 
         for i, x in enumerate(input_nodes):
             x_stride = x.get_layout().stride
+            x_offset = x.get_layout().offset
+            if hasattr(x, 'data') and hasattr(x.data, 'dims'):
+                # In case of PermuteView, the stride is permuted
+                perm_dims = x.data.dims
+                x_stride = [x_stride[perm_dims[d]] for d in range(rank)]
+
             input_idx = []
             output_idx = []
             for d in range(rank):
@@ -271,25 +287,3 @@ class MLIRCatTemplate(MLIRTemplate):
             output_idxs.append(output_idx)
 
         return input_idxs, output_idxs, cumulative_offsets
-
-    def _build_output_tile_desc(self, kernel, input_tile_sizes_dim, tile_sizes, rank):
-        """Build output tile descriptor."""
-        max_output_tile_dim = max(input_tile_sizes_dim) if input_tile_sizes_dim else 1
-        output_full_tile_sizes = []
-        tile_size_idx = 0
-        for d in range(rank):
-            if d != self.dim:
-                output_full_tile_sizes.append(tile_sizes[tile_size_idx])
-                tile_size_idx += 1
-            else:
-                output_full_tile_sizes.append(max_output_tile_dim)
-
-        y_tile_desc = mlir_common.MLIRMultiDimTile(
-            output_full_tile_sizes,
-            kernel.vector_lane,
-            vlane_split_axis=rank - 1,
-            vlane_stride=1
-        )
-        y_tile_desc.set_tile_size(output_full_tile_sizes)
-        y_tile_desc.set_name("y_cat_tile")
-        return y_tile_desc
