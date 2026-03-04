@@ -118,7 +118,6 @@ class MLIRCatTemplate(MLIRTemplate):
             input_reorder=self.input_reorder,
         )
 
-        self._setup_epilogue_info(kernel, y)
         code = self._template_from_string(TEMPLATE).render(**kernel.render_options)
         return code
 
@@ -294,15 +293,3 @@ class MLIRCatTemplate(MLIRTemplate):
         y_tile_desc.set_tile_size(output_full_tile_sizes)
         y_tile_desc.set_name("y_cat_tile")
         return y_tile_desc
-
-    def _setup_epilogue_info(self, kernel, y):
-        """Setup epilogue information."""
-        if hasattr(y, "get_numel"):
-            y_numel = y.get_numel()
-        elif hasattr(y, "node") and hasattr(y.node, "get_numel"):
-            y_numel = y.node.get_numel()
-        else:
-            y_numel = None
-
-        if y_numel is not None:
-            kernel.exception_nodes[kernel.render_options["OUT_DVAR"]] = {"numel": y_numel}

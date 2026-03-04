@@ -813,7 +813,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             if dram_var in self.exception_nodes:
                 numel = self.exception_nodes[dram_var]["numel"]
             else:
-                numel = self.get_arg_info(self.named_nodes[dram_var].get_name()).get_numel()
+                numel = self.named_nodes[dram_var].get_numel()
             mlir_dtype = mlir_common.DTYPE_TO_MLIR[node_layout.dtype]
             dram_shape = f"memref<{numel}x{mlir_dtype}>"
             dram_stride = []
