@@ -112,7 +112,8 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         self.outer_func_name = outer_func_name
         self.outer_func_render = outer_func_render
         self.kernel_arg_attributes = kernel_arg_attributes
-        self.render_hooks = OrderedDict()
+        self.render_hooks = OrderedDict()  # Stores {key: (priority, hook)}
+        self.dma_op_counter = itertools.count()  # Add counter for unique DMA op keys
         self.buffer_names = dict()
         self.render_options = dict()
         self.tile_size = []
@@ -555,7 +556,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             dram_var = self.epilogue_info["dram_var"]
             index_list = self.epilogue_info["dram_idx"]
             tile_desc = self.epilogue_info["dram_tile_desc"]
-            code = self.def_dma_op("MVOUT", dram_var, index_list, tile_desc)
+            code = self.def_dma_op("MVOUT", dram_var, index_list, tile_desc, lazy_mode=False)
             self.cse.generate(self.dma_stores, code, assignment = False)
 
         body = IndentedBuffer()
@@ -653,7 +654,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             return f"({', '.join(renamed_arg_defs)})"
 
         assert "<DEF_KERNEL>" not in self.render_hooks
-        self.render_hooks["<DEF_KERNEL>"] = hook
+        self.render_hooks["<DEF_KERNEL>"] = (5, hook)  # Default priority 5
         return "<DEF_KERNEL>"
 
     # This function is a temporal function for convolution because currently convolution kernel is not considering padding.
@@ -700,7 +701,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             return f"({', '.join(arg_defs)})"
 
         assert "<DEF_CONV_KERNEL>" not in self.render_hooks
-        self.render_hooks["<DEF_CONV_KERNEL>"] = kernel_hook
+        self.render_hooks["<DEF_CONV_KERNEL>"] = (5, kernel_hook)  # Default priority 5
         return "<DEF_CONV_KERNEL>"
 
     # This function is for convolution wrapper function finalizing.
@@ -711,7 +712,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             return f"({', '.join(wrapper_arg_defs)})"
 
         if "<DEF_CONV_WRAPPER>" not in self.render_hooks:
-            self.render_hooks["<DEF_CONV_WRAPPER>"] = wrapper_hook
+            self.render_hooks["<DEF_CONV_WRAPPER>"] = (5, wrapper_hook)  # Default priority 5
         return "<DEF_CONV_WRAPPER>"
 
     def get_conv_inputs(self):
@@ -720,15 +721,15 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
     def get_conv_outputs(self):
         return {k: v for k, v in self.kernel_group.args.output_buffers.items() if v != 'REMOVED'}
 
-    def load_input(self, indent_size: int = 0):
+    def load_input(self, indent_size: int = 0, priority: int = 1):
         def hook():
             code = IndentedBuffer()
             prologue_code = self.codegen_prologue_body()
             if prologue_code.getvalue():
                 input_dma_code = self.def_dma_op("MVIN", self.prologue_info["input_dram_var"], self.prologue_info["input_idx"],
-                                self.prologue_info["input_tile_desc"], subtile_size=self.prologue_info["input_subtile_size"], async_type=False)
+                                self.prologue_info["input_tile_desc"], subtile_size=self.prologue_info["input_subtile_size"], async_type=False, lazy_mode=False)
                 weight_dma_code = self.def_dma_op("MVIN", self.prologue_info["weight_dram_var"], self.prologue_info["weight_idx"],
-                                self.prologue_info["weight_tile_desc"], subtile_size=self.prologue_info["weight_subtile_size"], async_type=False)
+                                self.prologue_info["weight_tile_desc"], subtile_size=self.prologue_info["weight_subtile_size"], async_type=False, lazy_mode=False)
                 if (self.prologue_info["is_input_fused"]):
                     code.splice(input_dma_code)
                     code.splice(prologue_code)
@@ -739,58 +740,63 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                     code.splice(input_dma_code)
             else:
                 dma_code = self.def_dma_op("MVIN", self.prologue_info["input_dram_var"], self.prologue_info["input_idx"],
-                                self.prologue_info["input_tile_desc"], subtile_size=self.prologue_info["input_subtile_size"], async_type=False)
+                                self.prologue_info["input_tile_desc"], subtile_size=self.prologue_info["input_subtile_size"], async_type=False, lazy_mode=False)
                 code.splice(dma_code)
                 dma_code = self.def_dma_op("MVIN", self.prologue_info["weight_dram_var"], self.prologue_info["weight_idx"],
-                                self.prologue_info["weight_tile_desc"], subtile_size=self.prologue_info["weight_subtile_size"], async_type=False)
+                                self.prologue_info["weight_tile_desc"], subtile_size=self.prologue_info["weight_subtile_size"], async_type=False, lazy_mode=False)
                 code.splice(dma_code)
             code = textwrap.indent(code.getvalue(), " "*indent_size).strip()
             return code
 
         assert "<PREPARE_INPUT>" not in self.render_hooks
-        self.render_hooks["<PREPARE_INPUT>"] = hook
-        self.render_hooks.move_to_end("<PREPARE_INPUT>", last=False) # Force order to be triggered first
+        self.render_hooks["<PREPARE_INPUT>"] = (priority, hook)
         return "<PREPARE_INPUT>"
 
-    def store_output(self, indent_size: int = 0):
+    def store_output(self, indent_size: int = 0, priority: int = 1):
         def hook():
             epilogue_code = self.codegen_epilogue_body()
             return textwrap.indent(epilogue_code.getvalue(), " "*indent_size).strip()
 
         assert "<STORE_OUTPUT>" not in self.render_hooks
-        self.render_hooks["<STORE_OUTPUT>"] = hook
-        self.render_hooks.move_to_end("<STORE_OUTPUT>", last=False) # Force order to be triggered first
+        self.render_hooks["<STORE_OUTPUT>"] = (priority, hook)
         return "<STORE_OUTPUT>"
 
-    def reduction_output(self, indent_size: int = 0):
+    def reduction_output(self, indent_size: int = 0, priority: int = 5):
         def hook():
             return textwrap.indent(self.reductions_suffix.getvalue(), " "*indent_size).strip()
 
         assert "<REDUCTION_OUTPUT>" not in self.render_hooks
-        self.render_hooks["<REDUCTION_OUTPUT>"] = hook
+        self.render_hooks["<REDUCTION_OUTPUT>"] = (priority, hook)
         return "<REDUCTION_OUTPUT>"
+
+    def _sort_hooks_by_priority(self):
+        """Sort hooks by priority (lower priority executes first)."""
+        sorted_hooks = OrderedDict()
+        for key, (priority, hook) in sorted(self.render_hooks.items(), key=lambda x: x[1][0]):
+            sorted_hooks[key] = hook
+        return sorted_hooks
 
     def def_function(self):
         _, call_args, _, _ = self.kernel_group.args.python_argdefs()
         if self.outer_func_render is not None:
             partial_code, function_name = self.outer_func_render(input_args=call_args)
+
             return PartialRender(
                 partial_code,
-                self.render_hooks,
+                self._sort_hooks_by_priority(),
             ), function_name
         else:
             return None, None
 
-    def def_global_vars(self):
+    def def_global_vars(self, priority: int = 10):
         key = "<GLOBAL_VARS>"
         def hook():
             return textwrap.indent(self.global_vars.getvalue(), "").strip()
 
-        assert key not in self.render_hooks
-        self.render_hooks[key] = hook
+        self.render_hooks[key] = (priority, hook)
         return key
 
-    def def_local_vars(self, indent_size=0):
+    def def_local_vars(self, indent_size=0, priority: int = 10):
         key = "<LOCAL_VARS>"
         def hook():
             code = IndentedBuffer()
@@ -799,52 +805,62 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             code.splice(self.alloc_buffer)
             return textwrap.indent(code.getvalue(), " "*indent_size).strip()
 
-        assert key not in self.render_hooks
-        self.render_hooks[key] = hook
+        self.render_hooks[key] = (priority, hook)
         return key
 
     def def_dma_op(self, dma_type, dram_var:str, index_list:list, tile_desc:mlir_common.MLIRMultiDimTile,
-                   subtile_size:list=[], async_type=None, indent_size=0):
-        # Prepare code block
-        local_code = IndentedBuffer()
-        with self, self.override_buffer_cse(buffer=local_code, cse=self.apply_cse):
-            index_var = self.parse_index_list(index_list, offset=tile_desc.offset)
-            node_layout = self.named_nodes[dram_var].get_layout()
-            if dram_var in self.exception_nodes:
-                numel = self.exception_nodes[dram_var]["numel"]
-            else:
-                numel = self.named_nodes[dram_var].get_numel()
-            mlir_dtype = mlir_common.DTYPE_TO_MLIR[node_layout.dtype]
-            dram_shape = f"memref<{numel}x{mlir_dtype}>"
-            dram_stride = []
-            for idx in index_list:
-                if idx.is_Mul:
-                    dram_stride.append(int(idx.args[0]))
-                elif idx == sympy.Symbol("c0"):
-                    dram_stride.append(0)
-                elif not idx.is_Number:
-                    dram_stride.append(1)
+                   subtile_size:list=[], async_type=None, indent_size=0, priority: int = 5, lazy_mode: bool = True):
+        def generate_dma_code():
+            """Internal method to generate DMA code directly."""
+            local_code = IndentedBuffer()
+            with self, self.override_buffer_cse(buffer=local_code, cse=self.apply_cse):
+                index_var = self.parse_index_list(index_list, offset=tile_desc.offset)
+                node_layout = self.named_nodes[dram_var].get_layout()
+                if dram_var in self.exception_nodes:
+                    numel = self.exception_nodes[dram_var]["numel"]
                 else:
-                    dram_stride.append(0)
+                    numel = self.get_arg_info(self.named_nodes[dram_var].get_name()).get_numel()
+                mlir_dtype = mlir_common.DTYPE_TO_MLIR[node_layout.dtype]
+                dram_shape = f"memref<{numel}x{mlir_dtype}>"
+                dram_stride = []
+                for idx in index_list:
+                    if idx.is_Mul:
+                        dram_stride.append(int(idx.args[0]))
+                    elif idx == sympy.Symbol("c0"):
+                        dram_stride.append(0)
+                    elif not idx.is_Number:
+                        dram_stride.append(1)
+                    else:
+                        dram_stride.append(0)
 
-            sram_var = tile_desc.get_name()
-            tile_shape = tile_desc.get_mlir_shape(mlir_dtype)
-            tile_stride = tile_desc.get_tile_stride()
-            vlane_split_axis = tile_desc.vmap.vlane_split_axis
-            vlane_stride = tile_desc.vmap.vlane_stride
+                    sram_var = tile_desc.get_name()
+                    tile_shape = tile_desc.get_mlir_shape(mlir_dtype)
+                    tile_stride = tile_desc.get_tile_stride()
+                    vlane_split_axis = tile_desc.vmap.vlane_split_axis
+                    vlane_stride = tile_desc.vmap.vlane_stride
 
-            zero_cse = self.get_const_cse(0, "index")
-            sram_index_var = ", ".join([f"%{str(zero_cse)}"]*tile_desc.get_nr_dim())
+                zero_cse = self.get_const_cse(0, "index")
+                sram_index_var = ", ".join([f"%{str(zero_cse)}"]*tile_desc.get_nr_dim())
 
-            attribute_parts = [f"dram_stride={dram_stride}", f"sram_stride={tile_stride}", "padding=0"]
-            if subtile_size:
-                attribute_parts.append(f"subtile_size={subtile_size}, async={int(async_type) if async_type is not None else 1}")
-            attribute = "  {" + ", ".join(attribute_parts) + "}"
-            code = self.get_dma_code(dma_type, vlane_split_axis, vlane_stride, mlir_dtype, dram_var, index_var, sram_var, sram_index_var,
-                                    dram_shape, tile_shape, "")
-            local_code.writeline(code)
-            local_code.writeline(attribute)
-        return textwrap.indent(local_code.getvalue(), " "*indent_size).strip()
+                attribute_parts = [f"dram_stride={dram_stride}", f"sram_stride={tile_stride}", "padding=0"]
+                if subtile_size:
+                    attribute_parts.append(f"subtile_size={subtile_size}, async={int(async_type) if async_type is not None else 1}")
+                attribute = "  {" + ", ".join(attribute_parts) + "}"
+                code = self.get_dma_code(dma_type, vlane_split_axis, vlane_stride, mlir_dtype, dram_var, index_var, sram_var, sram_index_var,
+                                        dram_shape, tile_shape, "")
+                local_code.writeline(code)
+                local_code.writeline(attribute)
+            return textwrap.indent(local_code.getvalue(), " "*indent_size).strip()
+
+        if not lazy_mode:
+            # Immediate mode: generate code directly and return it
+            return generate_dma_code()
+
+        # Lazy mode: register hook and return key
+        dma_op_id = next(self.dma_op_counter)
+        key = f"<DMA_OP_{dma_op_id}>"
+        self.render_hooks[key] = (priority, generate_dma_code)
+        return key
 
     def def_sram_buffer(self, dram_name, tile_desc, id=0, indent_size=0):
         # Prepare code block
@@ -862,7 +878,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
 
         return PartialRender(
             code,
-            self.render_hooks,
+            self._sort_hooks_by_priority(),
         )
 
     def get_spad_size_per_lane(self, tile_m, tile_n):
