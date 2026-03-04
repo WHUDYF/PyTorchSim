@@ -14,6 +14,7 @@ def test_result(name, out, cpu_out, rtol=1e-4, atol=1e-4):
         print("-" * len(message))
         print(message)
         print("-" * len(message))
+        pass
     else:
         print("custom out: ", out.cpu())
         print("cpu out: ", cpu_out)
@@ -31,35 +32,25 @@ def test_scaled_dot_product_attention(device, backends="flash"):
             for n_token in n_token_list:
                 for head_dim in head_dim_list:
                     # Inputs
+                    clear_caches()
                     query = torch.rand(n_batch, n_head, n_token, head_dim, dtype=torch.float32)
                     key = torch.rand(n_batch, n_head, n_token, head_dim, dtype=torch.float32)
                     value = torch.rand(n_batch, n_head, n_token, head_dim, dtype=torch.float32)
 
+                    # With NPU
                     query = query.to(device=device)
                     key = key.to(device=device)
                     value = value.to(device=device)
 
-                    # With NPU
-                    if backends == "flash":
-                        backends = [SDPBackend.FLASH_ATTENTION]
-                    elif backends == "math":
-                        backends = [SDPBackend.MATH]
-                    elif backends == "memory_efficient":
-                        backends = [SDPBackend.EFFICIENT_ATTENTION]
-                    else:
-                        backends = [SDPBackend.FLASH_ATTENTION, SDPBackend.MATH, SDPBackend.EFFICIENT_ATTENTION]
-
-                    with sdpa_kernel(backends=backends):
-                        opt_fn = torch.compile(dynamic=False)(F.scaled_dot_product_attention)
-                        out = opt_fn(query, key, value)
-                    
+                    opt_fn = torch.compile(dynamic=False)(F.scaled_dot_product_attention)
+                    out = opt_fn(query, key, value)
                     out = out.to(device)
 
                     # With CPU
-                    device = torch.device('cpu')
-                    query = query.to(device=device)
-                    key = key.to(device=device)
-                    value = value.to(device=device)
+                    cpu_device = torch.device('cpu')
+                    query = query.to(device=cpu_device)
+                    key = key.to(device=cpu_device)
+                    value = value.to(device=cpu_device)
                     cpu_out = F.scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False)
 
                     name = f"SDPA(n_batch: {n_batch}, n_head: {n_head}, n_token: {n_token}, head_dim: {head_dim})"
@@ -76,9 +67,7 @@ def clear_caches():
     os.environ["TORCHINDUCTOR_CACHE"] = "0"
     FxGraphCache.clear()
 
-if __name__ == "__main__":
-    clear_caches()
-    
+if __name__ == "__main__":    
     device = torch.device('npu:0')
     test_scaled_dot_product_attention(device, backends="flash")
     
