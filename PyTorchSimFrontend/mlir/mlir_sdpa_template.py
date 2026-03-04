@@ -339,6 +339,7 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_kernel(inputs=[query, key, value], outp
           
           // key @ query.t and scaling.
           linalg.matmul 
+            { idx_map = array<i32: 1, 0, -1> }
             ins(%k_buffer2D, %qt_buffer2D : memref<{{ tile_s }}x{{ tile_e }}x{{ data_stype }}, 1>, memref<{{ tile_e }}x{{ tile_l }}x{{ data_stype }}, 1>)
             outs(%mul_buffer : {{ mul_tile_desc.get_mlir_shape(data_stype) }})
 
@@ -451,7 +452,7 @@ class MLIRFlashSDPATemplate(MLIRTemplate):
                prologue_nodes: Optional[List[IRNode]] = None,
                tile_info = None,
                **kwargs):
-        
+    
         # Except for kernel, other arguments are usually None.
         query, key, value, out, q_tensor, k_tensor, v_tensor, out_tensor, b, l, s, e, ev, n_extra_node, n_prologue_node = self.extract_info(template_buffer_node, epilogue_nodes, prologue_nodes)
        
