@@ -15,7 +15,7 @@ from PyTorchSimFrontend.mlir.mlir_conv_mt_template import MLIRConvMultiTileTempl
 from PyTorchSimFrontend.mlir.mlir_conv_sb_template import MLIRConvSingleBatchTemplate
 from PyTorchSimFrontend.mlir.mlir_conv_sbs_template import MLIRConvSingleBatchStridedTemplate
 from PyTorchSimFrontend.mlir.mlir_maxpool_template import MLIRMaxPoolTemplate
-from PyTorchSimFrontend.mlir.mlir_sdpa_template import MLIRFlashSDPATemplate, flash_sdpa_args
+from PyTorchSimFrontend.mlir.mlir_sdpa_template import MLIRFlashSDPATemplate, flash_sdpa_args, calculate_scale
 from PyTorchSimFrontend import extension_config
 
 aten = torch.ops.aten
@@ -44,14 +44,16 @@ def tuned_flash_sdpa(
         query             : TensorBox, 
         key               : TensorBox, 
         value             : TensorBox, 
-        scale             : float, 
+        attn_bias         : Optional[TensorBox] = None,
         dropout_p         : float = 0.0, 
         is_causal         : bool = False, 
-        return_debug_mask : bool =False) -> tuple: 
+        return_debug_mask : bool = False,
+        scale             : Optional[float] = None) -> tuple: 
     
-    print("Enter tuned_flash_sdpa")
-
+    
+    scale = calculate_scale(query, scale)
     N, Hq, H, L, S, E, Ev, layout, query, key, value = flash_sdpa_args(query, key, value)
+    
     mlir_template = MLIRFlashSDPATemplate([query, key, value], layout, scale)
 
     # _scaled_dot_product_flash_attention has to return a tuple which has 9 values
@@ -211,4 +213,4 @@ lowerings.update({getattr(aten._unsafe_index, overload): custom_unsafe_index for
 if extension_config.CONFIG_USE_TIMING_POOLING:
     lowerings.update({getattr(aten.max_pool2d_with_indices, overload): custom_maxpool for overload in aten.max_pool2d_with_indices.overloads()}) # FIXME: maxpool should be implemented as a template
 
-lowerings.update({getattr(aten._scaled_dot_product_flash_attention, overload): tuned_flash_sdpa for overload in aten._scaled_dot_product_flash_attention.overloads()})
+lowerings.update({getattr(aten._scaled_dot_product_fused_attention_overrideable, overload): tuned_flash_sdpa for overload in aten._scaled_dot_product_fused_attention_overrideable.overloads()})

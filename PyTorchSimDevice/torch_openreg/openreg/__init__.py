@@ -66,8 +66,8 @@ def _lazy_init():
         return
 
     # Replace the global C++ binding with our custom dispatcher patch
-    from PyTorchSimFrontend.mlir.mlir_sdpa_template import patched_scaled_dot_product_attention
-    torch._C._nn.scaled_dot_product_attention = patched_scaled_dot_product_attention
+    # from PyTorchSimFrontend.mlir.mlir_sdpa_template import patched_scaled_dot_product_attention
+    # torch._C._nn.scaled_dot_product_attention = patched_scaled_dot_product_attention
     
     torch_openreg._C._init()
     register_interface_for_device(custom_device(), ExtensionDeviceInterface)
