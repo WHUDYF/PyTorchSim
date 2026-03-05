@@ -64,17 +64,30 @@ class MLIRCatTemplate(MLIRTemplate):
         tile_sizes = tile_info if tile_info is not None else [1] * len(output_sizes)
         output_strides = y.get_layout().stride
 
+        excluded_dims = list()
+        max_tiled_dims = 4 - 1
+        if len(tile_sizes) > max_tiled_dims:
+            # Create index:tile_size dictionary and sort by tile_size
+            dim_tile_dict = {idx: sz for idx, sz in enumerate(tile_sizes)}
+            sorted_dims = sorted(dim_tile_dict.items(), key=lambda x: x[1], reverse=True)
+            # Keep top 4 dimensions, exclude the rest
+            excluded_dims = [idx for idx, _ in sorted_dims[max_tiled_dims:]]
+            for idx in excluded_dims:
+                tile_sizes[idx] = 1
+
         # Calculate input tile sizes
         input_tile_sizes_dim = self._calculate_input_tile_sizes(
             kernel, input_sizes, tile_sizes, num_inputs, rank
         )
         buffer_name_to_template_name, input_buffer_names = self._build_buffer_mapping(input_nodes)
         input_tile_descs, output_tile_descs, unique_tile_descs = self._build_tile_descriptors(
-            kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank, input_buffer_names, y
+            kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank, input_buffer_names, y,
+            excluded_dims=excluded_dims
         )
 
         input_idxs, output_idxs, cumulative_offsets = self._build_index_expressions(
-            input_nodes, input_sizes, output_strides, rank, num_inputs
+            input_nodes, input_sizes, output_strides, rank, num_inputs,
+            excluded_dims=excluded_dims
         )
 
         # Map unique buffer names to their tile descriptors for template
@@ -203,9 +216,12 @@ class MLIRCatTemplate(MLIRTemplate):
         return buffer_name_to_template_name, input_buffer_names
 
     def _build_tile_descriptors(
-        self, kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank, input_buffer_names, output_node
+        self, kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank, input_buffer_names, output_node, excluded_dims=None
     ):
         """Build tile descriptors for each input and output."""
+        if excluded_dims is None:
+            excluded_dims = set()
+
         input_tile_descs = []
         output_tile_descs = []
         unique_tile_descs = {}
@@ -217,16 +233,21 @@ class MLIRCatTemplate(MLIRTemplate):
             tile_size_idx = 0
             for d in range(rank):
                 if d != self.dim:
-                    full_tile_sizes.append(tile_sizes[tile_size_idx])
+                    # Skip excluded dimensions
+                    if tile_size_idx not in excluded_dims:
+                        full_tile_sizes.append(tile_sizes[tile_size_idx])
                     tile_size_idx += 1
                 else:
                     full_tile_sizes.append(input_tile_sizes_dim[i])
+
+            # Calculate vlane_split_axis for reduced dimensions
+            vlane_split_axis = len(full_tile_sizes) - 1
 
             # Input tile descriptor
             input_tile_desc = mlir_common.MLIRMultiDimTile(
                 full_tile_sizes,
                 kernel.vector_lane,
-                vlane_split_axis=rank - 1,
+                vlane_split_axis=vlane_split_axis,
                 vlane_stride=1
             )
             input_tile_desc.set_tile_size(full_tile_sizes)
@@ -239,7 +260,7 @@ class MLIRCatTemplate(MLIRTemplate):
             output_tile_desc = mlir_common.MLIRMultiDimTile(
                 full_tile_sizes,
                 kernel.vector_lane,
-                vlane_split_axis=rank - 1,
+                vlane_split_axis=vlane_split_axis,
                 vlane_stride=1
             )
             output_tile_desc.set_tile_size(full_tile_sizes)
@@ -255,9 +276,12 @@ class MLIRCatTemplate(MLIRTemplate):
         return input_tile_descs, output_tile_descs, unique_tile_descs
 
     def _build_index_expressions(
-        self, input_nodes, input_sizes, output_strides, rank, num_inputs
+        self, input_nodes, input_sizes, output_strides, rank, num_inputs, excluded_dims=None
     ):
         """Build index expressions for input and output."""
+        if excluded_dims is None:
+            excluded_dims = set()
+
         input_idxs = []
         output_idxs = []
         cumulative_offsets = [0]
@@ -274,15 +298,21 @@ class MLIRCatTemplate(MLIRTemplate):
 
             input_idx = []
             output_idx = []
+            tile_size_idx = 0
             for d in range(rank):
                 if d != self.dim:
-                    input_idx_symbol = sympy.Symbol(f"index{d}")
-                    output_idx_symbol = sympy.Symbol(f"index{d}")
+                    # Skip excluded dimensions
+                    if tile_size_idx not in excluded_dims:
+                        input_idx_symbol = sympy.Symbol(f"index{d}")
+                        output_idx_symbol = sympy.Symbol(f"index{d}")
+                        input_idx.append(input_idx_symbol * x_stride[d])
+                        output_idx.append(output_idx_symbol * output_strides[d])
+                    tile_size_idx += 1
                 else:
                     input_idx_symbol = sympy.Symbol(f"index_local{self.dim}_{i}")
                     output_idx_symbol = sympy.Symbol(f"index{self.dim}_{i}")
-                input_idx.append(input_idx_symbol * x_stride[d])
-                output_idx.append(output_idx_symbol * output_strides[d])
+                    input_idx.append(input_idx_symbol * x_stride[d])
+                    output_idx.append(output_idx_symbol * output_strides[d])
             input_idxs.append(input_idx)
             output_idxs.append(output_idx)
 
