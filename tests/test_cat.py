@@ -150,13 +150,25 @@ def test_cat_4d_three_inputs(device):
     cpu_out = torch.cat([x.cpu(), y.cpu(), z.cpu()], dim=1)
     _test_result("cat.4d.three_inputs", out, cpu_out, rtol=1e-4, atol=1e-4)
 
+def test_cat_5d(device, dim=0):
+    def cat_5d_fn(a, b):
+        return torch.cat([a, b], dim=dim)
+
+    x = torch.randn(2, 3, 4, 5, 6, device=device)
+    y = torch.randn(3, 3, 4, 5, 6, device=device)
+    opt_fn = torch.compile(dynamic=False)(cat_5d_fn)
+
+    out = opt_fn(x, y)
+
+    cpu_out = torch.cat([x.cpu(), y.cpu()], dim=dim)
+    _test_result("cat.5d.dim0", out, cpu_out, rtol=1e-4, atol=1e-4)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run cat simulation tests")
     parser.add_argument(
         "--case",
         choices=[
-            "default", "out", "4d_dim0", "4d_dim1", "4d_dim2", "4d_dim3",
+            "default", "out", "4d_dim0", "4d_dim1", "4d_dim2", "4d_dim3", "5d"
             "three_inputs", "four_inputs", "4d_three_inputs", "all"
         ],
         default="all",
@@ -184,3 +196,5 @@ if __name__ == "__main__":
         test_cat_four_inputs(device)
     if args.case in ("4d_three_inputs", "all"):
         test_cat_4d_three_inputs(device)
+    if args.case in ("5d", "all"):
+        test_cat_5d(device)

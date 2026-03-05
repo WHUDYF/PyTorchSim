@@ -809,12 +809,18 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return key
 
     def def_dma_op(self, dma_type, dram_var:str, index_list:list, tile_desc:mlir_common.MLIRMultiDimTile,
-                   subtile_size:list=[], async_type=None, indent_size=0, priority: int = 5, lazy_mode: bool = True):
+                   subtile_size:list=[], async_type=None, indent_size=0, priority: int = 5, lazy_mode: bool = True,
+                   dram_stride:list=None, dram_offset=None):
+        # Todo. Remove legacy behavior (i.e., index_list parsing)
         def generate_dma_code():
             """Internal method to generate DMA code directly."""
             local_code = IndentedBuffer()
             with self, self.override_buffer_cse(buffer=local_code, cse=self.apply_cse):
-                index_var = self.parse_index_list(index_list, offset=tile_desc.offset)
+                if dram_offset is not None:
+                    # Use explicitly provided offset (pre-computed MLIR SSA variable name)
+                    index_var = dram_offset
+                else:
+                    index_var = self.parse_index_list(index_list, offset=tile_desc.offset)
                 node_layout = self.named_nodes[dram_var].get_layout()
                 if dram_var in self.exception_nodes:
                     numel = self.exception_nodes[dram_var]["numel"]
@@ -822,27 +828,33 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                     numel = self.get_arg_info(self.named_nodes[dram_var].get_name()).get_numel()
                 mlir_dtype = mlir_common.DTYPE_TO_MLIR[node_layout.dtype]
                 dram_shape = f"memref<{numel}x{mlir_dtype}>"
-                dram_stride = []
-                for idx in index_list:
-                    if idx.is_Mul:
-                        dram_stride.append(int(idx.args[0]))
-                    elif idx == sympy.Symbol("c0"):
-                        dram_stride.append(0)
-                    elif not idx.is_Number:
-                        dram_stride.append(1)
-                    else:
-                        dram_stride.append(0)
 
-                    sram_var = tile_desc.get_name()
-                    tile_shape = tile_desc.get_mlir_shape(mlir_dtype)
-                    tile_stride = tile_desc.get_tile_stride()
-                    vlane_split_axis = tile_desc.vmap.vlane_split_axis
-                    vlane_stride = tile_desc.vmap.vlane_stride
+                if dram_stride is not None:
+                    # Use explicitly provided dram_stride
+                    _dram_stride = dram_stride
+                else:
+                    # Extract dram_stride from index_list (legacy behavior)
+                    _dram_stride = []
+                    for idx in index_list:
+                        if idx.is_Mul:
+                            _dram_stride.append(int(idx.args[0]))
+                        elif idx == sympy.Symbol("c0"):
+                            _dram_stride.append(0)
+                        elif not idx.is_Number:
+                            _dram_stride.append(1)
+                        else:
+                            _dram_stride.append(0)
+
+                sram_var = tile_desc.get_name()
+                tile_shape = tile_desc.get_mlir_shape(mlir_dtype)
+                sram_strides = tile_desc.get_tile_stride()
+                vlane_split_axis = tile_desc.vmap.vlane_split_axis
+                vlane_stride = tile_desc.vmap.vlane_stride
 
                 zero_cse = self.get_const_cse(0, "index")
                 sram_index_var = ", ".join([f"%{str(zero_cse)}"]*tile_desc.get_nr_dim())
 
-                attribute_parts = [f"dram_stride={dram_stride}", f"sram_stride={tile_stride}", "padding=0"]
+                attribute_parts = [f"dram_stride={_dram_stride}", f"sram_stride={sram_strides}", "padding=0"]
                 if subtile_size:
                     attribute_parts.append(f"subtile_size={subtile_size}, async={int(async_type) if async_type is not None else 1}")
                 attribute = "  {" + ", ".join(attribute_parts) + "}"

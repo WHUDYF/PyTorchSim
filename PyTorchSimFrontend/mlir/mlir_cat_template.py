@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Set
 import math
 import itertools
 
@@ -23,10 +23,12 @@ func.func @{{ KERNEL_NAME }} {{kernel.def_kernel(inputs=INPUT_NAMES, outputs=[Y]
 {%- endfor %}
 {%- for i in range(NUM_INPUTS) %}
       // Input tensor{{ i }}
-      affine.for %index_local{{ DIM }}_{{ i }} = 0 to {{ INPUT_SIZES[i][DIM] }} step {{ INPUT_TILE_SIZES_DIM[i] }} {
-        %index{{ DIM }}_{{i}} = affine.apply affine_map<(d0) -> (d0 + {{ CUMULATIVE_OFFSETS[i] }})> (%index_local{{ DIM }}_{{ i }})
-        {{ kernel.def_dma_op("MVIN", INPUT_BUFFER_NAMES[i], INPUT_IDXS[i], INPUT_TILE_DESCS[i], indent_size=INDENT_SIZE) }}
-        {{ kernel.def_dma_op("MVOUT", OUT_DVAR, OUTPUT_IDXS[i], OUTPUT_TILE_DESCS[i], indent_size=INDENT_SIZE) }}
+      affine.for %index_local{{ DIM }}_{{ i }} = 0 to {{ INPUTS[i].sizes[DIM] }} step {{ INPUTS[i].tile_size_dim }} {
+        %index{{ DIM }}_{{ i }} = affine.apply affine_map<(d0) -> (d0 + {{ INPUTS[i].cum_offset }})> (%index_local{{ DIM }}_{{ i }})
+        %input_dram_offset_{{ i }} = affine.apply {{ INPUTS[i].offset_map }}({{ INPUTS[i].offset_vars }})
+        %output_dram_offset_{{ i }} = affine.apply {{ OUTPUTS[i].offset_map }}({{ OUTPUTS[i].offset_vars }})
+        {{ kernel.def_dma_op("MVIN", INPUTS[i].dram_name, [], INPUTS[i].tile_desc, indent_size=INDENT_SIZE, dram_stride=INPUTS[i].dram_strides, dram_offset="input_dram_offset_" ~ i) }}
+        {{ kernel.def_dma_op("MVOUT", "Y", [], OUTPUTS[i].tile_desc, indent_size=INDENT_SIZE, dram_stride=OUTPUTS[i].dram_strides, dram_offset="output_dram_offset_" ~ i) }}
       } { inner_loop=true }
 {%- endfor %}
 
@@ -52,81 +54,84 @@ class MLIRCatTemplate(MLIRTemplate):
         tile_info=None,
         **kwargs,
     ):
-        # Extract info
         input_nodes = self.input_nodes
         y = self.output_node
-        num_inputs = len(self.input_nodes)
+        num_inputs = len(input_nodes)
         rank = len(y.get_size())
 
         input_sizes = [x.get_size() for x in input_nodes]
-        output_sizes = [sz for dim, sz in enumerate(y.get_size()) if dim != self.dim]
-        output_dim = [dim for dim, sz in enumerate(y.get_size()) if dim != self.dim]
-        tile_sizes = tile_info if tile_info is not None else [1] * len(output_sizes)
+        output_sizes = [sz for d, sz in enumerate(y.get_size()) if d != self.dim]
+        output_dim   = [d  for d, _ in enumerate(y.get_size()) if d != self.dim]
         output_strides = y.get_layout().stride
 
-        excluded_dims = list()
-        max_tiled_dims = 4 - 1
-        if len(tile_sizes) > max_tiled_dims:
-            # Create index:tile_size dictionary and sort by tile_size
-            dim_tile_dict = {idx: sz for idx, sz in enumerate(tile_sizes)}
-            sorted_dims = sorted(dim_tile_dict.items(), key=lambda x: x[1], reverse=True)
-            # Keep top 4 dimensions, exclude the rest
-            excluded_dims = [idx for idx, _ in sorted_dims[max_tiled_dims:]]
-            for idx in excluded_dims:
-                tile_sizes[idx] = 1
+        tile_sizes = list(tile_info) if tile_info is not None else [1] * len(output_sizes)
+        excluded_dims = self._compute_excluded_dims(tile_sizes)
 
-        # Calculate input tile sizes
         input_tile_sizes_dim = self._calculate_input_tile_sizes(
             kernel, input_sizes, tile_sizes, num_inputs, rank
         )
-        buffer_name_to_template_name, input_buffer_names = self._build_buffer_mapping(input_nodes)
+        buffer_name_to_template_name, input_dram_names = self._build_buffer_mapping(input_nodes)
         input_tile_descs, output_tile_descs, unique_tile_descs = self._build_tile_descriptors(
-            kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank, input_buffer_names, y,
-            excluded_dims=excluded_dims
+            kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank,
+            input_dram_names, y, excluded_dims=excluded_dims
+        )
+        (input_offset_maps, input_offset_var_strs, input_dram_strides,
+         output_offset_maps, output_offset_var_strs, output_dram_strides,
+         cumulative_offsets) = self._build_dma_info(
+            input_nodes, input_sizes, output_strides, input_tile_descs, output_tile_descs,
+            rank, num_inputs, excluded_dims=excluded_dims
         )
 
-        input_idxs, output_idxs, cumulative_offsets = self._build_index_expressions(
-            input_nodes, input_sizes, output_strides, rank, num_inputs,
-            excluded_dims=excluded_dims
-        )
-
-        # Map unique buffer names to their tile descriptors for template
-        unique_buffer_tile_descs = {}
-        for actual_name, template_name in buffer_name_to_template_name.items():
-            if actual_name in unique_tile_descs:
-                unique_buffer_tile_descs[template_name] = unique_tile_descs[actual_name]
-
-        names_str = ", ".join(input_buffer_names + ["Y"])
+        unique_buffer_tile_descs = {
+            buffer_name_to_template_name[name]: desc
+            for name, desc in unique_tile_descs.items()
+        }
+        names_str = ", ".join(input_dram_names + ["Y"])
         indent_size = 2 + (rank - 1) * 2 + 4
 
+        inputs_info = [
+            dict(
+                dram_name    = input_dram_names[i],
+                sizes        = input_sizes[i],
+                tile_size_dim= input_tile_sizes_dim[i],
+                tile_desc    = input_tile_descs[i],
+                offset_map   = input_offset_maps[i],
+                offset_vars  = input_offset_var_strs[i],
+                dram_strides = input_dram_strides[i],
+                cum_offset   = cumulative_offsets[i],
+            )
+            for i in range(num_inputs)
+        ]
+        outputs_info = [
+            dict(
+                tile_desc    = output_tile_descs[i],
+                offset_map   = output_offset_maps[i],
+                offset_vars  = output_offset_var_strs[i],
+                dram_strides = output_dram_strides[i],
+            )
+            for i in range(num_inputs)
+        ]
+
         kernel.render_options = dict(
-            KERNEL_NAME=self.name,
-            kernel=kernel,
-            Y=y,
-            OUT_DVAR="Y",
-            NAMES_STR=names_str,
-            INPUT_NAMES=input_nodes,
-            INPUT_BUFFER_NAMES=input_buffer_names,
-            NUM_INPUTS=num_inputs,
-            RANK=rank,
-            DIM=self.dim,
-            INPUT_SIZES=input_sizes,
-            OUTPUT_SIZES=output_sizes,
-            OUTPUT_DIM=output_dim,
-            TILE_SIZES=tile_sizes,
-            INPUT_TILE_SIZES_DIM=input_tile_sizes_dim,
-            INPUT_TILE_DESCS=input_tile_descs,
-            OUTPUT_TILE_DESCS=output_tile_descs,
-            UNIQUE_BUFFER_TILE_DESCS=unique_buffer_tile_descs,
-            INPUT_IDXS=input_idxs,
-            OUTPUT_IDXS=output_idxs,
-            CUMULATIVE_OFFSETS=cumulative_offsets,
-            INDENT_SIZE=indent_size,
-            input_reorder=self.input_reorder,
+            KERNEL_NAME           = self.name,
+            kernel                = kernel,
+            NUM_INPUTS            = num_inputs,
+            NAMES_STR             = names_str,
+            Y                     = y,
+            INPUT_NAMES           = input_nodes,
+            RANK                  = rank,
+            DIM                   = self.dim,
+            OUTPUT_SIZES          = output_sizes,
+            OUTPUT_DIM            = output_dim,
+            TILE_SIZES            = tile_sizes,
+            UNIQUE_BUFFER_TILE_DESCS = unique_buffer_tile_descs,
+            INPUTS                = inputs_info,
+            OUTPUTS               = outputs_info,
+            INDENT_SIZE           = indent_size,
+            input_reorder         = self.input_reorder,
         )
 
-        code = self._template_from_string(TEMPLATE).render(**kernel.render_options)
-        return code
+        return self._template_from_string(TEMPLATE).render(**kernel.render_options)
 
     def get_tile_candidates(
         self,
@@ -141,179 +146,217 @@ class MLIRCatTemplate(MLIRTemplate):
 
         y = self.output_node
         num_inputs = len(self.input_nodes)
-        output_sizes = [sz for dim, sz in enumerate(y.get_size()) if dim != self.dim]
-        num_non_dim_dims = len(output_sizes)
+        output_sizes = [sz for d, sz in enumerate(y.get_size()) if d != self.dim]
 
-        if num_non_dim_dims == 0:
+        if not output_sizes:
             return [[1]]
 
-        tile_candidates = []
+        max_tile_total = kernel.spad_info["spad_size"] // (
+            kernel.vector_lane * kernel.precision * 2 * num_inputs
+        )
+
         dim_tile_candidates = []
-
         for dim_size in output_sizes:
-            dim_candidates = []
-            max_tile = min(dim_size, kernel.spad_info["spad_size"] // (kernel.vector_lane * kernel.precision * 2 * num_inputs))
-
+            max_tile = min(dim_size, max_tile_total)
+            candidates = set()
             for mult in range(1, max_tile // kernel.vector_lane + 1):
-                tile = mult * kernel.vector_lane
-                if tile <= dim_size:
-                    dim_candidates.append(tile)
-
+                t = mult * kernel.vector_lane
+                if t <= dim_size:
+                    candidates.add(t)
             if max_tile > 0:
                 for exp in range(int(math.log2(max_tile)) + 1):
-                    tile = 2 ** exp
-                    if tile <= dim_size and tile not in dim_candidates:
-                        dim_candidates.append(tile)
+                    t = 2 ** exp
+                    if t <= dim_size:
+                        candidates.add(t)
+            candidates.add(dim_size)
+            dim_tile_candidates.append(sorted(candidates)[:5])
 
-            if dim_size not in dim_candidates:
-                dim_candidates.append(dim_size)
-
-            dim_tile_candidates.append(sorted(set(dim_candidates))[:5])
-
-        for tile_combo in itertools.product(*dim_tile_candidates):
-            total_elements = math.prod(tile_combo)
-            total_spad_needed = total_elements * (num_inputs + 1) * kernel.precision
-
-            if total_spad_needed <= kernel.spad_info["spad_size"] * kernel.vector_lane:
-                tile_candidates.append(list(tile_combo))
+        tile_candidates = [
+            list(combo)
+            for combo in itertools.product(*dim_tile_candidates)
+            if math.prod(combo) * (num_inputs + 1) * kernel.precision
+               <= kernel.spad_info["spad_size"] * kernel.vector_lane
+        ]
 
         if not tile_candidates:
-            tile_candidates = [[1] * num_non_dim_dims]
+            tile_candidates = [[1] * len(output_sizes)]
 
         tile_candidates.sort(key=lambda x: -math.prod(x))
         return tile_candidates[:4]
 
-    def _calculate_input_tile_sizes(
-        self, kernel, input_sizes, tile_sizes, num_inputs, rank
-    ):
-        """Calculate tile sizes for concat dimension for each input."""
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _compute_excluded_dims(self, tile_sizes: list) -> list:
+        """Return non-tiled dimension indices when rank exceeds the 4-dim limit."""
+        max_tiled = 3
+        if len(tile_sizes) <= max_tiled:
+            return []
+        sorted_dims = sorted(enumerate(tile_sizes), key=lambda x: x[1], reverse=True)
+        excluded = [idx for idx, _ in sorted_dims[max_tiled:]]
+        for idx in excluded:
+            tile_sizes[idx] = 1
+        return excluded
+
+    def _calculate_input_tile_sizes(self, kernel, input_sizes, tile_sizes, num_inputs, rank):
+        """Calculate tile sizes along the concat dimension for each input."""
         non_dim_tile_elements = math.prod(tile_sizes) if tile_sizes else 1
-        non_dim_tile_spad = non_dim_tile_elements * kernel.precision
         max_spad_per_input = kernel.spad_info["spad_size"] * kernel.vector_lane // 2
-        extra_concat_input = math.ceil(max_spad_per_input / non_dim_tile_spad) - num_inputs
+        extra_concat = math.ceil(max_spad_per_input / (non_dim_tile_elements * kernel.precision)) - num_inputs
 
         input_tile_sizes_dim = []
         for i in range(num_inputs):
-            input_dim_size = input_sizes[i][self.dim]
-            if extra_concat_input > 0 and non_dim_tile_elements > 0:
-                max_tile_dim = min(input_dim_size, extra_concat_input)
-                extra_concat_input -= max_tile_dim
+            if extra_concat > 0 and non_dim_tile_elements > 0:
+                tile_dim = min(input_sizes[i][self.dim], extra_concat)
+                extra_concat -= tile_dim
             else:
-                max_tile_dim = 1
-            input_tile_sizes_dim.append(max_tile_dim)
+                tile_dim = 1
+            input_tile_sizes_dim.append(tile_dim)
         return input_tile_sizes_dim
 
     def _build_buffer_mapping(self, input_nodes):
-        """Map actual buffer names to template buffer names """
-        buffer_name_to_template_name = {}
-        input_buffer_names = []
+        """Map actual buffer names to short template names (X0, X1, ...)."""
+        name_map = {}
+        template_names = []
         for x in input_nodes:
-            actual_name = x.get_name()
-            template_name = buffer_name_to_template_name.setdefault(
-                actual_name, f"X{len(buffer_name_to_template_name)}"
-            )
-            input_buffer_names.append(template_name)
-        return buffer_name_to_template_name, input_buffer_names
+            actual = x.get_name()
+            template = name_map.setdefault(actual, f"X{len(name_map)}")
+            template_names.append(template)
+        return name_map, template_names
 
     def _build_tile_descriptors(
-        self, kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank, input_buffer_names, output_node, excluded_dims=None
+        self, kernel, input_nodes, input_sizes, input_tile_sizes_dim, tile_sizes, rank,
+        input_buffer_names, output_node, excluded_dims=None
     ):
-        """Build tile descriptors for each input and output."""
+        """Build tile descriptors for every input (and its paired output)."""
         if excluded_dims is None:
             excluded_dims = set()
 
-        input_tile_descs = []
-        output_tile_descs = []
-        unique_tile_descs = {}
+        def make_tile_desc(tile_sz, vector_lane, name, offset):
+            desc = mlir_common.MLIRMultiDimTile(
+                tile_sz, vector_lane,
+                vlane_split_axis=len(tile_sz) - 1,
+                vlane_stride=1
+            )
+            desc.set_tile_size(tile_sz)
+            desc.set_name(name)
+            desc.offset = offset
+            return desc
+
         output_offset = output_node.get_layout().offset
+        input_tile_descs, output_tile_descs, unique_tile_descs = [], [], {}
 
         for i, x in enumerate(input_nodes):
-            x_offset = x.get_layout().offset
-            full_tile_sizes = []
-            tile_size_idx = 0
+            # Collect tile sizes for tiled dimensions only (skip excluded non-concat dims)
+            tile_sz = []
+            tile_idx = 0
             for d in range(rank):
                 if d != self.dim:
-                    # Skip excluded dimensions
-                    if tile_size_idx not in excluded_dims:
-                        full_tile_sizes.append(tile_sizes[tile_size_idx])
-                    tile_size_idx += 1
+                    if tile_idx not in excluded_dims:
+                        tile_sz.append(tile_sizes[tile_idx])
+                    tile_idx += 1
                 else:
-                    full_tile_sizes.append(input_tile_sizes_dim[i])
+                    tile_sz.append(input_tile_sizes_dim[i])
 
-            # Calculate vlane_split_axis for reduced dimensions
-            vlane_split_axis = len(full_tile_sizes) - 1
+            sram_name = f"{input_buffer_names[i].lower()}_cat_tile"
+            input_tile_descs.append(make_tile_desc(tile_sz, kernel.vector_lane, sram_name, x.get_layout().offset))
+            output_tile_descs.append(make_tile_desc(tile_sz, kernel.vector_lane, sram_name, output_offset))
 
-            # Input tile descriptor
-            input_tile_desc = mlir_common.MLIRMultiDimTile(
-                full_tile_sizes,
-                kernel.vector_lane,
-                vlane_split_axis=vlane_split_axis,
-                vlane_stride=1
-            )
-            input_tile_desc.set_tile_size(full_tile_sizes)
-            template_buffer_name = input_buffer_names[i]
-            input_tile_desc.set_name(f"{template_buffer_name.lower()}_cat_tile")
-            input_tile_desc.offset = x_offset
-            input_tile_descs.append(input_tile_desc)
-
-            # Output tile descriptor (same as input but with output offset)
-            output_tile_desc = mlir_common.MLIRMultiDimTile(
-                full_tile_sizes,
-                kernel.vector_lane,
-                vlane_split_axis=vlane_split_axis,
-                vlane_stride=1
-            )
-            output_tile_desc.set_tile_size(full_tile_sizes)
-            output_tile_desc.set_name(f"{template_buffer_name.lower()}_cat_tile")
-            output_tile_desc.offset = output_offset
-            output_tile_descs.append(output_tile_desc)
-
-            # Store unique tile desc by actual buffer name
             actual_name = x.get_name()
             if actual_name not in unique_tile_descs:
-                unique_tile_descs[actual_name] = input_tile_desc
+                unique_tile_descs[actual_name] = input_tile_descs[-1]
 
         return input_tile_descs, output_tile_descs, unique_tile_descs
 
-    def _build_index_expressions(
-        self, input_nodes, input_sizes, output_strides, rank, num_inputs, excluded_dims=None
+    def _build_dma_info(
+        self, input_nodes, input_sizes, output_strides,
+        input_tile_descs, output_tile_descs,
+        rank, num_inputs, excluded_dims=None
     ):
-        """Build index expressions for input and output."""
+        """Build per-input DRAM offset affine maps and tile strides.
+
+        Three stride concepts are maintained:
+
+        * layout_strides (internal) - raw DRAM buffer strides for every rank
+          dimension, used to compute the flat base-address affine map.
+          These reflect how the tensor is physically laid out in DRAM.
+        * dram_strides (returned,  ``def_dma_op dram_stride=``) - stride in
+          DRAM per *tiled* dimension (excluded dims removed). The DMA engine
+          uses these to walk DRAM when loading/storing a tile.
+        * sram_strides (inside ``def_dma_op``, from tile_desc) - stride in
+          SRAM per tiled dimension. The DMA engine uses these to place data
+          into the SRAM tile buffer.
+
+        Returns:
+            input_offset_maps, input_offset_var_strs, input_dram_strides,
+            output_offset_maps, output_offset_var_strs, output_dram_strides,
+            cumulative_offsets
+        """
         if excluded_dims is None:
             excluded_dims = set()
 
-        input_idxs = []
-        output_idxs = []
+        def make_affine_map(idx_syms, strides, layout_offset):
+            terms = []
+            for j, s in enumerate(strides):
+                s = int(s)
+                if s == 1:
+                    terms.append(f"d{j}")
+                elif s != 0:
+                    terms.append(f"d{j} * {s}")
+            try:
+                off = int(layout_offset)
+            except (TypeError, ValueError):
+                off = 0
+            if off:
+                terms.append(str(off))
+            dim_str = ", ".join(f"d{j}" for j in range(len(idx_syms)))
+            return f"affine_map<({dim_str}) -> ({' + '.join(terms) if terms else '0'})>"
+
         cumulative_offsets = [0]
         for i in range(num_inputs - 1):
             cumulative_offsets.append(cumulative_offsets[-1] + input_sizes[i][self.dim])
 
+        input_offset_maps, input_offset_var_strs, input_dram_strides = [], [], []
+        output_offset_maps, output_offset_var_strs, output_dram_strides = [], [], []
+
         for i, x in enumerate(input_nodes):
             x_stride = x.get_layout().stride
-            x_offset = x.get_layout().offset
             if hasattr(x, 'data') and hasattr(x.data, 'dims'):
-                # In case of PermuteView, the stride is permuted
-                perm_dims = x.data.dims
-                x_stride = [x_stride[perm_dims[d]] for d in range(rank)]
+                # PermuteView: re-order strides according to the permutation
+                perm = x.data.dims
+                x_stride = [x_stride[perm[d]] for d in range(rank)]
 
-            input_idx = []
-            output_idx = []
-            tile_size_idx = 0
+            in_syms, in_layout_strides, in_dram_strides = [], [], []
+            out_syms, out_layout_strides, out_dram_strides = [], [], []
+            tile_idx = 0
+
             for d in range(rank):
                 if d != self.dim:
-                    # Skip excluded dimensions
-                    if tile_size_idx not in excluded_dims:
-                        input_idx_symbol = sympy.Symbol(f"index{d}")
-                        output_idx_symbol = sympy.Symbol(f"index{d}")
-                        input_idx.append(input_idx_symbol * x_stride[d])
-                        output_idx.append(output_idx_symbol * output_strides[d])
-                    tile_size_idx += 1
+                    in_syms.append(sympy.Symbol(f"index{d}"))
+                    in_layout_strides.append(int(x_stride[d]))
+                    out_syms.append(sympy.Symbol(f"index{d}"))
+                    out_layout_strides.append(int(output_strides[d]))
+                    if tile_idx not in excluded_dims:
+                        in_dram_strides.append(int(x_stride[d]))
+                        out_dram_strides.append(int(output_strides[d]))
+                    tile_idx += 1
                 else:
-                    input_idx_symbol = sympy.Symbol(f"index_local{self.dim}_{i}")
-                    output_idx_symbol = sympy.Symbol(f"index{self.dim}_{i}")
-                    input_idx.append(input_idx_symbol * x_stride[d])
-                    output_idx.append(output_idx_symbol * output_strides[d])
-            input_idxs.append(input_idx)
-            output_idxs.append(output_idx)
+                    in_syms.append(sympy.Symbol(f"index_local{self.dim}_{i}"))
+                    in_layout_strides.append(int(x_stride[d]))
+                    out_syms.append(sympy.Symbol(f"index{self.dim}_{i}"))
+                    out_layout_strides.append(int(output_strides[d]))
+                    in_dram_strides.append(int(x_stride[d]))
+                    out_dram_strides.append(int(output_strides[d]))
 
-        return input_idxs, output_idxs, cumulative_offsets
+            input_offset_maps.append(make_affine_map(in_syms, in_layout_strides, input_tile_descs[i].offset))
+            input_offset_var_strs.append(", ".join(f"%{s}" for s in in_syms))
+            input_dram_strides.append(in_dram_strides)
+
+            output_offset_maps.append(make_affine_map(out_syms, out_layout_strides, output_tile_descs[i].offset))
+            output_offset_var_strs.append(", ".join(f"%{s}" for s in out_syms))
+            output_dram_strides.append(out_dram_strides)
+
+        return (input_offset_maps, input_offset_var_strs, input_dram_strides,
+                output_offset_maps, output_offset_var_strs, output_dram_strides,
+                cumulative_offsets)
