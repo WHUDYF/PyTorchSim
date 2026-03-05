@@ -161,14 +161,14 @@ class MLIRCatTemplate(MLIRTemplate):
             candidates = set()
             for mult in range(1, max_tile // kernel.vector_lane + 1):
                 t = mult * kernel.vector_lane
-                if t <= dim_size:
+                if t <= dim_size and dim_size % t == 0:
                     candidates.add(t)
             if max_tile > 0:
                 for exp in range(int(math.log2(max_tile)) + 1):
                     t = 2 ** exp
-                    if t <= dim_size:
+                    if t <= dim_size and dim_size % t == 0:
                         candidates.add(t)
-            candidates.add(dim_size)
+            candidates.add(dim_size)  # dim_size always divides itself
             dim_tile_candidates.append(sorted(candidates)[:5])
 
         tile_candidates = [
@@ -322,11 +322,6 @@ class MLIRCatTemplate(MLIRTemplate):
 
         for i, x in enumerate(input_nodes):
             x_stride = x.get_layout().stride
-            if hasattr(x, 'data') and hasattr(x.data, 'dims'):
-                # PermuteView: re-order strides according to the permutation
-                perm = x.data.dims
-                x_stride = [x_stride[perm[d]] for d in range(rank)]
-
             in_syms, in_layout_strides, in_dram_strides = [], [], []
             out_syms, out_layout_strides, out_dram_strides = [], [], []
             tile_idx = 0

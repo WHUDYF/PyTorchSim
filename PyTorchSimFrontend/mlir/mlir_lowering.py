@@ -1,3 +1,4 @@
+import math
 from typing import List, Optional, Sequence
 
 import torch
@@ -205,11 +206,27 @@ def _cat_layout(tensors: Sequence[TensorBox], dim: int) -> ir.Layout:
 def custom_cat_default(tensors: Sequence[TensorBox], dim: int = 0):
     if tensors and dim < 0:
         dim += len(tensors[0].get_size())
-
+    copy_default_lowering = lowerings.get(aten.copy_.default)
+    empty_strided_lowering = lowerings.get(aten.empty_strided.default)
+    new_tensors = []
     for t in tensors:
         t.realize()
-    layout = _cat_layout(tensors, dim)
-    mlir_template = MLIRCatTemplate(list(tensors), layout, dim=dim)
+        # If the tensor is backed by a view (ReinterpretView, PermuteView, etc.),
+        # materialise it into a fresh contiguous FixedLayout buffer so the cat
+        # kernel always receives plain, dense strides.
+        if isinstance(t.data, ir.BaseView):
+            sizes = list(t.get_size())
+            strides = [math.prod(sizes[i + 1:]) for i in range(len(sizes))]
+            new_buf = empty_strided_lowering(
+                sizes, strides, dtype=t.get_dtype(), device=t.get_device()
+            )
+            tt = copy_default_lowering(new_buf, t)
+        else:
+            tt = t
+        new_tensors.append(tt)
+
+    layout = _cat_layout(new_tensors, dim)
+    mlir_template = MLIRCatTemplate(list(new_tensors), layout, dim=dim)
     return mlir_template.generate().output_node()
 
 def _custom_sort_values_impl(
