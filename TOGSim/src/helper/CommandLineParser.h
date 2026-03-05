@@ -19,7 +19,7 @@ class CommandLineParser {
      * Command Line Parser constructor
      */
     CommandLineParser() noexcept {
-        options_description.add_options()("help", "Prints help message");
+        options_description.add_options()("help,h", "Prints help message");
     }
 
     /**
@@ -37,6 +37,12 @@ class CommandLineParser {
      * (Should be called after `parse` method is done`)
      */
     void print_help_message_if_required() const noexcept;
+
+    /**
+     * Prints the help message.
+     * (Can be called to show help for invalid options)
+     */
+    void print_help_message() const noexcept;
 
     /**
      * Add a new command line argument option.
