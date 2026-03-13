@@ -169,9 +169,6 @@ FLASH_SDPA_TEMPLATE = r"""
 // tile_l = {{ tile_l }}
 // tile_s = {{ tile_s }}
 // tile_e = {{ tile_e }}
-// subtile_l = {{ subtile_l }}
-// subtile_s = {{ subtile_s }}
-// subtile_e = {{ subtile_e }}
 {{kernel.def_global_vars()}}
 
 func.func @{{ KERNEL_NAME }}{{kernel.def_kernel(inputs=[query, key, value], outputs=[out], names_str="query, key, value, out", input_reorder=input_reorder)}} {
@@ -210,7 +207,7 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_kernel(inputs=[query, key, value], outp
     affine.for %index3 = 0 to 1 step 1 {
       affine.for %index1 = 0 to {{ l }} step {{ tile_l }} {
         %q_dram_offset = affine.apply {{ q_offset_map }}(%index0, %index1, %index3)
-        {{ kernel.def_dma_op("MVIN", "query", [], q_tile_desc, subtile_size=[1, subtile_l, subtile_e], indent_size=8, dram_stride=q_dram_stride, dram_offset="q_dram_offset") }}
+        {{ kernel.def_dma_op("MVIN", "query", [], q_tile_desc, indent_size=8, dram_stride=q_dram_stride, dram_offset="q_dram_offset") }}
 
         affine.vector_store %v0_l, %out_buffer[0, 0, 0] : {{ out_tile_desc.get_mlir_shape(data_stype) }}, vector<{{ kernel.get_spad_size_per_lane(tile_l, tile_e) }}x{{ data_stype }}>
         affine.vector_store %v_neg_inf_2x, %max_buffer[0, 0] : {{ max_desc.get_mlir_shape(data_stype) }}, vector<2x{{ data_stype }}>
@@ -221,9 +218,9 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_kernel(inputs=[query, key, value], outp
 
         affine.for %index2 = 0 to {{ s }} step {{ tile_s }} {
           %k_dram_offset = affine.apply {{ k_offset_map }}(%index0, %index2, %index3)
-          {{ kernel.def_dma_op("MVIN", "key", [], k_tile_desc, subtile_size=[1, subtile_s, subtile_e], indent_size=10, dram_stride=k_dram_stride, dram_offset="k_dram_offset") }}
+          {{ kernel.def_dma_op("MVIN", "key", [], k_tile_desc, indent_size=10, dram_stride=k_dram_stride, dram_offset="k_dram_offset") }}
           %v_dram_offset = affine.apply {{ v_offset_map }}(%index0, %index2, %index3)
-          {{ kernel.def_dma_op("MVIN", "value", [], v_tile_desc, subtile_size=[1, subtile_s, subtile_e], indent_size=10, dram_stride=v_dram_stride, dram_offset="v_dram_offset") }}
+          {{ kernel.def_dma_op("MVIN", "value", [], v_tile_desc, indent_size=10, dram_stride=v_dram_stride, dram_offset="v_dram_offset") }}
 
           affine.vector_store %v0_s, %mul_buffer[0, 0] : {{ mul_tile_desc.get_mlir_shape(data_stype) }}, vector<{{ kernel.get_spad_size_per_lane(tile_s, tile_l) }}x{{ data_stype }}>
 
@@ -487,9 +484,6 @@ class MLIRFlashSDPATemplate(MLIRTemplate):
             tile_l = tile_l,
             tile_s = tile_s,
             tile_e = tile_e,                   # Tile sizes (sram)
-            subtile_l = subtile_l,
-            subtile_s = subtile_s,
-            subtile_e = subtile_e,             # Subtile sizes (sram)
             data_stype="f32",
             query = query,
             key = key,
@@ -601,12 +595,12 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_kernel(inputs=[query, key, value], outp
     affine.for %blk = 0 to {{ nblk }} step 1 {
       // Reset per-block accumulators for all qsub/dh tiles.
       %qk_offset = affine.apply {{ qk_offset_map }}(%kv)
-      {{ kernel.def_dma_op("MVIN", "query", [], q_tile_desc, subtile_size=[Dh, 1, g_size], indent_size=8, dram_stride=q_dram_stride, dram_offset="qk_offset") }}
+      {{ kernel.def_dma_op("MVIN", "query", [], q_tile_desc, indent_size=8, dram_stride=q_dram_stride, dram_offset="qk_offset") }}
       %q2D_buffer = memref.reinterpret_cast %q_buffer to offset: [0], sizes: [{{ Dh }}, {{ g_size }}], strides: [{{g_size}}, 1] : {{ q_tile_desc.get_mlir_shape(io_stype) }} to memref<{{ Dh }}x{{ g_size }}x{{ io_stype }}, 1>
       affine.for %s0 = 0 to {{ BlkS }} step {{ tile_s }} {
         affine.for %k0 = 0 to {{ Dh }} step {{ tile_e }} {
           %kk_offset = affine.apply {{ kk_offset_map_blk }}(%kv, %s0, %k0)[%blk]
-          {{ kernel.def_dma_op("MVIN", "key", [], k_tile_desc, subtile_size=[1, tile_s, tile_e], indent_size=10, padding=1, dram_stride=k_dram_stride, dram_offset="kk_offset") }}
+          {{ kernel.def_dma_op("MVIN", "key", [], k_tile_desc, indent_size=10, padding=1, dram_stride=k_dram_stride, dram_offset="kk_offset") }}
           %k2D = memref.reinterpret_cast %k_buffer to offset: [0], sizes: [{{ tile_s }}, {{ tile_e }}], strides: [{{ tile_e }},1] : {{ k_tile_desc.get_mlir_shape(io_stype) }} to memref<{{ tile_s }}x{{ tile_e }}x{{ io_stype }}, 1>
           %q2D = memref.reinterpret_cast %q2D_buffer to offset: [%k0], sizes: [{{ tile_e }}, {{ g_size }}], strides: [{{ g_size }}, 1] : memref<{{ Dh }}x{{ g_size }}x{{ io_stype }}, 1> to memref<{{ tile_e }}x{{ g_size }}x{{ io_stype }}, 1>
           linalg.matmul
@@ -824,7 +818,7 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_kernel(inputs=[partial], outputs=[out],
 
     affine.for %blk = 0 to {{ nblk }} {
       %partial_offset = affine.apply {{ partial_offset_map }}(%gh, %blk)
-      {{ kernel.def_dma_op("MVIN", "partial", [], partial_tile_desc, subtile_size=[1, 1, tile_pack], indent_size=8, dram_stride=partial_dram_stride, dram_offset="partial_offset") }}
+      {{ kernel.def_dma_op("MVIN", "partial", [], partial_tile_desc, indent_size=8, dram_stride=partial_dram_stride, dram_offset="partial_offset") }}
       %p = affine.vector_load %partial_buffer[0, 0, 0] : {{ partial_tile_desc.get_mlir_shape("f32") }}, vector<{{ tile_pack }}xf32>
       %p2 = vector.shape_cast %p : vector<{{ tile_pack }}xf32> to vector<2x{{ tile_e }}xf32>
       %o_j = vector.extract %p2[0] : vector<{{ tile_e }}xf32> from vector<2x{{ tile_e }}xf32>
