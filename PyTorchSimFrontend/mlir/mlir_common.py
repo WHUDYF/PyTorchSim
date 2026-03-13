@@ -67,7 +67,7 @@ MLIR_TO_DTYPE = {
 DTYPE_TO_C = {
     torch.float32: "float",
     torch.float64: "double",
-    torch.float16: "half",
+    torch.float16: "uint16_t",
     torch.int64: "int64_t",
     torch.int32: "int32_t",
     torch.int16: "int16_t",
@@ -89,6 +89,12 @@ MLIR_TO_BIT = {
     "bf16": 16,
     "index": 64
 }
+
+def get_dtype_nbytes(dtype):
+    mlir_dtype = DTYPE_TO_MLIR.get(dtype)
+    if mlir_dtype is None or mlir_dtype not in MLIR_TO_BIT:
+        raise NotImplementedError(f"Unsupported dtype for precision calculation: {dtype}")
+    return MLIR_TO_BIT[mlir_dtype] // 8
 
 DTYPE_LOWP_FP = [
     torch.bfloat16,
@@ -173,7 +179,11 @@ class MLIRKernelArgs(common.KernelArgs):
     def mlir_argdefs(self, extra_node=dict()):
         buffer_types = {}
         for x in V.graph.buffers:
-            if not isinstance(x.layout, MultiOutputLayout): # FIXME: MultiOutputLayout should be handled
+            if isinstance(x.layout, MultiOutputLayout):
+                # MultiOutput kernel containers own concrete output nodes in `outputs`.
+                for out in getattr(x, "outputs", []):
+                    buffer_types[out.get_name()] = [out.get_dtype(), out.get_numel(), out.get_size(), out.get_stride()]
+            else:
                 buffer_types[x.get_name()] = [x.get_dtype(), x.get_numel(), x.get_size(), x.get_stride()]
         for name, val in V.graph.graph_inputs.items():
             if isinstance(val, sympy.Expr):
@@ -504,7 +514,7 @@ class MLIRMultiDimTile(TileAdjustMixin):
             vlane_stride=vlane_stride
         )
 
-        self.implicit_dim_size = None
+        self.implicit_dim_size = {}
         self.nr_rdim = 0
         self.offset = sympy.Integer(0) # Dram offset
 
@@ -575,7 +585,6 @@ class BaseMLIRHardwareInfo():
         # Default HW setting
         self.vector_lane = extension_config.vpu_num_lanes
         self.spad_info = extension_config.CONFIG_SPAD_INFO
-        self.precision = extension_config.CONFIG_PRECISION
         self.num_cores = extension_config.CONFIG_NUM_CORES
         self.vlen = extension_config.vpu_vector_length_bits
 
@@ -654,6 +663,11 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
     def indirect_indexing(self, index_var, size, check, wrap_neg):
         raise NotImplementedError()
 
+    def check_bounds(self, expr, size, lower, upper):
+        # MLIR backend currently relies on masked paths for out-of-bounds handling.
+        # Keep this hook as a no-op to satisfy Inductor's check_bounds callback.
+        return
+    
     def codegen_global_init(self):
         raise NotImplementedError()
 
@@ -919,6 +933,10 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 return self.indirect_indexing(index_var, size, check, wrap_neg)
 
             @staticmethod
+            def check_bounds(index, size, lower, upper):
+                return self.check_bounds(index, size, lower, upper)
+
+            @staticmethod
             def load(name: str, index: sympy.Expr):
                 index = self.rename_indexing(index)
                 if name in self.cse.invalidated_stores:
@@ -963,6 +981,10 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             @staticmethod
             def reduction(dtype, src_dtype, reduction_type, value):
                 return self.reduction(dtype, src_dtype, reduction_type, value)
+
+            @staticmethod
+            def check_bounds(index, size, lower, upper):
+                return self.check_bounds(index, size, lower, upper)
 
             @staticmethod
             def _index_expr(tile_size, buffer, renamed_expression, index):

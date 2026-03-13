@@ -1,5 +1,6 @@
 import contextlib
 import sympy
+import sys
 import re
 import os
 from functools import reduce
@@ -110,6 +111,7 @@ class ExtensionWrapperCodegen(wrapper.PythonWrapperCodegen):
                 aten = torch.ops.aten
                 inductor_ops = torch.ops.inductor
                 assert_size_stride = torch._C._dynamo.guards.assert_size_stride
+                assert_alignment = torch._C._dynamo.guards.assert_alignment
                 alloc_from_pool = torch.ops.inductor._alloc_from_pool
                 reinterpret_tensor = torch.ops.inductor._reinterpret_tensor
                 custom_async_compile = CustomAsyncCompile()
@@ -283,7 +285,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         self.gem5_header = IndentedBuffer()
         self.header.writeline("#include <unistd.h>")
         self.header.writeline("#include <stdlib.h>")
-        self.header.writeline("void* __wrap_malloc(size_t size) { return sbrk(size); }")
+        self.header.writeline("void* __wrap_malloc(size_t size) { size = (size + 511UL) & ~511UL; return sbrk(size); }") # Align to 512 bytes
         self.header.writeline("void __wrap_free(void *ptr) { return; }")
         self.reduction_cse = common.CSE(self.newvar_prefix, self.suffix, name_prefix="tmp_acc")
         self.spad_cse = common.CSE(self.newvar_prefix, self.suffix, name_prefix="spad")
@@ -374,9 +376,51 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             expr = expr.replace(target_arg, new_arg)
             indices.append(str(new_arg))
 
-        expr_str = str(expr)
-        if "//" in expr_str:
-            expr_str = expr_str.replace("//", " floordiv ")
+        # Convert ModularIndexing and FloorDiv to sympy expressions
+        # ModularIndexing(x, y, z) means (x // y) % z -> Mod(FloorDiv(x, y), z)
+        # FloorDiv(x, y) means x // y -> will be converted to floordiv in string representation
+        # Use preorder_traversal to find all instances
+        replacements = {}
+        for sub in sympy.preorder_traversal(expr):
+            if isinstance(sub, ModularIndexing):
+                # Convert ModularIndexing to Mod(FloorDiv(...), ...)
+                if sub.args[1] != 1:
+                    floor_div = FloorDiv(sub.args[0], sub.args[1])
+                else:
+                    floor_div = sub.args[0]
+                mod_expr = sympy.Mod(floor_div, sub.args[2])
+                replacements[sub] = mod_expr
+            elif isinstance(sub, FloorDiv):
+                # Keep FloorDiv as is, will be handled in custom string conversion
+                # We need to mark it for special handling
+                pass
+
+        # Apply replacements
+        for old_expr, new_expr in replacements.items():
+            expr = expr.subs(old_expr, new_expr)
+
+        # Custom string conversion for MLIR affine expressions
+        def mlir_str(expr):
+            """Convert sympy expression to MLIR affine expression string"""
+            if isinstance(expr, FloorDiv):
+                return f"({mlir_str(expr.args[0])} floordiv {mlir_str(expr.args[1])})"
+            elif isinstance(expr, sympy.Mod):
+                return f"({mlir_str(expr.args[0])} mod {mlir_str(expr.args[1])})"
+            elif isinstance(expr, sympy.Add):
+                terms = [mlir_str(term) for term in expr.args]
+                return " + ".join(terms)
+            elif isinstance(expr, sympy.Mul):
+                factors = [mlir_str(factor) for factor in expr.args]
+                return " * ".join(factors)
+            elif isinstance(expr, sympy.Symbol):
+                return str(expr)
+            elif expr.is_number:
+                return str(expr)
+            else:
+                # Fallback to string representation
+                return str(expr)
+
+        expr_str = mlir_str(expr)
         return expr_str, indices
 
     def parse_indices(self, expr, comments="", indices=None, indirect_dims=[]) -> common.CSEVariable:
@@ -470,7 +514,6 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         tile_numel_per_lane = local_tile_desc.get_numel_per_lane()
         tile_shape = local_tile_desc.get_mlir_shape(mlir_dtype)
         tile_stride = local_tile_desc.get_tile_stride()
-
         # Compute vector unit size
         vshape = self.kernel_group.tile_desc.get_mlir_vshape(mlir_dtype)
         compute_vec_size = self.kernel_group.tile_desc.get_compute_vec_size()
@@ -697,7 +740,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             self.reset("recompile")
             raise mlir_common.RecompileSignal(f"Index access (tile size {prior_tile_size} is not divisible by {prior_ranges})")
 
-        tile_size = tile_desc.get_tile_size_per_lane()
+        tile_size_per_lane = tile_desc.get_tile_size_per_lane()
         compute_vec_size = tile_desc.get_compute_vec_size()
         strides = tile_desc.get_tile_stride_per_lane()
 
@@ -707,13 +750,13 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
 
         # Create tile_dim index
         dim_list = []
-        for idx in range(len(tile_size)):
+        for idx in range(len(tile_size_per_lane)):
             # Prepare initial values
             offset = tile_desc.vmap.vlane_stride #* strides[idx]
-            outer_sz = tile_size[idx] // tile_desc.vmap.vlane_stride
+            outer_sz = tile_desc.get_tile_size()[idx] // tile_desc.vmap.vlane_stride
             with self.override_buffer_cse(buffer=self.const_buffer, cse=self.const_cse):
                 div_coeff = self.get_const_cse(strides[idx], "index")
-                mod_coeff = self.get_const_cse(tile_size[idx], "index")
+                mod_coeff = self.get_const_cse(tile_size_per_lane[idx], "index")
                 vlane_stride_coeff = self.get_const_cse(tile_desc.vmap.vlane_stride, "index")
                 vlane_outer_coeff = self.get_const_cse(outer_sz, "index")
                 nr_vector_lane = self.get_const_cse(self.vector_lane, "index")
@@ -1017,6 +1060,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 "vlen" : self.vlen,
                 "arg_attributes" : arg_attributes,
                 "autotune" : True,
+                "origins" : {str(i) for node in nodes for i in node.node.origins},
             },
             source_code=src_code,
         )
@@ -1159,22 +1203,33 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 for constraint in sorted_constraints[1:]:
                     index = index.replace(constraint.original_expr, 0)
 
-        # Calculate dram stride
+        # Calculate dram stride in local tile-dim order.
+        # This keeps dram/sram stride rank aligned with tile rank.
+        local_dim_to_axis = {dim: axis for axis, dim in enumerate(local_dims)}
         dram_stride = [0] * local_tile_desc.get_nr_dim()
         if index.is_Symbol:
             dim_idx = int(str(index)[5:])
-            dram_stride[dim_idx] = 1
+            if dim_idx in local_dim_to_axis:
+                dram_stride[local_dim_to_axis[dim_idx]] = 1
         elif index.is_Number:
             pass
         else:
+
             dram_dict = defaultdict(list)
+            implicit_dim_divisors = defaultdict(lambda: sys.maxsize)
             # Assume that div will have high priority than mod
             for arg in index.as_ordered_terms():
                 coeff, dim = arg.as_coeff_mul()
                 if len(dim) == 0:
                     continue
                 real_dim = list(dim[0].free_symbols)[0]
-                dram_dict[str(real_dim)].append(coeff)
+                if dim[0].has(ModularIndexing):
+                    if dim[0].args[1] < implicit_dim_divisors[str(real_dim)]:
+                        implicit_dim_divisors[str(real_dim)] = dim[0].args[1]
+                        dram_dict[str(real_dim)] = [coeff]
+                else:
+                    dram_dict[str(real_dim)].append(coeff)
+
             # Add missing dims if not added
             max_dim = len(self.ranges) if not store_reduction else len(self.ranges) - 1
             for i in range(max_dim):
@@ -1194,6 +1249,9 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                     if not str(sub.args[0]).startswith("index"):
                         continue
                     dim_idx = int((str(sub.args[0])[5:]))
+                    if dim_idx not in local_dim_to_axis:
+                        continue
+                    local_dim_idx = local_dim_to_axis[dim_idx]
                     if int(self.kernel_group.tile_desc.get_tile_size()[dim_idx] % sub.args[1]) != 0:
                         # In this case, need to recompile
                         original_tile = self.kernel_group.tile_desc.get_tile_size()
@@ -1212,7 +1270,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                         # Send recompile signal
                         self.reset("recompile")
                         raise mlir_common.RecompileSignal(f"Tile size {self.kernel_group.tile_desc.get_tile_size()[dim_idx]} is not divisible by {sub.args[1]}")
-                    dim_divisor[dim_idx] = sub.args[1]
+                    dim_divisor[local_dim_idx] = sub.args[1]
 
             # Update dram_stride, just insert 0 next to target dim
             offset = 0
@@ -1366,11 +1424,11 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             value = float(value)
         else:
             value = int(value)
-
-        if value not in self.consts:
-            self.consts[str(value)+dtype] = self.const_cse.generate(self.const_buffer, f"arith.constant {value} : {dtype}")
-            self.register_var_info(self.consts[str(value)+dtype], [1, dtype])
-        return self.consts[str(value)+dtype]
+        key = str(value)+dtype
+        if key not in self.consts:
+            self.consts[key] = self.const_cse.generate(self.const_buffer, f"arith.constant {value} : {dtype}")
+            self.register_var_info(self.consts[key], [1, dtype])
+        return self.consts[key]
 
     def get_tag_cse(self, value=None, shape="memref<1xi32>"):
         if value is None:
@@ -1433,10 +1491,10 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 self.spad_buffer_dict[target_dim] = [sram_var, local_tile_desc.get_tile_size(), tile_numel_per_lane, sram_index_var, tile_shape, vshape]
 
                 # Store the indirect index variable
-                opeartion = "affine.vector_store"
+                target_var = self.cse.varname_map[target_dim]
                 compute_index_var = ",".join(sram_index_var.split(",")[:-1] + [f"%{self.compute_idx}"])
-                line = f"{opeartion} %{target_dim}, %{sram_var}[{compute_index_var}] : {tile_shape}, {vshape}"
-                self.stores.writeline(line)
+                with self.override_buffer_cse(buffer=self.stores):
+                    ops._store(target_var, sram_var, compute_index_var, tile_shape)
             mlir_dtype = vshape.split("x")[1][:-1]
             with self.override_buffer_cse(buffer=target_dma_buffers):
                 out = ops._load(tile_numel_per_lane, mlir_dtype, sram_var, sram_index_var, tile_shape)

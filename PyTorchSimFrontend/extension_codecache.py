@@ -67,8 +67,17 @@ def mlir_compile_command(filename, vectorlane_size, vlen=256):
         f"""
             {extension_config.CONFIG_TORCHSIM_LLVM_PATH}/llc \
                 -relocation-model=pic -march=riscv64 -O3 --stack-size-section \
-                -mattr=+m,+f,+d,+a,+c,+v,+xsfvcp,zvl{vlen}b \
+                -mattr=+m,+f,+d,+a,+c,+v,+zvfh,+xsfvcp,zvl{vlen}b \
+                -filetype=obj \
                 {'--print-after-all' if extension_config.CONFIG_TORCHSIM_DUMP_LLVM_IR else ''} \
+                -O2 {filename}.ll -o {filename}.o
+        """,
+    ).strip(),
+            re.sub(r"[ \n]+", " ",
+        f"""
+            {extension_config.CONFIG_TORCHSIM_LLVM_PATH}/llc \
+                -relocation-model=pic -march=riscv64 -O3 --stack-size-section \
+                -mattr=+m,+f,+d,+a,+c,+v,+zvfh,+xsfvcp,zvl{vlen}b \
                 -O2 {filename}.ll -o {filename}.s
         """,
     ).strip()]
@@ -109,9 +118,10 @@ def mlir_gem5_compile_command(filename, sample_filename, tog_file, vectorlane_si
         f"""
             {extension_config.CONFIG_TORCHSIM_LLVM_PATH}/llc \
                 -relocation-model=pic -march=riscv64 -O3 --stack-size-section \
-                -mattr=+m,+f,+d,+a,+c,+v,+xsfvcp,zvl{vlen}b \
+                -mattr=+m,+f,+d,+a,+c,+v,+zvfh,+xsfvcp,zvl{vlen}b \
+                -filetype=obj \
                 {'--print-after-all' if extension_config.CONFIG_TORCHSIM_DUMP_LLVM_IR else ''} \
-                -O2 {sample_filename}.ll -o {sample_filename}.s
+                -O2 {sample_filename}.ll -o {sample_filename}.o
         """,
     ).strip()]
 
@@ -166,11 +176,13 @@ class MLIRCodeCache:
             opt_cmd = shlex.split(cmds[0])
             translate_cmd = shlex.split(cmds[1])
             llc_cmd = shlex.split(cmds[2])
+            llc_asm_cmd = shlex.split(cmds[3])
             with lock:
                 try:
                     subprocess.check_call(opt_cmd)
                     subprocess.check_call(translate_cmd)
                     subprocess.check_call(llc_cmd)
+                    subprocess.check_call(llc_asm_cmd)
                 except subprocess.CalledProcessError as e:
                     logger.error(f"Command failed with exit code {e.returncode}")
                     logger.error(f"Error output: {e.output.decode() if isinstance(e.output, bytes) else e.output}")
