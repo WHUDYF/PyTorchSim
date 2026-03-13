@@ -16,6 +16,7 @@ from PyTorchSimFrontend.mlir.mlir_conv_mt_template import MLIRConvMultiTileTempl
 from PyTorchSimFrontend.mlir.mlir_conv_sb_template import MLIRConvSingleBatchTemplate
 from PyTorchSimFrontend.mlir.mlir_conv_sbs_template import MLIRConvSingleBatchStridedTemplate
 from PyTorchSimFrontend.mlir.mlir_maxpool_template import MLIRMaxPoolTemplate
+from PyTorchSimFrontend.mlir.mlir_sdpa_template import MLIRFlashSDPATemplate, flash_sdpa_args, calculate_scale
 from PyTorchSimFrontend.mlir.mlir_cat_template import MLIRCatTemplate
 from PyTorchSimFrontend.mlir.mlir_sort_template import MLIRSortTemplate, MLIRStableSortTemplate
 from PyTorchSimFrontend import extension_config
@@ -41,6 +42,28 @@ def tuned_bmm(mat1, mat2, *, layout=None):
     mlir_template = MLIRBMMTemplate([mat1, mat2], layout)
 
     return mlir_template.generate().output_node()
+
+
+def tuned_flash_sdpa(
+        query             : TensorBox, 
+        key               : TensorBox, 
+        value             : TensorBox, 
+        attn_bias         : Optional[TensorBox] = None,
+        dropout_p         : float = 0.0, 
+        is_causal         : bool = False, 
+        return_debug_mask : bool = False,
+        scale             : Optional[float] = None) -> tuple: 
+    
+    
+    scale = calculate_scale(query, scale)
+    N, Hq, H, L, S, E, Ev, layout, query, key, value = flash_sdpa_args(query, key, value)
+    
+    mlir_template = MLIRFlashSDPATemplate([query, key, value], layout, scale)
+
+    # _scaled_dot_product_flash_attention has to return a tuple which has 9 values
+    # since its backward(_scaled_dot_product_flash_attention_backward) needs that values.
+    # (Tensor output, Tensor logsumexp, Tensor cum_seq_q, Tensor cum_seq_k, SymInt max_q, SymInt max_k, Tensor rng_state, Tensor unused, Tensor debug_attn_mask)
+    return (mlir_template.generate().output_node(), None, None, None, None, None, None, None, None)
 
 def conv_layout(
     x: TensorBox,
@@ -286,3 +309,5 @@ lowerings.update({getattr(aten.sort, overload): custom_sort_default for overload
     
 if extension_config.CONFIG_USE_TIMING_POOLING:
     lowerings.update({getattr(aten.max_pool2d_with_indices, overload): custom_maxpool for overload in aten.max_pool2d_with_indices.overloads()}) # FIXME: maxpool should be implemented as a template
+
+lowerings.update({getattr(aten._scaled_dot_product_fused_attention_overrideable, overload): tuned_flash_sdpa for overload in aten._scaled_dot_product_fused_attention_overrideable.overloads()})
