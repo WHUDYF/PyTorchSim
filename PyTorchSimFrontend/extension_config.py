@@ -130,7 +130,7 @@ CONFIG_TLS_MODE = int(os.environ.get('TORCHSIM_TLS_MODE', default=1))
 
 CONFIG_USE_TIMING_POOLING = int(os.environ.get('TORCHSIM_USE_TIMING_POOLING', default=0))
 
-CONFIG_DEBUG_MODE = int(os.environ.get('TORCHSIM_DEBUG_MODE', default=1))
+CONFIG_DEBUG_MODE = int(os.environ.get('TORCHSIM_DEBUG_MODE', default=0))
 
 
 def setup_logger(name=None, level=None):
