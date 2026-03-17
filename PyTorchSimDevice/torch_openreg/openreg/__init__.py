@@ -73,6 +73,11 @@ def _lazy_init():
     register_interface_for_device(custom_device(), ExtensionDeviceInterface)
     _initialized = True
 
+    # Set default SDPA backend to math-only for this device.
+    torch._C._set_sdp_use_flash(False)
+    torch._C._set_sdp_use_overrideable(False)
+    torch._C._set_sdp_use_math(True)
+
     # Create default streams for all devices
     num_devices = device_count()
     for device_idx in range(num_devices):
