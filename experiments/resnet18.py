@@ -1,49 +1,28 @@
-import torch
-import torch._dynamo
-import torch.utils.cpp_extension
-
+import os
+import sys
 import argparse
-import datetime
 
-def run_resnet(batch, config):
-    from torchvision.models import resnet18
-    from Scheduler.scheduler import Scheduler, SchedulerDNNModel, Request
-    scheduler = Scheduler(num_request_queue=1, engine_select=Scheduler.FIFO_ENGINE, togsim_config=config)
-    device = scheduler.execution_engine.module.custom_device()
-    model = resnet18().eval()
-    input = torch.randn(batch, 3, 224, 224).to(device=device)
-    opt_fn = torch.compile(dynamic=False)(model.to(device, memory_format=torch.channels_last))
+base_path = os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim')
+sys.path.insert(0, base_path)
 
-    SchedulerDNNModel.register_model("resnet18", opt_fn)
-    request = Request("resnet18", [input], [], request_queue_idx=0)
-    scheduler.add_request(request, request_time=0)
+import torch
+from torchvision.models import resnet18
+from Simulator.simulator import TOGSimulator
 
-    # Run scheduler
-    while not scheduler.is_finished():
-        with torch.no_grad():
-            scheduler.schedule()
-
-    print("ResNet18 Simulation Done")
+config = os.environ.get('TOGSIM_CONFIG', f'{base_path}/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml')
+os.environ['TOGSIM_CONFIG'] = config
 
 if __name__ == "__main__":
-    import os
-    import sys
-    base_dir = os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim')
-    config = os.environ.get('TORCHSIM_CONFIG', default=f'{base_dir}/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml')
-    config_prefix = config.split('/')[-1].split('.')[0][9:] # extract config name from config path
-    sys.path.append(base_dir)
     args = argparse.ArgumentParser()
     args.add_argument('--batch', type=int, default=1)
-    args.add_argument('--dump_path', type=str, default='results')
     args = args.parse_args()
-    batch = args.batch
-    result_path = os.path.join(base_dir, args.dump_path, config_prefix, f"resnet18_{batch}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}")
-    # setting environment variables
-    os.environ['TORCHSIM_LOG_PATH'] = result_path
-    os.environ['TORCHSIM_USE_TIMING_POOLING'] = "1"
-    # only timing simulation
-    os.environ['TORCHSIM_VALIDATION_MODE'] = "0"
-    if 'pytorchsim_functional_mode' in os.environ:
-        del os.environ['pytorchsim_functional_mode']
 
-    run_resnet(batch, config)
+    device = torch.device("npu:0")
+    model = resnet18().eval().to(device=device, memory_format=torch.channels_last)
+    opt_fn = torch.compile(dynamic=False)(model)
+    model_input = torch.randn(args.batch, 3, 224, 224).to(device=device)
+
+    with TOGSimulator(config_path=config):
+        torch.npu.launch_model(opt_fn, model_input, stream_index=0, timestamp=0)
+        torch.npu.synchronize()
+    print("ResNet18 Simulation Done")

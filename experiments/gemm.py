@@ -1,51 +1,32 @@
-import torch
-import torch._dynamo
-import torch.utils.cpp_extension
-
+import os
+import sys
 import argparse
-import datetime
 
+base_path = os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim')
+sys.path.insert(0, base_path)
 
-def run_matmul(input_size, hidden_size, output_size, config):
-    from Scheduler.scheduler import Scheduler, SchedulerDNNModel, Request
-    def custom_matmul(a, b):
-        return torch.matmul(a, b)
-    scheduler = Scheduler(num_request_queue=1, engine_select=Scheduler.FIFO_ENGINE, togsim_config=config)
-    device = scheduler.execution_engine.module.custom_device()
-    torch.manual_seed(0)
-    input = torch.randn(input_size, hidden_size).to(device=device)
-    weight = torch.randn(hidden_size, output_size).to(device=device)
-    opt_fn = torch.compile(dynamic=False)(custom_matmul)
+import torch
+from Simulator.simulator import TOGSimulator
 
-    SchedulerDNNModel.register_model("GEMM", opt_fn)
-    request = Request("GEMM", [input, weight], [], request_queue_idx=0)
-    scheduler.add_request(request, request_time=0)
+config = os.environ.get('TOGSIM_CONFIG', f'{base_path}/configs/systolic_ws_128x128_c2_simple_noc_tpuv4.yml')
+os.environ['TOGSIM_CONFIG'] = config
 
-    # Run scheduler
-    while not scheduler.is_finished():
-        scheduler.schedule()
-
-    print(f"GEMM {input_size}x{hidden_size}x{output_size} (MxKxN) Simulation Done")
+def matmul_fn(a, b):
+    return torch.matmul(a, b)
 
 if __name__ == "__main__":
-    import os
-    import sys
-    base_dir = os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim')
-    config = os.environ.get('TORCHSIM_CONFIG', default=f'{base_dir}/configs/systolic_ws_128x128_c2_simple_noc_tpuv4.yml')
-    config_prefix = config.split('/')[-1].split('.')[0][9:] # extract config name from config path
-    sys.path.append(base_dir)
     args = argparse.ArgumentParser()
     args.add_argument('--size', nargs='+', type=int, default=[128, 128, 128], help='M K N')
-    args.add_argument('--dump_path', type=str, default='results')
     args = args.parse_args()
-    size = args.size
-    size_str = "x".join([str(i) for i in size])
-    result_path = os.path.join(base_dir, args.dump_path, config_prefix, f"GEMM_{size_str}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}")
-    # setting environment variables
-    os.environ['TORCHSIM_LOG_PATH'] = result_path
-    # only timing simulation
-    os.environ['TORCHSIM_VALIDATION_MODE'] = "0"
-    if 'pytorchsim_functional_mode' in os.environ:
-        del os.environ['pytorchsim_functional_mode']
+    M, K, N = args.size[0], args.size[1], args.size[2]
 
-    run_matmul(size[0], size[1], size[2], config)
+    device = torch.device("npu:0")
+    torch.manual_seed(0)
+    input_a = torch.randn(M, K).to(device=device)
+    input_b = torch.randn(K, N).to(device=device)
+    opt_fn = torch.compile(dynamic=False)(matmul_fn)
+
+    with TOGSimulator(config_path=config):
+        torch.npu.launch_model(opt_fn, input_a, input_b, stream_index=0, timestamp=0)
+        torch.npu.synchronize()
+    print(f"GEMM {M}x{K}x{N} (MxKxN) Simulation Done")
