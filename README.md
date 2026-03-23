@@ -414,7 +414,7 @@ export TORCHSIM_USE_TIMING_POOLING=0 # use lightweight pooling for timing
 ```
 You can set TOGSim config path as below.
 ```bash
-export TORCHSIM_CONFIG=/workspace/PyTorchSim/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml
+export TOGSIM_CONFIG=/workspace/PyTorchSim/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml
 ```
 ## Future Works
 Currently, PyTorchSim supports PyTorch 2.2. Support for newer versions will be added soon.

@@ -241,7 +241,7 @@ if __name__ == "__main__":
 
     base_dir = os.environ.get("TORCHSIM_DIR", default="/workspace/PyTorchSim")
     config = os.environ.get(
-        "TORCHSIM_CONFIG",
+        "TOGSIM_CONFIG",
         default=f"{base_dir}/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml",
     )
     args = argparse.ArgumentParser()

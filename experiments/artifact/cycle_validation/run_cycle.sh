@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-export TORCHSIM_CONFIG=$TORCHSIM_DIR/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml
+export TOGSIM_CONFIG=$TORCHSIM_DIR/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml
 LOG_DIR=$TORCHSIM_DIR/experiments/artifact/logs
 mkdir -p $LOG_DIR
 

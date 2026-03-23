@@ -32,7 +32,7 @@ for i in "${config[@]}"; do
       output=$(bash -c "
         export TORCHSIM_TLS_MODE=0;
         export TORCHSIM_VALIDATION_MODE=1;
-        export TORCHSIM_CONFIG=$config_path;
+        export TOGSIM_CONFIG=$config_path;
         export AUTOTUNE=0;
         printenv;
         python3 $workload 2> /dev/null | $TORCHSIM_DIR/experiments/artifact/speedup/scripts/ils_parser.sh
