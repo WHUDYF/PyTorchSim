@@ -33,7 +33,7 @@ if __name__ == "__main__":
     custom_conv = conv2d_fn(batch_size, i_h, i_w, i_c, o_c, kernel_size, stride, padding)
     opt_fn = torch.compile(dynamic=False)(custom_conv)
 
-    with TOGSimulator(config_path=config):
+    with TOGSimulator(config_path=config), torch.no_grad():
         torch.npu.launch_model(opt_fn, conv_input, conv_kernel, conv_bias, stream_index=0, timestamp=0)
         torch.npu.synchronize()
     print(f"CONV {batch_size}_{i_h}_{i_w}_{i_c}_{o_c}_{kernel_size}_{stride}_{padding} Simulation Done")

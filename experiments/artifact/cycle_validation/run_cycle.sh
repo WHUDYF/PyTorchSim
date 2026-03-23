@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-export TOGSIM_CONFIG=$TORCHSIM_DIR/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml
+export TOGSIM_CONFIG=$TORCHSIM_DIR/configs/systolic_ws_128x128_c1_simple_noc_tpuv3_timing_only.yml
 LOG_DIR=$TORCHSIM_DIR/experiments/artifact/logs
 mkdir -p $LOG_DIR
 
@@ -33,16 +33,6 @@ for sz in \
   python3 $TORCHSIM_DIR/experiments/conv.py --size $sz | tee $LOG_DIR/${name}.log
 done
 
-# Attention
-for sz in "12 512 64" "16 512 64" "32 512 64"; do
-  name="attention_${sz// /x}"
-  echo ""
-  echo "==================================================="
-  echo "[*] Running Attention size=$sz"
-  echo "==================================================="
-  python3 $TORCHSIM_DIR/experiments/attention.py --size $sz | tee $LOG_DIR/${name}.log
-done
-
 # LayerNorm
 for sz in "512 768" "2048 768" "8192 768"; do
   name="layernorm_${sz// /x}"
@@ -61,6 +51,16 @@ for sz in "512 512" "2048 2048" "8192 8192"; do
   echo "[*] Running Softmax size=$sz"
   echo "==================================================="
   python3 $TORCHSIM_DIR/experiments/softmax.py --size $sz | tee $LOG_DIR/${name}.log
+done
+
+# Attention
+for sz in "12 512 64" "16 512 64" "32 512 64"; do
+  name="attention_${sz// /x}"
+  echo ""
+  echo "==================================================="
+  echo "[*] Running Attention size=$sz"
+  echo "==================================================="
+  python3 $TORCHSIM_DIR/experiments/attention.py --size $sz | tee $LOG_DIR/${name}.log
 done
 
 # ResNet
