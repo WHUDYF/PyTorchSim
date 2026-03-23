@@ -4,7 +4,7 @@ import shlex
 import subprocess
 import torch
 
-from torch._inductor.codecache import get_lock_dir, get_hash, write
+from torch._inductor.codecache import get_hash, write
 from torch._inductor.async_compile import AsyncCompile
 from AsmParser.tog_generator import tog_generator
 from PyTorchSimFrontend.mlir.mlir_caller_codegen import MLIRKernelCallerCodeGen
@@ -21,6 +21,11 @@ def hash_prefix(hash_value):
 
 def get_write_path(src_code):
     return os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(get_hash(src_code.strip())))
+
+
+def get_lock_path(write_path):
+    """Return lock file path for the given write_path (per-source_code lock)."""
+    return os.path.join(write_path, ".compile.lock")
 
 def dump_metadata(args, arg_attributes, path):
     meta_path = os.path.join(path, "meta.txt")
@@ -161,8 +166,8 @@ class MLIRCodeCache:
         gem5_cmds = mlir_gem5_compile_command(new_input_path, sample_mlir_path, raw_tog_path, vectorlane_size)
 
         from filelock import FileLock
-        lock_dir = get_lock_dir()
-        lock = FileLock(os.path.join(lock_dir, key + ".lock"), timeout=LOCK_TIMEOUT)
+        os.makedirs(write_path, exist_ok=True)
+        lock = FileLock(get_lock_path(write_path), timeout=LOCK_TIMEOUT)
 
         if spad_info is not None:
             link_option = f"-Wl,--section-start=.spad=0x{spad_info['spad_vaddr']:x}"
@@ -212,7 +217,7 @@ class MLIRCodeCache:
         gem5_translate_cmd = shlex.split(gem5_cmds[1])
         gem5_llc_cmd = shlex.split(gem5_cmds[2])
 
-        lock = FileLock(os.path.join(lock_dir, key + ".lock"), timeout=LOCK_TIMEOUT)
+        lock = FileLock(get_lock_path(write_path), timeout=LOCK_TIMEOUT)
         with lock:
             try:
                 result = subprocess.check_output(gem5_sample_cmd)
@@ -278,11 +283,10 @@ class CustomAsyncCompile(AsyncCompile):
             # Wait for compilation
             key = future.result()
             from filelock import FileLock
-            lock_dir = get_lock_dir()
-            lock = FileLock(os.path.join(lock_dir, key + ".lock"), timeout=LOCK_TIMEOUT)
+            result_path = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(key))
+            lock = FileLock(get_lock_path(result_path), timeout=LOCK_TIMEOUT)
             with lock:
                 # Run simulator pass
-                result_path = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(key))
                 # Dump arguments and meta data
                 dump_metadata(args, arg_attributes, result_path)
                 runtime_path = FunctionalSimulator.get_runtime_dump_path(result_path)

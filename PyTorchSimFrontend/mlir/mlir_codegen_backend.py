@@ -1091,6 +1091,8 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         return src_code, meta_code
 
     def _prepare_simulator_headers(self, src_code):
+        from filelock import FileLock
+
         write_path = extension_codecache.get_write_path(src_code)
         os.makedirs(write_path, exist_ok=True)
 
@@ -1101,8 +1103,10 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         spad_section_end_symbol = (
             f"int spad_section_end[0] __attribute__ ((section(\".spad\"), aligned({self.spad_info['spad_size']*self.vector_lane})));"
         )
-        write_atomic(spike_write_path, self.header.getvalue() + spad_end_symbol + spad_section_end_symbol)
-        write_atomic(gem5_write_path, self.gem5_header.getvalue())
+        lock = FileLock(extension_codecache.get_lock_path(write_path), timeout=extension_codecache.LOCK_TIMEOUT)
+        with lock:
+            write_atomic(spike_write_path, self.header.getvalue() + spad_end_symbol + spad_section_end_symbol)
+            write_atomic(gem5_write_path, self.gem5_header.getvalue())
 
     def get_arg_info(self, name):
         arg_info = dict()

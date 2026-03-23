@@ -613,18 +613,22 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return src_code, meta_code
 
     def _prepare_simulator_headers(self, src_code):
+        from filelock import FileLock
+
         spad_end_symbol = f"int spad_end[0] __attribute__ ((section(\".spad\")));\n"
         spad_section_end_symbol = f"int spad_section_end[0] __attribute__ ((section(\".spad\"), aligned({self.spad_info['spad_size']*self.vector_lane})));"
 
         write_path = extension_codecache.get_write_path(src_code)
-        if not os.path.exists(write_path):
-            os.makedirs(write_path, exist_ok=True)
+        os.makedirs(write_path, exist_ok=True)
         spike_write_path = os.path.join(write_path, "global_var.h")
         gem5_write_path = os.path.join(write_path, "gem5_global_var.h")
-        if not os.path.exists(spike_write_path):
-            write_atomic(spike_write_path, self.header.getvalue()+spad_end_symbol+spad_section_end_symbol)
-        if not os.path.exists(gem5_write_path):
-            write_atomic(gem5_write_path, self.gem5_header.getvalue())
+
+        lock = FileLock(extension_codecache.get_lock_path(write_path), timeout=extension_codecache.LOCK_TIMEOUT)
+        with lock:
+            if not os.path.exists(spike_write_path):
+                write_atomic(spike_write_path, self.header.getvalue()+spad_end_symbol+spad_section_end_symbol)
+            if not os.path.exists(gem5_write_path):
+                write_atomic(gem5_write_path, self.gem5_header.getvalue())
 
     def codegen_prologue_body(self):
         body = IndentedBuffer()
