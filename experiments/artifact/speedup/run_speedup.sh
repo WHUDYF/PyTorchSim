@@ -1,7 +1,11 @@
 #!/bin/bash
+set -e
+
 LOG_DIR=$TORCHSIM_DIR/experiments/artifact/logs
 CONFIG_DIR="$TORCHSIM_DIR/configs"
-SIMULATOR_BIN="$TORCHSIM_DIR/TOGSim/build/bin/Simulator"
+EXTRACT_TRACE="$TORCHSIM_DIR/experiments/artifact/speedup/scripts/extract_trace_from_log.py"
+TRACE_CACHE_DIR="$TORCHSIM_DIR/experiments/artifact/speedup/trace_cache"
+mkdir -p "$TRACE_CACHE_DIR"
 
 configs=(
     "systolic_ws_128x128_c2_simple_noc_tpuv3.yml"
@@ -25,9 +29,11 @@ output_dir="$TORCHSIM_DIR/experiments/artifact/speedup/results"
 mkdir -p "$output_dir"
 
 echo "[*] Scanning log files in: $LOG_DIR"
+echo "[*] Extracting [TOGSim] Run command and trace from logs"
 echo ""
 
 for log_file in "$LOG_DIR"/*.log; do
+  [[ -f "$log_file" ]] || continue
   filename=$(basename "$log_file")
   workload="${filename%.log}"
 
@@ -36,45 +42,38 @@ for log_file in "$LOG_DIR"/*.log; do
   fi
   echo "==> Workload: $workload"
 
-  declare -a ONNX_ATTR_PAIRS=()
+  # === Extract [TOGSim] Run command from log ===
+  base_cmd=$(grep "\[TOGSim\] Run command:" "$log_file" 2>/dev/null | sed 's/.*\[TOGSim\] Run command: //' | head -1)
+  if [[ -z "$base_cmd" ]]; then
+    echo "    Skipping: no [TOGSim] Run command found in $log_file"
+    continue
+  fi
 
-  # === Grep launch line ===
-  while IFS= read -r line; do
-    if [[ "$line" == launch* ]]; then
-      read -r _ onnx_path attr_path _ <<< "$line"
-      ONNX_ATTR_PAIRS+=("$onnx_path|$attr_path")
-    fi
-  done < "$log_file"
+  # === Get trace file (replace FIFO in command; stored trace or generate from log) ===
+  trace_file=$(python3 "$EXTRACT_TRACE" "$log_file" "$TRACE_CACHE_DIR/${workload}.trace" 2>/dev/null) || true
+  if [[ -z "$trace_file" || ! -f "$trace_file" ]]; then
+    echo "    Skipping: could not extract trace from $log_file"
+    continue
+  fi
 
   # Normal configs
   for config in "${configs[@]}"; do
-    output_file="$output_dir/${workload}_${config}.txt" 
-    echo "Running with config=$config"
-    echo "===== config=$config | model=$workload =====" >> "$output_file"
+    output_file="$output_dir/${workload}_${config}.txt"
+    echo "===== config=$config | model=$workload =====" > "$output_file"
     sum_all_iters=0.0
     iter_count=0
 
-     # === Run 5 iterations ===
     for iter in {1..5}; do
       echo "[Iter $iter] Running simulation for workload=$workload config=$config"
-      cmd=""
-      for pair in "${ONNX_ATTR_PAIRS[@]}"; do
-        IFS="|" read -r onnx_path attr_path <<< "$pair"
-        cmd+=" $SIMULATOR_BIN --config $CONFIG_DIR/$config --models_list $onnx_path --attributes_list $attr_path;"
-      done
+      # Build command: replace --config and --models_list in base_cmd with our config and trace
+      cmd=$(echo "$base_cmd" | sed -E "s|--config [^ ]+|--config $CONFIG_DIR/$config|" | sed -E "s|--models_list [^ ]+|--models_list $trace_file|")
+      echo "$cmd"
+      output=$(bash -c "$cmd" 2>&1) || true
+      sim_time=$(echo "$output" | grep "Wall-clock time for simulation:" | sed -E 's/.*Wall-clock time for simulation: ([0-9]+\.[0-9]+) seconds.*/\1/')
 
-      output=$(bash -c "$cmd")
-      sim_times=$(echo "$output" | grep "Simulation time:" | sed -E 's/.*Simulation time: ([0-9]+\.[0-9]+).*/\1/')
-
-      if [[ -n "$sim_times" ]]; then
-        sum_per_iter=0.0
-        while IFS= read -r sim_time; do
-          echo "Iteration $iter: simulation_time = $sim_time" >> "$output_file"
-          sum_per_iter=$(awk -v a="$sum_per_iter" -v b="$sim_time" 'BEGIN {printf "%.6f", a + b}')
-        done <<< "$sim_times"
-
-        echo "Iteration $iter: total_simulation_time = $sum_per_iter" >> "$output_file"
-        sum_all_iters=$(awk -v a="$sum_all_iters" -v b="$sum_per_iter" 'BEGIN {printf "%.6f", a + b}')
+      if [[ -n "$sim_time" ]]; then
+        echo "Iteration $iter: simulation_time = $sim_time" >> "$output_file"
+        sum_all_iters=$(awk -v a="$sum_all_iters" -v b="$sim_time" 'BEGIN {printf "%.6f", a + b}')
         iter_count=$((iter_count + 1))
       else
         echo "Iteration $iter: No simulation time found." >> "$output_file"

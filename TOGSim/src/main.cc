@@ -115,6 +115,14 @@ int main(int argc, char** argv) {
   // Check if help was requested
   cmd_parser.print_help_message_if_required();
 
+  // Dump full command for copy-paste re-run
+  std::ostringstream cmd_oss;
+  for (int i = 0; i < argc; ++i) {
+    if (i > 0) cmd_oss << " ";
+    cmd_oss << argv[i];
+  }
+  spdlog::info("[TOGSim] Run command: {}", cmd_oss.str());
+
   std::string level = "info";
   cmd_parser.set_if_defined("log_level", &level);
   if (level == "trace")
