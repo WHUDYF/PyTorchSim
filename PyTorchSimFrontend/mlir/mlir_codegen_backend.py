@@ -285,7 +285,13 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         self.gem5_header = IndentedBuffer()
         self.header.writeline("#include <unistd.h>")
         self.header.writeline("#include <stdlib.h>")
-        self.header.writeline("void* __wrap_malloc(size_t size) { size = (size + 511UL) & ~511UL; return sbrk(size); }") # Align to 512 bytes
+        self.header.writeline("#include <stdio.h>")
+        self.header.writeline("void* __wrap_malloc(size_t size) {")  # Align to 512 bytes
+        self.header.writeline("    size_t aligned = (size + 511UL) & ~511UL;")
+        self.header.writeline("    void *p = sbrk(aligned);")
+        #self.header.writeline('    fprintf(stderr, "[SPIKE][__wrap_malloc] addr=%p size=%zu (req=%zu)\\n", p, aligned, size);')
+        self.header.writeline("    return p;")
+        self.header.writeline("}")
         self.header.writeline("void __wrap_free(void *ptr) { return; }")
         self.reduction_cse = common.CSE(self.newvar_prefix, self.suffix, name_prefix="tmp_acc")
         self.spad_cse = common.CSE(self.newvar_prefix, self.suffix, name_prefix="spad")

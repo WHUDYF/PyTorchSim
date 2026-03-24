@@ -1,9 +1,134 @@
 import math
+import operator
+from typing import Optional, Sequence, Tuple, Union
+
 import torch
 import torch.nn.functional as F
 from torch._inductor.decomposition import register_decomposition
 
-aten = torch.ops.aten
+aten = torch.ops.aten  # only for @register_decomposition target
+
+
+def _pair_2d(seq: Sequence[int]) -> Tuple[int, int]:
+    if len(seq) == 1:
+        v = int(seq[0])
+        return v, v
+    return int(seq[0]), int(seq[1])
+
+
+def _group_conv_cin1_cout1(
+    input: torch.Tensor,
+    weight: torch.Tensor,
+    bias: Optional[torch.Tensor],
+    stride: Tuple[int, ...],
+    padding: Tuple[int, ...],
+    dilation: Tuple[int, ...],
+    groups: int,
+) -> torch.Tensor:
+    """
+    Grouped conv with ``Cin//groups == 1`` and ``Cout//groups == 1`` (input ``[N,G,H,W]``, weight ``[G,1,Kh,Kw]``).
+
+    1. Symmetric spatial padding on the input.
+    2. For each kernel position ``(kh, kw)``, gather the output grid from the padded tensor and
+       multiply by ``weight[:, 0, kh, kw]`` (broadcast over ``N``), then sum over ``(kh, kw)``.
+
+    Note
+    ----
+    This is not a performance-optimized kernel: it is explicit gather–multiply–accumulate over
+    kernel elements. For competitive performance, add a dedicated template (or fused) kernel
+    instead of relying on this decomposition.
+    """
+    n, c_in, _, _ = input.shape
+    # PyTorch layout: ``[Cout, Cin/groups, Kh, Kw]`` i.e. ``[G, 1, Kh, Kw]`` here.
+    c_out, cin_pg, kh, kw = weight.shape
+    g = groups
+    assert c_in == g and c_out == g and cin_pg == 1, (c_in, c_out, cin_pg, g)
+
+    sh, sw = _pair_2d(stride)
+    ph, pw = _pair_2d(padding)
+    d_h, d_w = _pair_2d(dilation)
+
+    # (left, right, top, bottom) for last two dims
+    x_pad = F.pad(input, (pw, pw, ph, ph))
+    _, _, hp, wp = x_pad.shape
+
+    h_out = (hp - d_h * (kh - 1) - 1) // sh + 1
+    w_out = (wp - d_w * (kw - 1) - 1) // sw + 1
+
+    out = torch.zeros(n, g, h_out, w_out, dtype=input.dtype, device=input.device)
+    for ki in range(kh):
+        rows = torch.arange(h_out, device=input.device, dtype=torch.long) * sh + ki * d_h
+        for kj in range(kw):
+            cols = torch.arange(w_out, device=input.device, dtype=torch.long) * sw + kj * d_w
+            sub = x_pad[:, :, rows[:, None], cols[None, :]]
+            wgk = weight[:, 0, ki, kj].reshape(1, g, 1, 1)
+            out = out + sub * wgk
+
+    if bias is not None:
+        out = out + bias.reshape(1, g, 1, 1)
+    return out
+
+
+@register_decomposition(aten.convolution.default)
+def decompose_group_convolution(
+    input: torch.Tensor,
+    weight: torch.Tensor,
+    bias: Union[torch.Tensor, None],
+    stride: Sequence[int],
+    padding: Sequence[int],
+    dilation: Sequence[int],
+    transposed: bool,
+    output_padding: Sequence[int],
+    groups: Union[int, torch.SymInt],
+):
+    """
+    Lower grouped ``aten.convolution`` only when each group has a single input and output
+    channel (``Cin//groups == Cout//groups == 1``), via ``_group_conv_cin1_cout1``.
+
+    Note
+    ----
+    The lowered path is not a performance-optimized kernel; it exists for correctness and
+    lowering experiments. For speed, implement a separate template (fused) kernel for group
+    convolution.
+
+    Non-static ``groups`` (cannot ``int()``) falls back: returns ``NotImplemented`` so the
+    default ``aten.convolution`` is used. ``groups==1`` also returns ``NotImplemented``.
+    """
+    try:
+        gcount = operator.index(groups)
+    except (TypeError, ValueError):
+        return NotImplemented
+    # groups==1: do not decompose; Inductor keeps the default aten.convolution (plain conv).
+    if gcount == 1:
+        return NotImplemented
+
+    cin = input.shape[1]
+    cout = weight.shape[0]
+    cin_pg = cin // gcount
+    cout_pg = cout // gcount
+    supported = (
+        not transposed
+        and cin % gcount == 0
+        and cout % gcount == 0
+        and cin_pg == 1
+        and cout_pg == 1
+        and weight.shape[1] == 1
+    )
+    if not supported:
+        raise NotImplementedError(
+            "PyTorchSim aten.convolution decomposition supports grouped conv only when "
+            "Cin//groups == 1 and Cout//groups == 1 (i.e. per-group Cin and Cout are 1). "
+            "For general group convolution, use the default kernel or a dedicated template kernel."
+        )
+    return _group_conv_cin1_cout1(
+        input,
+        weight,
+        bias,
+        tuple(stride),
+        tuple(padding),
+        tuple(dilation),
+        gcount,
+    )
 
 @register_decomposition(aten._native_multi_head_attention.default)
 def decompose_native_multi_head_attention(
