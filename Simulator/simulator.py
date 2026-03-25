@@ -427,28 +427,44 @@ class TOGSimulator():
         if buf_name in cls.ALLOC_POOL:
             del cls.ALLOC_POOL[buf_name]
 
-    def create_attribute_file(self, attribute_path, inputs, **kwargs):
+    @staticmethod
+    def write_kernel_attribute_file(attribute_dir, inputs, alloc_pool=None):
+        """
+        Write kernel attribute YAML (address_info + sram_alloc) under attribute_dir.
+
+        Does not require a TOGSimulator instance. alloc_pool defaults to class ALLOC_POOL.
+
+        Args:
+            attribute_dir: Directory to hold numbered attribute files (created if needed)
+            inputs: Kernel input tensors (data_ptr used for address_info)
+            alloc_pool: Optional dict like ALLOC_POOL; defaults to TOGSimulator.ALLOC_POOL
+
+        Returns:
+            Path to the written YAML file.
+        """
+        if alloc_pool is None:
+            alloc_pool = TOGSimulator.ALLOC_POOL
         address_info = {}
         sram_buffer = {}
         yaml_content = {}
 
-        os.makedirs(attribute_path, exist_ok=True)
-        index = str(len(os.listdir(attribute_path)))
-        attribute_path = os.path.join(attribute_path, index)
+        os.makedirs(attribute_dir, exist_ok=True)
+        index = str(len(os.listdir(attribute_dir)))
+        attribute_file = os.path.join(attribute_dir, index)
 
         for idx, tensor in enumerate(inputs):
             address_info[f"arg{idx}"] = tensor.data_ptr()
         yaml_content["address_info"] = address_info
 
-        for buf_name, range in self.ALLOC_POOL.items():
+        for buf_name, range in alloc_pool.items():
             sram_buffer[buf_name] = range
         yaml_content["sram_alloc"] = sram_buffer
 
-        with open(attribute_path, "w") as f:
+        with open(attribute_file, "w") as f:
             yaml.dump(yaml_content, f, default_flow_style=False)
             f.flush()
-            os.fsync(f.fileno()) # There could be a race condition.
-        return attribute_path
+            os.fsync(f.fileno())
+        return attribute_file
 
     def load_yaml(self, config_path):
         config_path = Path(config_path)

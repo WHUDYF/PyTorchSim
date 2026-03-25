@@ -231,7 +231,7 @@ class PyTorchSimRunner:
         onnx_path = os.path.join(result_path, "tile_graph.onnx")
 
         attribute_path = os.path.join(runtime_path, "attribute")
-        attribute_path = self.tog_simulator.create_attribute_file(attribute_path, inputs)
+        attribute_path = TOGSimulator.write_kernel_attribute_file(attribute_path, inputs)
         return onnx_path, attribute_path
 
     def launch_kernel(self, current_cycle, partion_idx=0):
