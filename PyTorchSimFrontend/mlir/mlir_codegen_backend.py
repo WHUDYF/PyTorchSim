@@ -319,6 +319,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         self.reduce_iterator = {}
         self.spad_buffer_dict = dict()
         self.base_vector_initialized = False
+        self.loop_size = None
 
     def reset(self, reason):
         save = self.exit_stack, self._nested_context_depth
@@ -1072,6 +1073,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 "vlen" : self.vlen,
                 "arg_attributes" : arg_attributes,
                 "autotune" : True,
+                "loop_size" : self.loop_size,
                 "origins" : {str(i) for node in nodes for i in node.node.origins},
             },
             source_code=src_code,
