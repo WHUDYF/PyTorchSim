@@ -123,6 +123,6 @@ class MLIRConvCommonTemplate(MLIRTemplate):
             return stride
 
         X_stride = compute_stride(X_shape)
-        arg_attributes.append([X.data.data.name, [MLIRKernelArgs.MLIR_ARGS_IN, X.layout.dtype, math.prod(X_shape), X_shape, X_stride]])
+        arg_attributes.append([X.get_name(), [MLIRKernelArgs.MLIR_ARGS_IN, X.layout.dtype, math.prod(X_shape), X_shape, X_stride]])
 
         return arg_attributes

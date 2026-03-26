@@ -16,6 +16,73 @@ def _pair_2d(seq: Sequence[int]) -> Tuple[int, int]:
     return int(seq[0]), int(seq[1])
 
 
+def _int_eq(x, v: int) -> bool:
+    try:
+        return int(x) == v
+    except (TypeError, ValueError):
+        return False
+
+
+def _can_rewrite_pointwise_conv_on_1x1_spatial_to_linear(
+    input: torch.Tensor,
+    weight: torch.Tensor,
+    stride: Sequence[int],
+    padding: Sequence[int],
+    dilation: Sequence[int],
+    transposed: bool,
+    output_padding: Sequence[int],
+    groups: int,
+) -> bool:
+    """
+    Whether this ``aten.convolution`` is **exactly** ``F.linear`` on ``[N, C]`` (then reshaped
+    to ``[N, C_out, 1, 1]``): 1x1 kernel, spatial size 1x1, ``groups==1``, stride 1, no padding,
+    dilation 1 (typical SE line after global pool).
+
+    If True, use ``_apply_pointwise_conv_on_1x1_spatial_as_linear``; if False, keep normal conv.
+    """
+    if transposed or input.dim() != 4 or weight.dim() != 4:
+        return False
+    if groups != 1:
+        return False
+    if not (
+        _int_eq(input.shape[2], 1)
+        and _int_eq(input.shape[3], 1)
+        and _int_eq(weight.shape[2], 1)
+        and _int_eq(weight.shape[3], 1)
+    ):
+        return False
+
+    sh, sw = _pair_2d(stride)
+    ph, pw = _pair_2d(padding)
+    dh, dw = _pair_2d(dilation)
+    if sh != 1 or sw != 1 or ph != 0 or pw != 0 or dh != 1 or dw != 1:
+        return False
+    if len(output_padding) and any(not _int_eq(o, 0) for o in output_padding):
+        return False
+
+    _, cin, _, _ = input.shape
+    _, cin_w, _, _ = weight.shape
+    try:
+        if int(cin_w) != int(cin):
+            return False
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _apply_pointwise_conv_on_1x1_spatial_as_linear(
+    input: torch.Tensor,
+    weight: torch.Tensor,
+    bias: Optional[torch.Tensor],
+) -> torch.Tensor:
+    """Same numerics as ``convolution``; call only when ``_can_rewrite_...`` is True."""
+    n, cin, _, _ = input.shape
+    cout, _, _, _ = weight.shape
+    x = input.reshape(n, cin)
+    w = weight.reshape(cout, cin)
+    return F.linear(x, w, bias).reshape(n, cout, 1, 1)
+
+
 def _group_conv_cin1_cout1(
     input: torch.Tensor,
     weight: torch.Tensor,
@@ -70,7 +137,7 @@ def _group_conv_cin1_cout1(
 
 
 @register_decomposition(aten.convolution.default)
-def decompose_group_convolution(
+def decompose_convolution(
     input: torch.Tensor,
     weight: torch.Tensor,
     bias: Union[torch.Tensor, None],
@@ -82,23 +149,36 @@ def decompose_group_convolution(
     groups: Union[int, torch.SymInt],
 ):
     """
-    Lower grouped ``aten.convolution`` only when each group has a single input and output
-    channel (``Cin//groups == Cout//groups == 1``), via ``_group_conv_cin1_cout1``.
+    1. Pointwise 1x1 on spatial 1x1 (groups==1): rewrite to F.linear so backends
+       that struggle with tiny spatial convs (e.g. SE after AdaptiveAvgPool2d(1)) see
+       aten.mm / linear lowering instead.
+
+    2. Grouped conv when Cin//groups == Cout//groups == 1: _group_conv_cin1_cout1.
+
+    Otherwise returns NotImplemented (Inductor uses the default aten.convolution).
 
     Note
     ----
-    The lowered path is not a performance-optimized kernel; it exists for correctness and
-    lowering experiments. For speed, implement a separate template (fused) kernel for group
-    convolution.
-
-    Non-static ``groups`` (cannot ``int()``) falls back: returns ``NotImplemented`` so the
-    default ``aten.convolution`` is used. ``groups==1`` also returns ``NotImplemented``.
+    The grouped path is not performance-optimized; it exists for correctness experiments.
     """
     try:
         gcount = operator.index(groups)
     except (TypeError, ValueError):
         return NotImplemented
-    # groups==1: do not decompose; Inductor keeps the default aten.convolution (plain conv).
+
+    if _can_rewrite_pointwise_conv_on_1x1_spatial_to_linear(
+        input,
+        weight,
+        stride,
+        padding,
+        dilation,
+        transposed,
+        output_padding,
+        gcount,
+    ):
+        return _apply_pointwise_conv_on_1x1_spatial_as_linear(input, weight, bias)
+
+    # groups==1, non-1x1 spatial: keep default aten.convolution (plain conv).
     if gcount == 1:
         return NotImplemented
 
