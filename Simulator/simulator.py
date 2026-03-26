@@ -223,6 +223,7 @@ class TOGSimulator():
     TOGSIM_RESULT_PATH_KEY = "TOGSIM_RESULT_PATH"
     FINISH_STR = "Simulation finished"
     ALLOC_POOL = dict() # For eagermode buffer plan
+    _TOGSIM_CONFIG_ENV_UNSET = object()
     def __init__(self, config_path=None, togsim_path=None) -> None:
         if config_path is None:
             config_path = extension_config.CONFIG_TOGSIM_CONFIG
@@ -258,17 +259,31 @@ class TOGSimulator():
             raise RuntimeError(f"Failed to open trace file: {e}")
 
     def __enter__(self):
-        """Context manager entry."""
-        # Set this simulator instance as the global TOGSimulator
+        """Context manager entry.
+
+        Sets ``TOGSIM_CONFIG`` to this instance's config path so that compilation
+        (``extension_config`` / codegen) uses the same YAML as TOGSim. Previous
+        value is restored in ``__exit__``.
+        """
+        if "TOGSIM_CONFIG" in os.environ:
+            self._old_togsim_config_env = os.environ["TOGSIM_CONFIG"]
+        else:
+            self._old_togsim_config_env = self._TOGSIM_CONFIG_ENV_UNSET
+        os.environ["TOGSIM_CONFIG"] = os.path.abspath(self.config_path)
+
         self.old_tog_simulator = torch.npu.get_tog_simulator()
         torch.npu.set_tog_simulator(self)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - automatically cleanup."""
-        # Reset global TOGSimulator to None
         self.until()
         torch.npu.set_tog_simulator(self.old_tog_simulator)
+
+        if self._old_togsim_config_env is self._TOGSIM_CONFIG_ENV_UNSET:
+            os.environ.pop("TOGSIM_CONFIG", None)
+        else:
+            os.environ["TOGSIM_CONFIG"] = self._old_togsim_config_env
 
     def _start_process(self):
         cmd = f"{self.get_togsim_command(self.config_path, self.base_dir)} --models_list {self.trace_file_path}"

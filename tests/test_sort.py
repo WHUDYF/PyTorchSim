@@ -115,10 +115,7 @@ if __name__ == "__main__":
 
     shape = tuple(map(int, args.shape.strip("()").split(",")))
 
-    from Scheduler.scheduler import PyTorchSimRunner
-
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
 
     test_sort_stable_suite(device)
     test_sort_duplicate_cases(device)

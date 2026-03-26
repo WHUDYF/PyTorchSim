@@ -807,10 +807,8 @@ def train_moe_single_iteration(device, iter_idx, is_evaluation=0):
         train(opt_model, train_loader)
 
 if __name__ == "__main__":
-    from Scheduler.scheduler import PyTorchSimRunner
     torch.set_printoptions(threshold=float('inf'), linewidth=600)
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
 
     test_moe(device)
     # train_moe(device)

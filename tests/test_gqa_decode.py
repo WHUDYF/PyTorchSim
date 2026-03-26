@@ -6,8 +6,7 @@ import sys
 import math
 import argparse
 from Simulator.simulator import TOGSimulator
-from Scheduler.scheduler import PyTorchSimRunner
-device = PyTorchSimRunner.setup_device().custom_device()
+device = torch.device("npu:0")
 # ─────────────────────────────────────────────────────────────────────────────
 # Optimized: Flash-Decode style — tile S upfront, batch in B dimension
 # ─────────────────────────────────────────────────────────────────────────────
