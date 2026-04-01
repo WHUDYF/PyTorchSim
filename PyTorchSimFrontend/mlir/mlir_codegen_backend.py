@@ -536,7 +536,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         compute_index_var = ",".join(sram_index_var.split(",")[:-1] + [f"%{self.compute_idx}"])
 
         # MVIN Encoding
-        attribute = f"{{dram_stride={dram_stride}, sram_stride={tile_stride}, padding={padding}}}"
+        attribute = mlir_common.format_dma_op_attributes(dram_stride, tile_stride, int(padding))
         code = self.get_dma_code("MVIN", vlane_split_axis, vlane_stride, mlir_dtype, dram_var, index_var, sram_var, sram_index_var,
                                  dram_shape, tile_shape, attribute)
         self.cse.generate(dma_buffer, code, assignment = False) # FIXME: assignment = False does not support caching
@@ -607,7 +607,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             sram_index_var = self.spad_buffer_dict[str(value)][3]
 
         # Generate DMA instruction
-        attribute = f"{{dram_stride={dram_stride}, sram_stride={tile_stride}, padding=0}}"
+        attribute = mlir_common.format_dma_op_attributes(dram_stride, tile_stride, 0)
         code = self.get_dma_code("MVOUT", vlane_split_axis, vlane_stride, mlir_dtype, dram_var, index_var, sram_var, sram_index_var,
                                  dram_shape, tile_shape, attribute)
         self.dma_stores.writeline(common.DeferredLine(name, code))
@@ -736,7 +736,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 ops._store(value, sram_var, sram_index_var, tile_shape, buffer_name=name)
 
             # Generate DMA instruction
-            attribute = f"{{dram_stride={dram_stride}, sram_stride={tile_stride}, padding=0}}"
+            attribute = mlir_common.format_dma_op_attributes(dram_stride, tile_stride, 0)
             code = self.get_dma_code("MVOUT", vlane_split_axis, vlane_stride, mlir_dtype, dram_var, index_var, sram_var, sram_index_var,
                                     dram_shape, tile_shape, attribute)
             self.reductions_suffix.writeline(common.DeferredLine(name, code))

@@ -3,8 +3,7 @@ import math
 import contextvars
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Dict
-from typing import List
+from typing import Dict, Iterable, List, Optional, Sequence, Union
 from collections import defaultdict
 from functools import reduce
 from operator import mul
@@ -119,6 +118,27 @@ MLIR_INF = {
         "f64" : 0x7FF8000000000000
     }
 }
+
+def format_dma_op_attributes(
+    dram_stride: Sequence,
+    sram_stride: Sequence,
+    padding: int = 0,
+    *,
+    subtile_size: Optional[Sequence] = None,
+    async_type: Optional[int] = None,
+) -> str:
+    """Attribute dict for memref.dma_start; stride lists as bracketed integer lists."""
+    parts = [
+        f"dram_stride = {dram_stride}",
+        f"sram_stride = {sram_stride}",
+        f"padding = {int(padding)}",
+    ]
+    if subtile_size:
+        parts.append(f"subtile_size = {subtile_size}")
+        av = int(async_type) if async_type is not None else 1
+        parts.append(f"async = {av} : i64")
+    return "{" + ", ".join(parts) + "}"
+
 
 class ParallelLoopBuffer(IndentedBuffer):
     def indent(self, offset=1, attribute="", suffix=""):

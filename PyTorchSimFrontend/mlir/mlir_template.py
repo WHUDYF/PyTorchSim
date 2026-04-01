@@ -952,14 +952,19 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                 zero_cse = self.get_const_cse(0, "index")
                 sram_index_var = ", ".join([f"%{str(zero_cse)}"]*tile_desc.get_nr_dim())
 
-                attribute_parts = [f"dram_stride={_dram_stride}", f"sram_stride={sram_strides}", f"padding={int(padding)}"]
                 if subtile_size:
-                    attribute_parts.append(f"subtile_size={subtile_size}, async={int(async_type) if async_type is not None else 1}")
-                attribute = "  {" + ", ".join(attribute_parts) + "}"
+                    attribute = mlir_common.format_dma_op_attributes(
+                        _dram_stride,
+                        sram_strides,
+                        int(padding),
+                        subtile_size=subtile_size,
+                        async_type=int(async_type) if async_type is not None else None,
+                    )
+                else:
+                    attribute = mlir_common.format_dma_op_attributes(_dram_stride, sram_strides, int(padding))
                 code = self.get_dma_code(dma_type, vlane_split_axis, vlane_stride, mlir_dtype, dram_var, index_var, sram_var, sram_index_var,
-                                        dram_shape, tile_shape, "")
+                                        dram_shape, tile_shape, attribute)
                 local_code.writeline(code)
-                local_code.writeline(attribute)
             return textwrap.indent(local_code.getvalue(), " "*indent_size).strip()
 
         if not lazy_mode:
@@ -1025,7 +1030,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             # Allocate sram buffer
             dram_shape = mlir_common.MLIRKernelArgs.get_mlir_shape(self.buffer_types[name])
             sram_var, sram_index_var = self.get_scratchpad_buffer(dtype, name, self.kernel_group.tile_desc, index)
-            attribute = f"{{dram_stride={dram_stride}, sram_stride={tile_stride}, padding=0}}"
+            attribute = mlir_common.format_dma_op_attributes(dram_stride, tile_stride, 0)
             code = self.get_dma_code("MVIN", vlane_split_axis, vlane_stride, mlir_dtype, dram_var, index_var, sram_var, sram_index_var,
                                      dram_shape, tile_shape, attribute)
             self.cse.generate(self.dma_loads, code, assignment = False)
@@ -1093,7 +1098,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             ops._store(value, sram_var, compute_index_var, tile_shape, buffer_name=buffer_name)
 
         # Generate DMA instruction
-        attribute = f"{{dram_stride={dram_stride}, sram_stride={tile_stride}, padding=0}}"
+        attribute = mlir_common.format_dma_op_attributes(dram_stride, tile_stride, 0)
         code = self.get_dma_code("MVOUT", vlane_split_axis, vlane_stride, mlir_dtype, dram_var, index_var, sram_var, sram_index_var,
                                  dram_shape, tile_shape, attribute)
         self.dma_stores.writeline(DeferredLine(name, code))
@@ -1244,7 +1249,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
 
         # MVOUT Encoding
         # Generate DMA instruction
-        attribute = f"{{dram_stride={dram_stride}, sram_stride={final_tile_stride}, padding=0}}"
+        attribute = mlir_common.format_dma_op_attributes(dram_stride, final_tile_stride, 0)
         code = self.get_dma_code("MVOUT", vlane_split_axis, vlane_stride, mlir_dtype, dram_var, index_var, sram_var, sram_index_var,
                                 dram_shape, final_tile_shape, attribute)
         self.reductions_suffix.writeline(DeferredLine(name, code))
