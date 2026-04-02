@@ -285,7 +285,13 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         self.gem5_header = IndentedBuffer()
         self.header.writeline("#include <unistd.h>")
         self.header.writeline("#include <stdlib.h>")
-        self.header.writeline("void* __wrap_malloc(size_t size) { return sbrk(size); }")
+        self.header.writeline("#include <stdio.h>")
+        self.header.writeline("void* __wrap_malloc(size_t size) {")  # Align to 512 bytes
+        self.header.writeline("    size_t aligned = (size + 511UL) & ~511UL;")
+        self.header.writeline("    void *p = sbrk(aligned);")
+        #self.header.writeline('    fprintf(stderr, "[SPIKE][__wrap_malloc] addr=%p size=%zu (req=%zu)\\n", p, aligned, size);')
+        self.header.writeline("    return p;")
+        self.header.writeline("}")
         self.header.writeline("void __wrap_free(void *ptr) { return; }")
         self.reduction_cse = common.CSE(self.newvar_prefix, self.suffix, name_prefix="tmp_acc")
         self.spad_cse = common.CSE(self.newvar_prefix, self.suffix, name_prefix="spad")
@@ -313,6 +319,7 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         self.reduce_iterator = {}
         self.spad_buffer_dict = dict()
         self.base_vector_initialized = False
+        self.loop_size = None
 
     def reset(self, reason):
         save = self.exit_stack, self._nested_context_depth
@@ -470,7 +477,12 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 new_expr_list[idx] = arg.subs(arg.args[1], dim_list[idx])
                 indices.append(str(new_arg))
             elif not arg.is_number:
-                new_arg = sympy.Symbol(str(self.convert_index(arg)))
+                try:
+                    new_arg = sympy.Symbol(str(self.convert_index(arg)))
+                #not implemented case
+                except NotImplementedError:
+                    print(f"Not implemented case: {arg}")
+                    raise NotImplementedError(f"Not implemented case: {arg}")
                 new_expr_list[idx] = new_arg.subs(new_arg, dim_list[idx])
                 indices.append(str(new_arg))
             else:
@@ -959,7 +971,10 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
 
             # Try initial tile size
             self.reset(None)
-            src_code, meta_code = super().codegen_nodes(nodes, kernel_name)
+            try:
+                src_code, meta_code = super().codegen_nodes(nodes, kernel_name)
+            except mlir_common.RecompileSignal:
+                continue
             current_tile_sz = tuple(self.kernel_group.tile_desc.get_tile_size())
             search_space.add(current_tile_sz)
 
@@ -981,14 +996,12 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                     # Try increase tile size for this axis
                     try:
                         self.kernel_group.tile_desc.scale_tile_dim(axis, prev_ranges[axis], 2)
-                    except extension_codecache.TileSizeError as e:
-                        # Failed to find proper tile size
+                        self.reset(None)
+                        src_code, meta_code = super().codegen_nodes(nodes, kernel_name)
+                    except (extension_codecache.TileSizeError, mlir_common.RecompileSignal):
                         candidate_axes.remove(axis)
                         self.reset(None)
                         continue
-
-                    self.reset(None)
-                    src_code, meta_code = super().codegen_nodes(nodes, kernel_name)
                     current_tile_sz = tuple(self.kernel_group.tile_desc.get_tile_size())
 
                     # FIXME. How to intergrate this constraint to tile system?
@@ -1060,6 +1073,8 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
                 "vlen" : self.vlen,
                 "arg_attributes" : arg_attributes,
                 "autotune" : True,
+                "loop_size" : self.loop_size,
+                "origins" : {str(i) for node in nodes for i in node.node.origins},
             },
             source_code=src_code,
         )
@@ -1084,6 +1099,8 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         return src_code, meta_code
 
     def _prepare_simulator_headers(self, src_code):
+        from filelock import FileLock
+
         write_path = extension_codecache.get_write_path(src_code)
         os.makedirs(write_path, exist_ok=True)
 
@@ -1094,8 +1111,10 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         spad_section_end_symbol = (
             f"int spad_section_end[0] __attribute__ ((section(\".spad\"), aligned({self.spad_info['spad_size']*self.vector_lane})));"
         )
-        write_atomic(spike_write_path, self.header.getvalue() + spad_end_symbol + spad_section_end_symbol)
-        write_atomic(gem5_write_path, self.gem5_header.getvalue())
+        lock = FileLock(extension_codecache.get_lock_path(write_path), timeout=extension_codecache.LOCK_TIMEOUT)
+        with lock:
+            write_atomic(spike_write_path, self.header.getvalue() + spad_end_symbol + spad_section_end_symbol)
+            write_atomic(gem5_write_path, self.gem5_header.getvalue())
 
     def get_arg_info(self, name):
         arg_info = dict()
@@ -1423,11 +1442,11 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
             value = float(value)
         else:
             value = int(value)
-
-        if value not in self.consts:
-            self.consts[str(value)+dtype] = self.const_cse.generate(self.const_buffer, f"arith.constant {value} : {dtype}")
-            self.register_var_info(self.consts[str(value)+dtype], [1, dtype])
-        return self.consts[str(value)+dtype]
+        key = str(value)+dtype
+        if key not in self.consts:
+            self.consts[key] = self.const_cse.generate(self.const_buffer, f"arith.constant {value} : {dtype}")
+            self.register_var_info(self.consts[key], [1, dtype])
+        return self.consts[key]
 
     def get_tag_cse(self, value=None, shape="memref<1xi32>"):
         if value is None:

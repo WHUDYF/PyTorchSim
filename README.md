@@ -106,9 +106,8 @@ You can run your own PyTorch model on PyTorchSim by setting up a custom NPU devi
 This method also applies when you want to simulate models beyond the provided examples.
 ```python
 import torch
-from Scheduler.scheduler import PyTorchSimRunner
-# Declare a custom NPU device
-device = PyTorchSimRunner.setup_device().custom_device()
+
+device = torch.device("npu:0")
 
 # Declare you own model (e.g. resnet18 from torchvision)
 from torchvision.models import resnet18
@@ -215,75 +214,94 @@ opt_step()
 `tests/test_mlp.py` provides an example of MLP training.
 
 ## Multi-tenancy
-Our load generator supports multi-tenancy experiments. You can run a simple example by executing `tests/test_scheduler.py`.
+
+While the **`with TOGSimulator(config_path=...)`** block is active, **`TOGSIM_CONFIG`** is set to that YAML so **compilation and TOGSim use the same** hardware description.
+
+### 1. One TOGSim session, one continuous log
+
+If you want **one** log where kernels are simulated **in sequence** as a single run, wrap the code you already use to execute the compiled model with **`with TOGSimulator(config_path=...)`**. No other API is required; every forward inside the block shares that session.
+
+```python
+import torch
+from Simulator.simulator import TOGSimulator
+
+# ... build model, torch.compile, tensors on npu:0 as usual ...
+
+with TOGSimulator(config_path=config):
+    y = compiled_model(x)
+```
+
+### 2. Multi-tenancy and explicit scheduling (`launch_model`)
+
+For **multi-tenant** or **interleaved** execution, you usually need to attach a **timestamp** and a **`stream_index`** to each launch so the simulator can order work correctly. Use **`torch.npu.launch_model(compiled_model, *inputs, stream_index=..., timestamp=...)`** for that; plain `compiled_model(x)` does not carry those parameters.
+
+**`stream_index`** is the **request-queue / partition index** in the TOGSim config: it must match the **values** in the **`partition`** map (each queue index is mapped to a **core**). For example, `stream_index=0` goes to the queue bound to `core_0`, `stream_index=1` to the queue for `core_1`, and so on.
+
+**`timestamp`** is in **nanoseconds** (simulation time for ordering launches). Use `0` when you do not need explicit times beyond submission order.
+
+```python
+with TOGSimulator(config_path=config):
+    torch.npu.launch_model(opt_model1, x1, stream_index=0, timestamp=0)
+    torch.npu.launch_model(opt_model2, x2, stream_index=1, timestamp=0)
+    torch.npu.synchronize()
+    torch.npu.launch_model(opt_model1, x1, stream_index=0, timestamp=0)
+    torch.npu.launch_model(opt_model2, x2, stream_index=1, timestamp=0)
+```
+
+Here **`synchronize()`** acts as a barrier: it does not return until every **`launch_model`** issued **above** it has finished in the simulator. The later pair of `launch_model` calls therefore runs only after those earlier models have fully completed—so the sync is the point in the timeline where **all preceding launches are done**.
+
 ```bash
 python tests/test_scheduler.py
 ```
-Below is an example code of multi-tenancy `resnet18` and `EncoderBlock`.
-In this example, the `Scheduler` is initialized with a number of request queues, a scheduling policy, and a TOGSimulator config file(`.yml`). The compiled PyTorch models are then registered with a unique model id.
 
-```python3
-import os
-import sys
-import torch
-from torchvision.models import resnet18
-base_path = os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim')
-config = f'{base_path}/configs/systolic_ws_128x128_c2_simple_noc_tpuv3_partition.yml'
+Use a TOGSim config(`.yml`) that defines **partitions** when mapping queues to cores, for example:
 
-sys.path.append(base_path)
-from tests.test_transformer import EncoderBlock
-from Scheduler.scheduler import Scheduler, SchedulerDNNModel, Request, poisson_request_generator
-scheduler = Scheduler(num_request_queue=2, engine_select=Scheduler.FIFO_ENGINE, togsim_config=config)
+- **`num_partition`**: Number of independent request queues (valid **`stream_index`** values are `0 … num_partition-1`).
+- **`partition`**: Maps each **core** name to a **queue index**; that index is the same **`stream_index`** you pass to **`launch_model`**.
 
-# Register compiled model
-target_model0 = resnet18().eval()
-target_model1 = EncoderBlock(768, 12).eval()
-opt_model0 = torch.compile(target_model0.to(device=scheduler.execution_engine.module.custom_device(), memory_format=torch.channels_last))
-opt_model1 = torch.compile(target_model1.to(device=scheduler.execution_engine.module.custom_device()))
-SchedulerDNNModel.register_model("model0", opt_model0)
-SchedulerDNNModel.register_model("model1", opt_model1)
-```
-
-The config file(`.yml`) specifies two key items:
-- `num_partition`: The total number of independent request queues to create.
-- `partition`: Defines the hardware mapping, assigning each queue (identified by its index) to a specific physical core.
-For example, the configuration below creates two scheduling queues (`0` and `1`) and maps `core_0` to queue `0` and `core_1` to queue `1`:
 ```
   "num_partition" : 2,
   "partition": {
-    "core_0":0,
-    "core_1":1
+    "core_0": 0,
+    "core_1": 1
   }
 ```
 
-Next, DNN model requests are generated and submitted. We provide a `poisson_request_generator` utility, which generates request arrival times.
-Each `Request` is created with its model name, data, and a request_queue_idx to specify its target queue, then added via `scheduler.add_request`.
-As shown in the code, `model0` requests are queued to `request_queue_idx=0`, while `model1` requests are queued to `request_queue_idx=1`.
-```python3
-# Load Generation
+Here `stream_index=0` selects queue `0` (core_0), `stream_index=1` selects queue `1` (core_1).
+
+### 3. Load generation (Poisson arrivals)
+
+The **`poisson_request_generator`** in **`Scheduler.scheduler`** yields synthetic **arrival times** (in **milliseconds**). Merge those with **`launch_model`**: convert each time to **nanoseconds** for **`timestamp`**, set **`stream_index`** to the target partition queue, and run all launches inside one **`with TOGSimulator(...)`** so a **single** log captures the full trace.
+
+```python
+from Scheduler.scheduler import poisson_request_generator
+
 model0_lambda = 5.0
 model1_lambda = 3.0
-max_time = 1000.0 # [s]
+max_time_msec = 1000.0  # Poisson horizon [ms]
 
-# Generate Possion distribution requests for model0
-for model0_request_time in poisson_request_generator(model0_lambda, max_msec_time=max_time):
-    x = torch.randn(1, 3, 224, 224)
-    new_request = Request("model0", [x], [], request_queue_idx=0)
-    scheduler.add_request(new_request, request_time=model0_request_time)
+events = []
+for t in poisson_request_generator(model0_lambda, max_msec_time=max_time_msec):
+    x = torch.randn(1, 3, 224, 224, device=device)
+    events.append((t, 0, opt_model0, (x,)))  # stream_index 0 → queue / partition 0
 
-# Generate Possion distribution requests for model1
-for model1_request_time in poisson_request_generator(model1_lambda, max_msec_time=max_time):
-    x = torch.randn(128, 768)
-    new_request = Request("model1", [x], [], request_queue_idx=1)
-    scheduler.add_request(new_request, request_time=model1_request_time)
+for t in poisson_request_generator(model1_lambda, max_msec_time=max_time_msec):
+    x = torch.randn(128, 768, device=device)
+    events.append((t, 1, opt_model1, (x,)))  # stream_index 1 → queue / partition 1
+
+events.sort(key=lambda e: e[0])
+
+with TOGSimulator(config_path=config):
+    for t_msec, stream_index, model, args in events:
+        torch.npu.launch_model(
+            model,
+            *args,
+            stream_index=stream_index,
+            timestamp=int(t_msec * 1e6),
+        )  # ms → ns
 ```
 
-Finally, `scheduler.schedule()` is called in a loop until all requests are processed.
-```python3
-# Run scheduler
-while not scheduler.is_finished():
-    scheduler.schedule()
-```
+The two Poisson streams are **combined and sorted by time** so launches follow a single global arrival order.
 
 ## Compiler Optimizations
 PyTorchSim compiler supports several fusion optimizations:
@@ -396,7 +414,6 @@ export TORCHSIM_USE_TIMING_POOLING=0 # use lightweight pooling for timing
   "icnt_injection_ports_per_core" : 16 // Interconnect injection ports per core
   "icnt_config_path" : "../configs/booksim2_configs/fly_c4_m32.icnt", // Booksim2 config file path
 
-  "precision" : 4,                   // Element's precision in tensor (Byte)
   "scheduler" : "simple",            // Scheduler type (Now, only support simple scheduler)
   "num_partition" : 2,               // Multi-core Partitioning
   "partition": {                     // allocate request queue index
@@ -415,7 +432,7 @@ export TORCHSIM_USE_TIMING_POOLING=0 # use lightweight pooling for timing
 ```
 You can set TOGSim config path as below.
 ```bash
-export TORCHSIM_CONFIG=/workspace/PyTorchSim/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml
+export TOGSIM_CONFIG=/workspace/PyTorchSim/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml
 ```
 ## Future Works
 Currently, PyTorchSim supports PyTorch 2.2. Support for newer versions will be added soon.

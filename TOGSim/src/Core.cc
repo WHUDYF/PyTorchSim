@@ -62,9 +62,9 @@ void Core::vu_cycle() {
     if (!_vu_compute_pipeline.empty()) {
       _stat_vu_compute_cycle++;
       if(_vu_compute_pipeline.front()->finish_cycle <= _core_cycle) {
-        int bubble = _vu_compute_pipeline.front()->bubble_cycle;
+        cycle_type bubble = _vu_compute_pipeline.front()->bubble_cycle;
         _stat_vu_compute_idle_cycle += bubble;
-        _stat_vu_compute_cycle -= bubble;
+        _stat_vu_compute_cycle = (bubble < _stat_vu_compute_cycle) ? (_stat_vu_compute_cycle - bubble) : 0;
         finish_instruction(_vu_compute_pipeline.front());
         _vu_compute_pipeline.pop();
       } else {
@@ -83,9 +83,10 @@ void Core::sa_cycle() {
     while (retry) {
       if (!_sa_compute_pipeline.at(i).empty()) {
         if(_sa_compute_pipeline.at(i).front()->finish_cycle <= _core_cycle) {
-          int bubble = _sa_compute_pipeline.at(i).front()->bubble_cycle;
+          cycle_type bubble = _sa_compute_pipeline.at(i).front()->bubble_cycle;
           _stat_sa_compute_idle_cycle.at(i) += bubble;
-          _stat_sa_compute_cycle.at(i) -= bubble;
+          cycle_type& stat = _stat_sa_compute_cycle.at(i);
+          stat = (bubble < stat) ? (stat - bubble) : 0;
           finish_instruction(_sa_compute_pipeline.at(i).front());
           _sa_compute_pipeline.at(i).pop();
         } else {

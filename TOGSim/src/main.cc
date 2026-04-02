@@ -96,19 +96,32 @@ int main(int argc, char** argv) {
   // parse command line argumnet
   CommandLineParser cmd_parser = CommandLineParser();
   cmd_parser.add_command_line_option<std::string>(
-      "config", "Path for hardware configuration file");
+      "config", "Path for hardware configuration file (.yml)");
   cmd_parser.add_command_line_option<std::string>(
-      "models_list", "Path for the models list file (can be FIFO or regular file)");
+      "models_list", "Path for the trace file (.trace)");
   cmd_parser.add_command_line_option<std::string>(
       "log_level", "Set for log level [trace, debug, info], default = info");
   try {
     cmd_parser.parse(argc, argv);
   } catch (const CommandLineParser::ParsingError& e) {
     spdlog::error(
-        "Command line argument parrsing error captured. Error message: {}",
+        "Command line argument parsing error captured. Error message: {}",
         e.what());
-    throw(e);
+    std::cerr << std::endl;
+    cmd_parser.print_help_message();
+    exit(1);
   }
+  
+  // Check if help was requested
+  cmd_parser.print_help_message_if_required();
+
+  // Dump full command for copy-paste re-run
+  std::ostringstream cmd_oss;
+  for (int i = 0; i < argc; ++i) {
+    if (i > 0) cmd_oss << " ";
+    cmd_oss << argv[i];
+  }
+  spdlog::info("[TOGSim] Run command: {}", cmd_oss.str());
 
   std::string level = "info";
   cmd_parser.set_if_defined("log_level", &level);

@@ -68,6 +68,7 @@ TORCH_TO_NUMPY = {
     torch.uint8: np.uint8,
     torch.bool: np.uint8,
     torch.bfloat16: np.float16,
+    torch.float16: np.float16,
 }
 
 class FunctionalSimulator():
@@ -143,7 +144,7 @@ class FunctionalSimulator():
         base_path= f"--base-path={runtime_path}"
         os.makedirs(os.path.join(runtime_path, "indirect_access"), exist_ok=True)
         os.makedirs(os.path.join(runtime_path, "dma_access"), exist_ok=True)
-        run = f'spike --isa rv64gcv --varch=vlen:256,elen:64 {vectorlane_option} {spad_option} {kernel_address} {base_path} /workspace/riscv-pk/build/pk {target_binary} {file_path_str}'
+        run = f'spike --isa rv64gcv_zfh --varch=vlen:256,elen:64 {vectorlane_option} {spad_option} {kernel_address} {base_path} /workspace/riscv-pk/build/pk {target_binary} {file_path_str}'
         if not silent_mode:
             logger.debug(f"[Spike] cmd> {run}")
             logger.info("[Spike] Running Spike simulator")
@@ -222,6 +223,7 @@ class TOGSimulator():
     TOGSIM_RESULT_PATH_KEY = "TOGSIM_RESULT_PATH"
     FINISH_STR = "Simulation finished"
     ALLOC_POOL = dict() # For eagermode buffer plan
+    _TOGSIM_CONFIG_ENV_UNSET = object()
     def __init__(self, config_path=None, togsim_path=None) -> None:
         if config_path is None:
             config_path = extension_config.CONFIG_TOGSIM_CONFIG
@@ -257,17 +259,31 @@ class TOGSimulator():
             raise RuntimeError(f"Failed to open trace file: {e}")
 
     def __enter__(self):
-        """Context manager entry."""
-        # Set this simulator instance as the global TOGSimulator
+        """Context manager entry.
+
+        Sets ``TOGSIM_CONFIG`` to this instance's config path so that compilation
+        (``extension_config`` / codegen) uses the same YAML as TOGSim. Previous
+        value is restored in ``__exit__``.
+        """
+        if "TOGSIM_CONFIG" in os.environ:
+            self._old_togsim_config_env = os.environ["TOGSIM_CONFIG"]
+        else:
+            self._old_togsim_config_env = self._TOGSIM_CONFIG_ENV_UNSET
+        os.environ["TOGSIM_CONFIG"] = os.path.abspath(self.config_path)
+
         self.old_tog_simulator = torch.npu.get_tog_simulator()
         torch.npu.set_tog_simulator(self)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - automatically cleanup."""
-        # Reset global TOGSimulator to None
         self.until()
         torch.npu.set_tog_simulator(self.old_tog_simulator)
+
+        if self._old_togsim_config_env is self._TOGSIM_CONFIG_ENV_UNSET:
+            os.environ.pop("TOGSIM_CONFIG", None)
+        else:
+            os.environ["TOGSIM_CONFIG"] = self._old_togsim_config_env
 
     def _start_process(self):
         cmd = f"{self.get_togsim_command(self.config_path, self.base_dir)} --models_list {self.trace_file_path}"
@@ -426,28 +442,44 @@ class TOGSimulator():
         if buf_name in cls.ALLOC_POOL:
             del cls.ALLOC_POOL[buf_name]
 
-    def create_attribute_file(self, attribute_path, inputs, **kwargs):
+    @staticmethod
+    def write_kernel_attribute_file(attribute_dir, inputs, alloc_pool=None):
+        """
+        Write kernel attribute YAML (address_info + sram_alloc) under attribute_dir.
+
+        Does not require a TOGSimulator instance. alloc_pool defaults to class ALLOC_POOL.
+
+        Args:
+            attribute_dir: Directory to hold numbered attribute files (created if needed)
+            inputs: Kernel input tensors (data_ptr used for address_info)
+            alloc_pool: Optional dict like ALLOC_POOL; defaults to TOGSimulator.ALLOC_POOL
+
+        Returns:
+            Path to the written YAML file.
+        """
+        if alloc_pool is None:
+            alloc_pool = TOGSimulator.ALLOC_POOL
         address_info = {}
         sram_buffer = {}
         yaml_content = {}
 
-        os.makedirs(attribute_path, exist_ok=True)
-        index = str(len(os.listdir(attribute_path)))
-        attribute_path = os.path.join(attribute_path, index)
+        os.makedirs(attribute_dir, exist_ok=True)
+        index = str(len(os.listdir(attribute_dir)))
+        attribute_file = os.path.join(attribute_dir, index)
 
         for idx, tensor in enumerate(inputs):
             address_info[f"arg{idx}"] = tensor.data_ptr()
         yaml_content["address_info"] = address_info
 
-        for buf_name, range in self.ALLOC_POOL.items():
+        for buf_name, range in alloc_pool.items():
             sram_buffer[buf_name] = range
         yaml_content["sram_alloc"] = sram_buffer
 
-        with open(attribute_path, "w") as f:
+        with open(attribute_file, "w") as f:
             yaml.dump(yaml_content, f, default_flow_style=False)
             f.flush()
-            os.fsync(f.fileno()) # There could be a race condition.
-        return attribute_path
+            os.fsync(f.fileno())
+        return attribute_file
 
     def load_yaml(self, config_path):
         config_path = Path(config_path)

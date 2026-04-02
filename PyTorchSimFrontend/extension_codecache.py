@@ -4,7 +4,7 @@ import shlex
 import subprocess
 import torch
 
-from torch._inductor.codecache import get_lock_dir, get_hash, write
+from torch._inductor.codecache import get_hash, write
 from torch._inductor.async_compile import AsyncCompile
 from AsmParser.tog_generator import tog_generator
 from PyTorchSimFrontend.mlir.mlir_caller_codegen import MLIRKernelCallerCodeGen
@@ -21,6 +21,11 @@ def hash_prefix(hash_value):
 
 def get_write_path(src_code):
     return os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(get_hash(src_code.strip())))
+
+
+def get_lock_path(write_path):
+    """Return lock file path for the given write_path (per-source_code lock)."""
+    return os.path.join(write_path, ".compile.lock")
 
 def dump_metadata(args, arg_attributes, path):
     meta_path = os.path.join(path, "meta.txt")
@@ -67,8 +72,17 @@ def mlir_compile_command(filename, vectorlane_size, vlen=256):
         f"""
             {extension_config.CONFIG_TORCHSIM_LLVM_PATH}/llc \
                 -relocation-model=pic -march=riscv64 -O3 --stack-size-section \
-                -mattr=+m,+f,+d,+a,+c,+v,+xsfvcp,zvl{vlen}b \
+                -mattr=+m,+f,+d,+a,+c,+v,+zvfh,+xsfvcp,zvl{vlen}b \
+                -filetype=obj \
                 {'--print-after-all' if extension_config.CONFIG_TORCHSIM_DUMP_LLVM_IR else ''} \
+                -O2 {filename}.ll -o {filename}.o
+        """,
+    ).strip(),
+            re.sub(r"[ \n]+", " ",
+        f"""
+            {extension_config.CONFIG_TORCHSIM_LLVM_PATH}/llc \
+                -relocation-model=pic -march=riscv64 -O3 --stack-size-section \
+                -mattr=+m,+f,+d,+a,+c,+v,+zvfh,+xsfvcp,zvl{vlen}b \
                 -O2 {filename}.ll -o {filename}.s
         """,
     ).strip()]
@@ -109,9 +123,10 @@ def mlir_gem5_compile_command(filename, sample_filename, tog_file, vectorlane_si
         f"""
             {extension_config.CONFIG_TORCHSIM_LLVM_PATH}/llc \
                 -relocation-model=pic -march=riscv64 -O3 --stack-size-section \
-                -mattr=+m,+f,+d,+a,+c,+v,+xsfvcp,zvl{vlen}b \
+                -mattr=+m,+f,+d,+a,+c,+v,+zvfh,+xsfvcp,zvl{vlen}b \
+                -filetype=obj \
                 {'--print-after-all' if extension_config.CONFIG_TORCHSIM_DUMP_LLVM_IR else ''} \
-                -O2 {sample_filename}.ll -o {sample_filename}.s
+                -O2 {sample_filename}.ll -o {sample_filename}.o
         """,
     ).strip()]
 
@@ -151,8 +166,8 @@ class MLIRCodeCache:
         gem5_cmds = mlir_gem5_compile_command(new_input_path, sample_mlir_path, raw_tog_path, vectorlane_size)
 
         from filelock import FileLock
-        lock_dir = get_lock_dir()
-        lock = FileLock(os.path.join(lock_dir, key + ".lock"), timeout=LOCK_TIMEOUT)
+        os.makedirs(write_path, exist_ok=True)
+        lock = FileLock(get_lock_path(write_path), timeout=LOCK_TIMEOUT)
 
         if spad_info is not None:
             link_option = f"-Wl,--section-start=.spad=0x{spad_info['spad_vaddr']:x}"
@@ -166,11 +181,13 @@ class MLIRCodeCache:
             opt_cmd = shlex.split(cmds[0])
             translate_cmd = shlex.split(cmds[1])
             llc_cmd = shlex.split(cmds[2])
+            llc_asm_cmd = shlex.split(cmds[3])
             with lock:
                 try:
                     subprocess.check_call(opt_cmd)
                     subprocess.check_call(translate_cmd)
                     subprocess.check_call(llc_cmd)
+                    subprocess.check_call(llc_asm_cmd)
                 except subprocess.CalledProcessError as e:
                     logger.error(f"Command failed with exit code {e.returncode}")
                     logger.error(f"Error output: {e.output.decode() if isinstance(e.output, bytes) else e.output}")
@@ -200,7 +217,7 @@ class MLIRCodeCache:
         gem5_translate_cmd = shlex.split(gem5_cmds[1])
         gem5_llc_cmd = shlex.split(gem5_cmds[2])
 
-        lock = FileLock(os.path.join(lock_dir, key + ".lock"), timeout=LOCK_TIMEOUT)
+        lock = FileLock(get_lock_path(write_path), timeout=LOCK_TIMEOUT)
         with lock:
             try:
                 result = subprocess.check_output(gem5_sample_cmd)
@@ -266,11 +283,10 @@ class CustomAsyncCompile(AsyncCompile):
             # Wait for compilation
             key = future.result()
             from filelock import FileLock
-            lock_dir = get_lock_dir()
-            lock = FileLock(os.path.join(lock_dir, key + ".lock"), timeout=LOCK_TIMEOUT)
+            result_path = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(key))
+            lock = FileLock(get_lock_path(result_path), timeout=LOCK_TIMEOUT)
             with lock:
                 # Run simulator pass
-                result_path = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(key))
                 # Dump arguments and meta data
                 dump_metadata(args, arg_attributes, result_path)
                 runtime_path = FunctionalSimulator.get_runtime_dump_path(result_path)
@@ -286,15 +302,16 @@ class CustomAsyncCompile(AsyncCompile):
 
                 # Prepare arguments for launch kernel
                 onnx_path = os.path.join(result_path, "tile_graph.onnx")
-                attribute_path = os.path.join(runtime_path, "attribute")
+                attribute_dir = os.path.join(runtime_path, "attribute")
+                kernel_attribute_path = TOGSimulator.write_kernel_attribute_file(attribute_dir, args)
 
                 TOGSim = torch.npu.get_tog_simulator()
                 if not autotune and TOGSim is not None:
-                    attribute_path = TOGSim.create_attribute_file(attribute_path, args)
-                    torch.npu.launch_kernel(onnx_path, attribute_path)
+                    torch.npu.launch_kernel(onnx_path, kernel_attribute_path)
                     result = None # No result for non-autotune mode
                 else:
-                    result_path = TOGSimulator.run_standalone(onnx_path, attribute_path, autotune_mode=autotune)
+                    result_path = TOGSimulator.run_standalone(
+                        onnx_path, kernel_attribute_path, autotune_mode=autotune)
                     result = TOGSimulator.get_result_from_file(result_path)
                 return result
         return run_kernel_simulation

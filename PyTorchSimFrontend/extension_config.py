@@ -31,8 +31,6 @@ def __getattr__(name):
           "spad_size" : config_yaml["vpu_spad_size_kb_per_lane"] << 10 # Note: spad size per lane
         }
 
-    if name == "CONFIG_PRECISION":
-        return 4 # 32bit
     if name == "CONFIG_NUM_CORES":
         return config_yaml["num_cores"]
     if name == "vpu_vector_length_bits":

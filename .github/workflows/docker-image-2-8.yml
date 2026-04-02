@@ -52,10 +52,18 @@ jobs:
           echo "Image did not become available in GHCR within expected time."
           exit 1
 
-  test-pytorchsim-wrapper:
+  test-pytorchsim-wrapper1:
     needs: build-and-test
     uses: ./.github/workflows/pytorchsim_test.yml
     with:
       image_name: ghcr.io/psal-postech/torchsim-test-2-8:${{ github.sha }}
       vector_lane: 128
       spad_size: 128
+
+  test-pytorchsim-wrapper2:
+    needs: build-and-test
+    uses: ./.github/workflows/pytorchsim_test.yml
+    with:
+      image_name: ghcr.io/psal-postech/torchsim-test-2-8:${{ github.sha }}
+      vector_lane: 32
+      spad_size: 32

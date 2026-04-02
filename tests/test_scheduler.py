@@ -1,5 +1,4 @@
 import os
-import sys
 import torch
 from torchvision.models import resnet18 as model1
 from test_transformer import EncoderBlock as model2
@@ -7,7 +6,6 @@ from Simulator.simulator import TOGSimulator
 
 base_path = os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim')
 config = f'{base_path}/configs/systolic_ws_128x128_c2_simple_noc_tpuv3_partition.yml'
-os.environ['TOGSIM_CONFIG'] = config
 
 target_model1 = model1().eval()
 target_model2 = model2(768, 12).eval()

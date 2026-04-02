@@ -12,7 +12,7 @@ void DMA::issue_tile(std::shared_ptr<Instruction> inst) {
   _current_inst = std::move(inst);
   std::vector<size_t>& tile_size = _current_inst->get_tile_size();
   if (tile_size.size() <= 0 || tile_size.size() > get_max_dim()) {
-    spdlog::error("[DMA {}] issued tile is not supported format..", _id);
+    spdlog::error("[DMA {}] issued tile is not supported format.. tile.size: {}, tile_size: [{}]", _id, tile_size.size(), fmt::join(tile_size, ", "));
     exit(EXIT_FAILURE);
   }
   _finished = false;

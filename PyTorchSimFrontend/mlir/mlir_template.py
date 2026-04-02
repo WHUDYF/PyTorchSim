@@ -14,7 +14,7 @@ from typing import List, Optional
 from unittest.mock import patch
 
 from torch._inductor.codegen.common import KernelTemplate, CSE, DeferredLine
-from torch._inductor.ir import Buffer, IRNode, TemplateBuffer, ChoiceCaller
+from torch._inductor.ir import Buffer, IRNode, TemplateBuffer, ChoiceCaller, ir_node_to_tensor
 from torch._inductor.select_algorithm import PartialRender
 from torch._inductor.codegen.cuda.cuda_kernel import CUDATemplateCaller
 from torch._inductor.autotune_process import TensorMeta
@@ -112,7 +112,8 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         self.outer_func_name = outer_func_name
         self.outer_func_render = outer_func_render
         self.kernel_arg_attributes = kernel_arg_attributes
-        self.render_hooks = OrderedDict()
+        self.render_hooks = OrderedDict()  # Stores {key: (priority, hook)}
+        self.dma_op_counter = itertools.count()  # Add counter for unique DMA op keys
         self.buffer_names = dict()
         self.render_options = dict()
         self.tile_size = []
@@ -124,6 +125,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         self.epilogue_buffer_group = IndentedBufferGroup(self, prefix="epilogue_")
         self.global_vars = IndentedBuffer()
         self.exception_nodes = {}
+        self.epilogue_info = {}
         # Reduction data structure
         self.reduction_epilogue_suffix = IndentedBuffer()
         self.reduction_fusion = False
@@ -148,10 +150,10 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         for idx, (loop_size, stride) in enumerate(zip(mat_size, tile_size)):
             self.loop_info[f"index{idx}"] = [0, loop_size, stride]
 
-    def gemmini_gemm_mapping(self, M, N, K):
+    def gemmini_gemm_mapping(self, M, N, K, precision_bytes=4):
         spad_size = self.spad_info["spad_size"] * self.vector_lane
         num_cores = self.num_cores
-        precision = self.precision
+        precision = precision_bytes
         dim_I, dim_J, dim_K = M, N, K
         dim = self.vector_lane
 
@@ -203,7 +205,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
 
         return inner_I, inner_J, inner_K
 
-    def gemm_combination_mapping(self, M, N, K, n_extra_node=0, n_prologue_node=0, pad_k=True, min_tile=False, is_conv=False):
+    def gemm_combination_mapping(self, M, N, K, n_extra_node=0, n_prologue_node=0, pad_k=True, min_tile=False, is_conv=False, precision_bytes=4):
         tile_candidates = []
         spad_size_per_lane = self.spad_info["spad_size"]
         spad_size = spad_size_per_lane * self.vector_lane
@@ -231,11 +233,11 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                 tile_M = i * self.vector_lane if M > self.vector_lane else M_padded
                 for j in tile_N_range:
                     tile_N = j * self.vector_lane if N > self.vector_lane else N_padded
-                    used_spad_size = (tile_M * tile_K * (1 + n_prologue_node) + tile_K * tile_N + tile_M * tile_N * (1 + n_extra_node)) * self.precision
+                    used_spad_size = (tile_M * tile_K * (1 + n_prologue_node) + tile_K * tile_N + tile_M * tile_N * (1 + n_extra_node)) * precision_bytes
                     weight_size_per_lane = self.get_spad_size_per_lane(tile_K, tile_N)
                     input_size_per_lane = self.get_spad_size_per_lane(tile_M * (1 + n_prologue_node), tile_K)
                     output_size_per_lane = self.get_spad_size_per_lane(tile_M * (1 + n_extra_node), tile_N)
-                    used_spad_size_per_lane = (weight_size_per_lane + input_size_per_lane + output_size_per_lane) * self.precision
+                    used_spad_size_per_lane = (weight_size_per_lane + input_size_per_lane + output_size_per_lane) * precision_bytes
                     check_spad_size = (used_spad_size < max_spad_size and used_spad_size_per_lane < max_spad_per_lane)
                     if check_spad_size:
                         dir_path = f"{extension_config.CONFIG_TORCHSIM_DIR}/validation/gemm_candidates"
@@ -257,11 +259,11 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                 tile_M = i * self.vector_lane if M > self.vector_lane else M_padded
                 for j in tile_N_range:
                     tile_N = j * self.vector_lane if N > self.vector_lane else N_padded
-                    used_spad_size = (tile_M * tile_K * (1 + n_prologue_node) + tile_K * tile_N + tile_M * tile_N * (1 + n_extra_node)) * self.precision
+                    used_spad_size = (tile_M * tile_K * (1 + n_prologue_node) + tile_K * tile_N + tile_M * tile_N * (1 + n_extra_node)) * precision_bytes
                     weight_size_per_lane = self.get_spad_size_per_lane(tile_K, tile_N)
                     input_size_per_lane = self.get_spad_size_per_lane(tile_M * (1 + n_prologue_node), tile_K)
                     output_size_per_lane = self.get_spad_size_per_lane(tile_M * (1 + n_extra_node), tile_N)
-                    used_spad_size_per_lane = (weight_size_per_lane + input_size_per_lane + output_size_per_lane) * self.precision
+                    used_spad_size_per_lane = (weight_size_per_lane + input_size_per_lane + output_size_per_lane) * precision_bytes
                     n_tile = math.ceil(M / max(tile_M, 128)) * math.ceil(N / max(tile_N, 128))
                     check_spad_size = (used_spad_size < max_spad_size and used_spad_size_per_lane < max_spad_per_lane)
                     if check_spad_size and max_used_spad_size < used_spad_size and maximize_i_j <= tile_M * tile_N and n_tile >= minimum_n_tile and max(tile_N, 128) // max(tile_M, 128) < 10:
@@ -275,7 +277,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         tile_candidates = [v for _, v in tile_candidates]
         return tile_candidates
 
-    def conv_combination_mapping(self, M, N, K, K_H, K_W, O_H, O_W, stride, dilation, n_extra_node=0):
+    def conv_combination_mapping(self, M, N, K, K_H, K_W, O_H, O_W, stride, dilation, n_extra_node=0, precision_bytes=4):
         tile_candidates = []
         spad_size_per_lane = self.spad_info["spad_size"]
         spad_size = spad_size_per_lane * self.vector_lane
@@ -283,7 +285,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         max_spad_per_lane = spad_size_per_lane // 2 # double buffer
 
         max_used_spad_size = 0
-        M, N, K = self.gemm_combination_mapping(M, N, K, n_extra_node=n_extra_node, pad_k=False, is_conv=True)[0]
+        M, N, K = self.gemm_combination_mapping(M, N, K, n_extra_node=n_extra_node, pad_k=False, is_conv=True, precision_bytes=precision_bytes)[0]
         max_k_h_w = 1 # maximize kernel size
         max_o_h_w = 1 # maximize output size
         K = min(K, self.vector_lane)
@@ -296,11 +298,11 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                         weight_size = k_w * k_h * K * N
                         input_size = i_w * i_h * M * K
                         output_size = o_w * o_h * M * N
-                        used_spad_size = (weight_size + input_size + output_size * (1 + n_extra_node)) * self.precision
+                        used_spad_size = (weight_size + input_size + output_size * (1 + n_extra_node)) * precision_bytes
                         weight_size_per_lane = self.get_spad_size_per_lane(k_w * k_h * K, N)
                         input_size_per_lane = self.get_spad_size_per_lane(i_w * i_h * M, K)
                         output_size_per_lane = self.get_spad_size_per_lane(o_w * o_h * M  * (1 + n_extra_node), N)
-                        used_spad_size_per_lane = (weight_size_per_lane + input_size_per_lane + output_size_per_lane) * self.precision
+                        used_spad_size_per_lane = (weight_size_per_lane + input_size_per_lane + output_size_per_lane) * precision_bytes
                         check_spad_size = (used_spad_size < max_spad_size and used_spad_size_per_lane < max_spad_per_lane)
                         if check_spad_size:
                             tile_candidates.append((used_spad_size, (k_h, k_w, o_h, o_w, M, N, K)))
@@ -316,7 +318,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         tile_candidates = [v for _, v in tile_candidates]
         return tile_candidates
 
-    def conv_multi_tile_mapping(self, M, N, K, K_H, K_W, O_H, O_W, stride, dilation, n_extra_node=0):
+    def conv_multi_tile_mapping(self, M, N, K, K_H, K_W, O_H, O_W, stride, dilation, n_extra_node=0, precision_bytes=4):
         tile_candidates = []
         spad_size_per_lane = self.spad_info["spad_size"]
         spad_size = spad_size_per_lane * self.vector_lane
@@ -324,7 +326,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         max_spad_per_lane = spad_size_per_lane // 2
 
         max_used_spad_size = 0
-        M, N, K = self.gemm_combination_mapping(M, N, K * K_W, n_extra_node=n_extra_node, pad_k=False, is_conv=True)[0]
+        M, N, K = self.gemm_combination_mapping(M, N, K * K_W, n_extra_node=n_extra_node, pad_k=False, is_conv=True, precision_bytes=precision_bytes)[0]
         max_k_h_w = K_W
         for o_h in sympy.divisors(O_H):
             for o_w in sympy.divisors(O_W):
@@ -334,11 +336,11 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                     weight_size = 1 * k_h * K * N
                     input_size = i_w * i_h * M * K
                     output_size = o_w * o_h * M * N
-                    used_spad_size = (weight_size + input_size + output_size * (1 + n_extra_node)) * self.precision
+                    used_spad_size = (weight_size + input_size + output_size * (1 + n_extra_node)) * precision_bytes
                     weight_size_per_lane = self.get_spad_size_per_lane(1 * k_h * K, N)
                     input_size_per_lane = self.get_spad_size_per_lane(i_w * i_h * M, K)
                     output_size_per_lane = self.get_spad_size_per_lane(o_w * o_h * M  * (1 + n_extra_node), N)
-                    used_spad_size_per_lane = (weight_size_per_lane + input_size_per_lane + output_size_per_lane) * self.precision
+                    used_spad_size_per_lane = (weight_size_per_lane + input_size_per_lane + output_size_per_lane) * precision_bytes
                     check_spad_size = (used_spad_size < max_spad_size and used_spad_size_per_lane < max_spad_per_lane)
                     if check_spad_size:
                         tile_candidates.append((used_spad_size, (k_h, K_W, o_h, o_w, M, N, K)))
@@ -352,7 +354,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         tile_candidates = [v for _, v in tile_candidates]
         return tile_candidates
 
-    def conv_single_batch_mapping(self, M, N, K, K_H, K_W, O_H, O_W, stride, dilation, n_extra_node=0):
+    def conv_single_batch_mapping(self, M, N, K, K_H, K_W, O_H, O_W, stride, dilation, n_extra_node=0, precision_bytes=4):
         tile_candidates = []
         spad_size_per_lane = self.spad_info["spad_size"]
         spad_size = spad_size_per_lane * self.vector_lane
@@ -360,7 +362,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         max_spad_per_lane = spad_size_per_lane // 2
 
         max_used_spad_size = 0
-        M, N, K = self.gemm_combination_mapping(O_W, N, K, n_extra_node=n_extra_node, pad_k=False, is_conv=True)[0]
+        M, N, K = self.gemm_combination_mapping(O_W, N, K, n_extra_node=n_extra_node, pad_k=False, is_conv=True, precision_bytes=precision_bytes)[0]
         max_k_h_w = 1
         for o_h in sympy.divisors(O_H):
             for k_h in sympy.divisors(K_H):
@@ -370,11 +372,11 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                     weight_size = k_w * k_h * K * N
                     input_size = i_w * i_h * k_w * K
                     output_size = M * o_h * N
-                    used_spad_size = (weight_size + input_size + output_size * (1 + n_extra_node)) * self.precision
+                    used_spad_size = (weight_size + input_size + output_size * (1 + n_extra_node)) * precision_bytes
                     weight_size_per_lane = self.get_spad_size_per_lane(k_w * k_h * K, N)
                     input_size_per_lane = self.get_spad_size_per_lane(i_w * i_h * k_w, K)
                     output_size_per_lane = self.get_spad_size_per_lane(M * o_h  * (1 + n_extra_node), N)
-                    used_spad_size_per_lane = (weight_size_per_lane + input_size_per_lane + output_size_per_lane) * self.precision
+                    used_spad_size_per_lane = (weight_size_per_lane + input_size_per_lane + output_size_per_lane) * precision_bytes
                     check_spad_size = (used_spad_size < max_spad_size and used_spad_size_per_lane < max_spad_per_lane)
                     if check_spad_size:
                         tile_candidates.append((used_spad_size, (k_h, k_w, o_h, M, M, N, K)))
@@ -386,6 +388,100 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             raise RuntimeError("Cannot find a valid mapping")
         tile_candidates = sorted(tile_candidates, key=lambda x: x[0], reverse=True)
         tile_candidates = [v for _, v in tile_candidates]
+        return tile_candidates
+    
+    # Flash Attention requires more SRAM compared to standard GEMM.
+    # Total buffers needed: query, key, value, out, mul, max, sum
+    # Tensor Shapes:
+    #   query (tile_l, tile_e), key (tile_s, tile_e), value (tile_s, tile_e), mul (tile_s, tile_l), out(tile_l, tile_e)
+    #   max, sum : (tile_l, 2) 
+    def flash_sdpa_mapping(self, l, s, e, n_extra_node=0, n_prologue_node=0, pad_e=True, min_tile=False, is_conv=False):
+        tile_candidates = []
+        
+        spad_size_per_lane = self.spad_info["spad_size"]
+        spad_size = spad_size_per_lane * self.vector_lane
+        
+        # Double buffering
+        max_spad_per_lane = spad_size_per_lane // 2
+        max_spad_size = spad_size // 2 
+
+        # Padding for utilization        
+        minimum_tile_size = 8 
+        minimum_n_tile = self.num_cores if min_tile else 1
+        l_pad_factor = self.vector_lane if l > self.vector_lane else minimum_tile_size
+        s_pad_factor = self.vector_lane if s > self.vector_lane else minimum_tile_size
+
+        pad = lambda x, factor: ((x + factor - 1) // factor) * factor
+        l_padded = pad(l, l_pad_factor)
+        s_padded = pad(s, s_pad_factor)
+
+        # Calculate the total number of vector-sized blocks
+        l_idx = l_padded // self.vector_lane
+        s_idx = s_padded // self.vector_lane
+
+        # Generate candidates for the number of blocks per tile
+        l_tile_range = sympy.divisors(l_idx) if l > self.vector_lane else [1]
+        s_tile_range = sympy.divisors(s_idx) if s > self.vector_lane else [1]
+        
+        # Convert block count to actual tile size
+        maximize_i_j = 1
+        max_used_spad_size = 0
+    
+        # Flash Attention does not tile along the head dimension (e or ev).
+        tile_e = e
+
+        for i in l_tile_range:
+            tile_l = i * self.vector_lane if l > self.vector_lane else l_padded
+            for j in s_tile_range:
+                tile_s = j * self.vector_lane if s > self.vector_lane else s_padded
+                
+                # Calculate used spad size
+                used_spad_size = (
+                    tile_l * tile_e * (1 + n_prologue_node) # query
+                    + tile_s * tile_e                       # key
+                    + tile_s * tile_e                       # value
+                    + tile_s * tile_l                       # mul
+                    + tile_l * tile_e * (1 + n_extra_node)  # out
+                    + (tile_l * 2) * 2                      # max, sum
+                ) * self.precision
+                
+                # Calculate used spad size per lane.
+                query_per_lane = tile_e * (1+n_prologue_node)
+                key_per_lane = tile_s
+                value_per_lane = tile_e
+                mul_per_lane = tile_s
+                out_per_lane = tile_e * (1 + n_extra_node)
+                vec_per_lane = 2 * 2
+
+                used_spad_per_lane = (
+                    query_per_lane
+                    + key_per_lane
+                    + value_per_lane
+                    + mul_per_lane
+                    + out_per_lane
+                    + vec_per_lane
+                ) * self.precision
+                
+                # Add the validated candidate to the list if it passes all hardware constraints.
+                n_tile = math.ceil(l / max(tile_l, 128)) * math.ceil(s / max(tile_s, 128))
+                check_spad_size = (used_spad_size < max_spad_size and used_spad_per_lane < max_spad_per_lane)
+
+                if (check_spad_size 
+                    and max_used_spad_size < used_spad_size             # SRAM utilization
+                    and maximize_i_j <= tile_l * tile_s                 # Larger tile
+                    and n_tile >= minimum_n_tile                        # Pallelism
+                    and max(tile_s, 128) // max(tile_l, 128) < 10):     # Balanced Shape
+                    max_used_spad_size = used_spad_size
+                    maximize_i_j = tile_l * tile_s
+                
+                if check_spad_size:
+                    tile_candidates.append((used_spad_size, (tile_l, tile_s, tile_e)))
+
+        # Sort by used_spad_size.
+        # tile_candidates[0] is the best solution we have.
+        tile_candidates = sorted(tile_candidates, key=lambda x: x[0], reverse=True)
+        tile_candidates = [v for _, v in tile_candidates]
+
         return tile_candidates
 
     def meta_kernel(self):
@@ -460,11 +556,11 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                         }
                         node.codegen((vars, reduction_vars))
 
-            # Codegen epilogue nodes
-            tile_desc = kernel.set_tile_size(kernel.epilogue_info)
-            kernel.kernel_group.set_tile_info(tile_desc)
-            kernel.call_ranges = None
             if epilogue_nodes:
+                # Codegen epilogue nodes
+                tile_desc = kernel.set_tile_size(kernel.epilogue_info)
+                kernel.kernel_group.set_tile_info(tile_desc)
+                kernel.call_ranges = None
                 with kernel.epilogue_buffer_group.as_local():
                     _, (group, reduction_group) = max(
                         epilogue_nodes, key=lambda x: int(x.is_reduction())
@@ -517,18 +613,22 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return src_code, meta_code
 
     def _prepare_simulator_headers(self, src_code):
+        from filelock import FileLock
+
         spad_end_symbol = f"int spad_end[0] __attribute__ ((section(\".spad\")));\n"
         spad_section_end_symbol = f"int spad_section_end[0] __attribute__ ((section(\".spad\"), aligned({self.spad_info['spad_size']*self.vector_lane})));"
 
         write_path = extension_codecache.get_write_path(src_code)
-        if not os.path.exists(write_path):
-            os.makedirs(write_path, exist_ok=True)
+        os.makedirs(write_path, exist_ok=True)
         spike_write_path = os.path.join(write_path, "global_var.h")
         gem5_write_path = os.path.join(write_path, "gem5_global_var.h")
-        if not os.path.exists(spike_write_path):
-            write_atomic(spike_write_path, self.header.getvalue()+spad_end_symbol+spad_section_end_symbol)
-        if not os.path.exists(gem5_write_path):
-            write_atomic(gem5_write_path, self.gem5_header.getvalue())
+
+        lock = FileLock(extension_codecache.get_lock_path(write_path), timeout=extension_codecache.LOCK_TIMEOUT)
+        with lock:
+            if not os.path.exists(spike_write_path):
+                write_atomic(spike_write_path, self.header.getvalue()+spad_end_symbol+spad_section_end_symbol)
+            if not os.path.exists(gem5_write_path):
+                write_atomic(gem5_write_path, self.gem5_header.getvalue())
 
     def codegen_prologue_body(self):
         body = IndentedBuffer()
@@ -554,7 +654,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             dram_var = self.epilogue_info["dram_var"]
             index_list = self.epilogue_info["dram_idx"]
             tile_desc = self.epilogue_info["dram_tile_desc"]
-            code = self.def_dma_op("MVOUT", dram_var, index_list, tile_desc)
+            code = self.def_dma_op("MVOUT", dram_var, index_list, tile_desc, lazy_mode=False)
             self.cse.generate(self.dma_stores, code, assignment = False)
 
         body = IndentedBuffer()
@@ -625,14 +725,34 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                     extra_node[node.get_name()] = node.node
                 else:
                     extra_node[node.get_name()] = node
-                self.buffer_names[node.get_name()] = self.epilogue_info['sram_var']
+
+                if 'sram_var' in self.epilogue_info:
+                    self.buffer_names[node.get_name()] = self.epilogue_info['sram_var']
 
         def hook():
-            arg_defs, *_ = self.kernel_group.args.mlir_argdefs(extra_node=extra_node)
-            return f"({', '.join(arg_defs)})"
+            arg_defs, call_args, *_ = self.kernel_group.args.mlir_argdefs(extra_node=extra_node)
+            output_names = names[len(inputs) : len(inputs) + len(outputs)]
+            out_ptr_idx = 0
+            renamed_arg_defs = []
+            for outer, arg_def in zip(call_args, arg_defs):
+                raw_symbol = arg_def.split(":", 1)[0].strip().lstrip("%")
+                if outer in self.kernel_group.args.input_buffers:
+                    symbol = self.kernel_group.args.input_buffers[outer]
+                elif outer in self.kernel_group.args.output_buffers:
+                    symbol = self.kernel_group.args.output_buffers[outer]
+                elif raw_symbol.startswith("out_ptr") and out_ptr_idx < len(output_names):
+                    symbol = output_names[out_ptr_idx]
+                    out_ptr_idx += 1
+                elif outer in self.kernel_group.args.sizevars:
+                    symbol = self.kernel_group.args.sizevars[outer]
+                else:
+                    symbol = raw_symbol
+                _, arg_type = arg_def.split(":", 1)
+                renamed_arg_defs.append(f"%{symbol}:{arg_type}")
+            return f"({', '.join(renamed_arg_defs)})"
 
         assert "<DEF_KERNEL>" not in self.render_hooks
-        self.render_hooks["<DEF_KERNEL>"] = hook
+        self.render_hooks["<DEF_KERNEL>"] = (5, hook)  # Default priority 5
         return "<DEF_KERNEL>"
 
     # This function is a temporal function for convolution because currently convolution kernel is not considering padding.
@@ -670,7 +790,8 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                 self.kernel_group.args.output_buffers[node.get_name()] = name
                 self.store_buffer_names.add(node.get_name())    #TODO: Is this enough not calling store() in mlir_common.py?
                 self.extra_node[node.get_name()] = node
-                self.buffer_names[node.get_name()] = self.epilogue_info['sram_var']   #TODO: Buffer name fixed
+                if 'sram_var' in self.epilogue_info:
+                    self.buffer_names[node.get_name()] = self.epilogue_info['sram_var']   #TODO: Buffer name fixed
 
         def kernel_hook():
             arg_defs, *_ = self.kernel_group.args.mlir_argdefs(extra_node=self.extra_node)
@@ -678,7 +799,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             return f"({', '.join(arg_defs)})"
 
         assert "<DEF_CONV_KERNEL>" not in self.render_hooks
-        self.render_hooks["<DEF_CONV_KERNEL>"] = kernel_hook
+        self.render_hooks["<DEF_CONV_KERNEL>"] = (5, kernel_hook)  # Default priority 5
         return "<DEF_CONV_KERNEL>"
 
     # This function is for convolution wrapper function finalizing.
@@ -689,7 +810,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             return f"({', '.join(wrapper_arg_defs)})"
 
         if "<DEF_CONV_WRAPPER>" not in self.render_hooks:
-            self.render_hooks["<DEF_CONV_WRAPPER>"] = wrapper_hook
+            self.render_hooks["<DEF_CONV_WRAPPER>"] = (5, wrapper_hook)  # Default priority 5
         return "<DEF_CONV_WRAPPER>"
 
     def get_conv_inputs(self):
@@ -698,15 +819,15 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
     def get_conv_outputs(self):
         return {k: v for k, v in self.kernel_group.args.output_buffers.items() if v != 'REMOVED'}
 
-    def load_input(self, indent_size: int = 0):
+    def load_input(self, indent_size: int = 0, priority: int = 1):
         def hook():
             code = IndentedBuffer()
             prologue_code = self.codegen_prologue_body()
             if prologue_code.getvalue():
                 input_dma_code = self.def_dma_op("MVIN", self.prologue_info["input_dram_var"], self.prologue_info["input_idx"],
-                                self.prologue_info["input_tile_desc"], subtile_size=self.prologue_info["input_subtile_size"], async_type=False)
+                                self.prologue_info["input_tile_desc"], subtile_size=self.prologue_info["input_subtile_size"], async_type=False, lazy_mode=False)
                 weight_dma_code = self.def_dma_op("MVIN", self.prologue_info["weight_dram_var"], self.prologue_info["weight_idx"],
-                                self.prologue_info["weight_tile_desc"], subtile_size=self.prologue_info["weight_subtile_size"], async_type=False)
+                                self.prologue_info["weight_tile_desc"], subtile_size=self.prologue_info["weight_subtile_size"], async_type=False, lazy_mode=False)
                 if (self.prologue_info["is_input_fused"]):
                     code.splice(input_dma_code)
                     code.splice(prologue_code)
@@ -717,58 +838,63 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
                     code.splice(input_dma_code)
             else:
                 dma_code = self.def_dma_op("MVIN", self.prologue_info["input_dram_var"], self.prologue_info["input_idx"],
-                                self.prologue_info["input_tile_desc"], subtile_size=self.prologue_info["input_subtile_size"], async_type=False)
+                                self.prologue_info["input_tile_desc"], subtile_size=self.prologue_info["input_subtile_size"], async_type=False, lazy_mode=False)
                 code.splice(dma_code)
                 dma_code = self.def_dma_op("MVIN", self.prologue_info["weight_dram_var"], self.prologue_info["weight_idx"],
-                                self.prologue_info["weight_tile_desc"], subtile_size=self.prologue_info["weight_subtile_size"], async_type=False)
+                                self.prologue_info["weight_tile_desc"], subtile_size=self.prologue_info["weight_subtile_size"], async_type=False, lazy_mode=False)
                 code.splice(dma_code)
             code = textwrap.indent(code.getvalue(), " "*indent_size).strip()
             return code
 
         assert "<PREPARE_INPUT>" not in self.render_hooks
-        self.render_hooks["<PREPARE_INPUT>"] = hook
-        self.render_hooks.move_to_end("<PREPARE_INPUT>", last=False) # Force order to be triggered first
+        self.render_hooks["<PREPARE_INPUT>"] = (priority, hook)
         return "<PREPARE_INPUT>"
 
-    def store_output(self, indent_size: int = 0):
+    def store_output(self, indent_size: int = 0, priority: int = 1):
         def hook():
             epilogue_code = self.codegen_epilogue_body()
             return textwrap.indent(epilogue_code.getvalue(), " "*indent_size).strip()
 
         assert "<STORE_OUTPUT>" not in self.render_hooks
-        self.render_hooks["<STORE_OUTPUT>"] = hook
-        self.render_hooks.move_to_end("<STORE_OUTPUT>", last=False) # Force order to be triggered first
+        self.render_hooks["<STORE_OUTPUT>"] = (priority, hook)
         return "<STORE_OUTPUT>"
 
-    def reduction_output(self, indent_size: int = 0):
+    def reduction_output(self, indent_size: int = 0, priority: int = 5):
         def hook():
             return textwrap.indent(self.reductions_suffix.getvalue(), " "*indent_size).strip()
 
         assert "<REDUCTION_OUTPUT>" not in self.render_hooks
-        self.render_hooks["<REDUCTION_OUTPUT>"] = hook
+        self.render_hooks["<REDUCTION_OUTPUT>"] = (priority, hook)
         return "<REDUCTION_OUTPUT>"
+
+    def _sort_hooks_by_priority(self):
+        """Sort hooks by priority (lower priority executes first)."""
+        sorted_hooks = OrderedDict()
+        for key, (priority, hook) in sorted(self.render_hooks.items(), key=lambda x: x[1][0]):
+            sorted_hooks[key] = hook
+        return sorted_hooks
 
     def def_function(self):
         _, call_args, _, _ = self.kernel_group.args.python_argdefs()
         if self.outer_func_render is not None:
             partial_code, function_name = self.outer_func_render(input_args=call_args)
+
             return PartialRender(
                 partial_code,
-                self.render_hooks,
+                self._sort_hooks_by_priority(),
             ), function_name
         else:
             return None, None
 
-    def def_global_vars(self):
+    def def_global_vars(self, priority: int = 10):
         key = "<GLOBAL_VARS>"
         def hook():
             return textwrap.indent(self.global_vars.getvalue(), "").strip()
 
-        assert key not in self.render_hooks
-        self.render_hooks[key] = hook
+        self.render_hooks[key] = (priority, hook)
         return key
 
-    def def_local_vars(self, indent_size=0):
+    def def_local_vars(self, indent_size=0, priority: int = 10):
         key = "<LOCAL_VARS>"
         def hook():
             code = IndentedBuffer()
@@ -777,57 +903,84 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             code.splice(self.alloc_buffer)
             return textwrap.indent(code.getvalue(), " "*indent_size).strip()
 
-        assert key not in self.render_hooks
-        self.render_hooks[key] = hook
+        self.render_hooks[key] = (priority, hook)
         return key
 
     def def_dma_op(self, dma_type, dram_var:str, index_list:list, tile_desc:mlir_common.MLIRMultiDimTile,
-                   subtile_size:list=[], async_type=None, indent_size=0):
-        # Prepare code block
-        local_code = IndentedBuffer()
-        with self, self.override_buffer_cse(buffer=local_code, cse=self.apply_cse):
-            index_var = self.parse_index_list(index_list, offset=tile_desc.offset)
-            node_layout = self.named_nodes[dram_var].get_layout()
-            if dram_var in self.exception_nodes:
-                numel = self.exception_nodes[dram_var]["numel"]
-            else:
-                numel = self.get_arg_info(self.named_nodes[dram_var].get_name()).get_numel()
-            mlir_dtype = mlir_common.DTYPE_TO_MLIR[node_layout.dtype]
-            dram_shape = f"memref<{numel}x{mlir_dtype}>"
-            dram_stride = []
-            for idx in index_list:
-                if idx.is_Mul:
-                    dram_stride.append(int(idx.args[0]))
-                elif idx == sympy.Symbol("c0"):
-                    dram_stride.append(0)
-                elif not idx.is_Number:
-                    dram_stride.append(1)
+                   subtile_size:list=[], async_type=None, indent_size=0, priority: int = 5, lazy_mode: bool = True,
+                   dram_stride:list=None, dram_offset=None, padding: int = 0):
+        # Todo. Remove legacy behavior (i.e., index_list parsing)
+        def generate_dma_code():
+            """Internal method to generate DMA code directly."""
+            local_code = IndentedBuffer()
+            with self, self.override_buffer_cse(buffer=local_code, cse=self.apply_cse):
+                if dram_offset is not None:
+                    # Use explicitly provided offset (pre-computed MLIR SSA variable name)
+                    index_var = dram_offset
                 else:
-                    dram_stride.append(0)
+                    index_var = self.parse_index_list(index_list, offset=tile_desc.offset)
+                node_layout = self.named_nodes[dram_var].get_layout()
+                if dram_var in self.exception_nodes:
+                    numel = self.exception_nodes[dram_var]["numel"]
+                else:
+                    numel = self.get_arg_info(self.named_nodes[dram_var].get_name()).get_numel()
+                mlir_dtype = mlir_common.DTYPE_TO_MLIR[node_layout.dtype]
+                dram_shape = f"memref<{numel}x{mlir_dtype}>"
 
-            sram_var = tile_desc.get_name()
-            tile_shape = tile_desc.get_mlir_shape(mlir_dtype)
-            tile_stride = tile_desc.get_tile_stride()
-            vlane_split_axis = tile_desc.vmap.vlane_split_axis
-            vlane_stride = tile_desc.vmap.vlane_stride
+                if dram_stride is not None:
+                    # Use explicitly provided dram_stride
+                    _dram_stride = dram_stride
+                else:
+                    # Extract dram_stride from index_list (legacy behavior)
+                    _dram_stride = []
+                    for idx in index_list:
+                        if idx.is_Mul:
+                            _dram_stride.append(int(idx.args[0]))
+                        elif idx == sympy.Symbol("c0"):
+                            _dram_stride.append(0)
+                        elif not idx.is_Number:
+                            _dram_stride.append(1)
+                        else:
+                            _dram_stride.append(0)
 
-            zero_cse = self.get_const_cse(0, "index")
-            sram_index_var = ", ".join([f"%{str(zero_cse)}"]*tile_desc.get_nr_dim())
+                sram_var = tile_desc.get_name()
+                tile_shape = tile_desc.get_mlir_shape(mlir_dtype)
+                sram_strides = tile_desc.get_tile_stride()
+                vlane_split_axis = tile_desc.vmap.vlane_split_axis
+                vlane_stride = tile_desc.vmap.vlane_stride
 
-            attribute_parts = [f"dram_stride={dram_stride}", f"sram_stride={tile_stride}", "padding=0"]
-            if subtile_size:
-                attribute_parts.append(f"subtile_size={subtile_size}, async={int(async_type) if async_type is not None else 1}")
-            attribute = "  {" + ", ".join(attribute_parts) + "}"
-            code = self.get_dma_code(dma_type, vlane_split_axis, vlane_stride, mlir_dtype, dram_var, index_var, sram_var, sram_index_var,
-                                    dram_shape, tile_shape, "")
-            local_code.writeline(code)
-            local_code.writeline(attribute)
-        return textwrap.indent(local_code.getvalue(), " "*indent_size).strip()
+                zero_cse = self.get_const_cse(0, "index")
+                sram_index_var = ", ".join([f"%{str(zero_cse)}"]*tile_desc.get_nr_dim())
+
+                attribute_parts = [f"dram_stride={_dram_stride}", f"sram_stride={sram_strides}", f"padding={int(padding)}"]
+                if subtile_size:
+                    attribute_parts.append(f"subtile_size={subtile_size}, async={int(async_type) if async_type is not None else 1}")
+                attribute = "  {" + ", ".join(attribute_parts) + "}"
+                code = self.get_dma_code(dma_type, vlane_split_axis, vlane_stride, mlir_dtype, dram_var, index_var, sram_var, sram_index_var,
+                                        dram_shape, tile_shape, "")
+                local_code.writeline(code)
+                local_code.writeline(attribute)
+            return textwrap.indent(local_code.getvalue(), " "*indent_size).strip()
+
+        if not lazy_mode:
+            # Immediate mode: generate code directly and return it
+            return generate_dma_code()
+
+        # Lazy mode: register hook and return key
+        dma_op_id = next(self.dma_op_counter)
+        key = f"<DMA_OP_{dma_op_id}>"
+        self.render_hooks[key] = (priority, generate_dma_code)
+        return key
 
     def def_sram_buffer(self, dram_name, tile_desc, id=0, indent_size=0):
         # Prepare code block
         with self:
-            dtype = self.named_nodes[dram_name].get_layout().dtype
+            try:
+                dtype = self.named_nodes[dram_name].get_layout().dtype
+            except (KeyError, AttributeError, TypeError):
+                import torch
+                dtype = torch.float32
+            
             tile_shape = tile_desc.get_mlir_shape(mlir_common.DTYPE_TO_MLIR[dtype])
             buffer_name = self.allocate_sram_buffer(dtype, dram_name, tile_desc, id, forced_name=dram_name)
             code = f"%{tile_desc.name} = memref.get_global @{buffer_name} : {tile_shape}"
@@ -840,7 +993,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
 
         return PartialRender(
             code,
-            self.render_hooks,
+            self._sort_hooks_by_priority(),
         )
 
     def get_spad_size_per_lane(self, tile_m, tile_n):
@@ -1106,7 +1259,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             numel_per_lane = tile_desc.get_numel_per_lane()
             r_tile_size = tile_desc.get_tile_size()[-1]
             nr_outer_loop = (numel_per_lane + r_tile_size-1) // r_tile_size
-            tile_desc.vmap.forced_vec_size = nr_outer_loop * 32 # Why? Emprically selected, other option failed to functionality...
+            tile_desc.vmap.forced_vec_size = self.get_safe_vec_size(nr_outer_loop * 32) # Why? Emprically selected, other option failed to functionality...
 
             self.reduction_fusion = True
             self.r_tile_size = tile_desc.get_tile_size()[-1]
@@ -1117,7 +1270,7 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
             self.compute_body_loop.step = tile_desc.get_compute_vec_size() // nr_outer_loop
             self.reduction_body_loop = mlir_common.LoopLevel(self.reduction_loop_idx, nr_outer_loop)
         else:
-            tile_desc.vmap.forced_vec_size = 64
+            tile_desc.vmap.forced_vec_size = self.get_safe_vec_size(64)
 
             if prologue:
                 self.prologue_compute_body_loop.size = tile_desc.get_numel_per_lane()
@@ -1128,6 +1281,15 @@ class MLIRTemplateKernel(MLIRKernel, BaseMLIRHardwareInfo):
         return tile_desc
 
 class MLIRTemplateCaller(CUDATemplateCaller):
+    def __init__(self, name, category, input_nodes, layout, make_kernel_render, supports_epilogue_fusion, template, info_kwargs, description):
+        bmreq = MLIRBenchmarkRequest(
+            kernel_name=name,
+            input_tensor_meta=list(),
+            output_tensor_meta=list(),
+            extra_args=[],
+            source_code="",
+        )
+        super().__init__(name, category, input_nodes, layout, make_kernel_render, bmreq, supports_epilogue_fusion, template, info_kwargs, description)
     def __str__(self):
         return f"MLIRTemplateCaller(source_file={self.bmreq.source_file})"
 
@@ -1151,8 +1313,14 @@ class MLIRTemplate(KernelTemplate):
         super().__init__(name)
         self.input_nodes = [node for node in input_nodes if node is not None]
         self.output_node: Buffer = Buffer(name="buf_out", layout=layout)
+        # Multi-output templates can override this with explicit output buffers.
+        self.output_nodes = [self.output_node]
         self.input_reorder = input_reorder
         self.layout = layout
+        # Fusion support flags (default to False)
+        self.support_epilogue_fusion = False
+        self.support_prologue_fusion = False
+        self.support_reduction_fusion = False
 
     def generate(self, **kwargs) -> ChoiceCaller:
         kernel_name = f"mlir_{self.name}"
@@ -1164,15 +1332,8 @@ class MLIRTemplate(KernelTemplate):
             code = self.render(kernel=kernel, **kwargs)
 
         kernel_hash_name = f"mlir_{self.name}_{next(self.index_counter)}"
-        extra_args = []
         # create the BenchmarkRequest
-        bmreq = MLIRBenchmarkRequest(
-            kernel_name=kernel_name,
-            input_tensor_meta=TensorMeta.from_irnodes(self.input_nodes),
-            output_tensor_meta=TensorMeta.from_irnodes(self.output_node),
-            extra_args=extra_args,
-            source_code=code,
-        )
+        output_nodes = getattr(self, "output_nodes", None) or [self.output_node]
 
         def make_kernel_render(
             template_node: TemplateBuffer,
@@ -1214,7 +1375,6 @@ class MLIRTemplate(KernelTemplate):
             self.input_nodes,
             self.output_node.get_layout(),
             make_kernel_render,
-            bmreq,
             False,  # supports_epilogue_fusion
             self,
             kwargs,
