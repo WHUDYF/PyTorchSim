@@ -9,6 +9,8 @@ from collections import defaultdict
 from functools import reduce
 from operator import mul
 import torch
+
+from PyTorchSimFrontend import extension_config
 from torch._inductor.codegen import common
 from torch._inductor.codegen import cpp
 from torch._inductor.virtualized import V
@@ -30,7 +32,6 @@ from torch._inductor.utils import (
     sympy_subs,
     unique,
 )
-from PyTorchSimFrontend import extension_config
 from PyTorchSimFrontend import extension_codecache
 
 from PyTorchSimFrontend.extension_utils import (

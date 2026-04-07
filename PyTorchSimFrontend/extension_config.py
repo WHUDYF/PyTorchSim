@@ -8,8 +8,42 @@ CONFIG_TORCHSIM_DIR = os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorch
 CONFIG_GEM5_PATH = os.environ.get('GEM5_PATH', default="/workspace/gem5/build/RISCV/gem5.opt")
 CONFIG_TORCHSIM_LLVM_PATH = os.environ.get('TORCHSIM_LLVM_PATH', default="/usr/bin")
 
+CONFIG_TORCHSIM_TOG_HOST_CC = os.environ.get("TORCHSIM_TOG_HOST_CC", "gcc")
+
+def _default_tog_host_cflags():
+    """Host flags for ``dlopen``'d ``*_tog.so`` / ``tile_operation_graph.so``."""
+    if os.environ.get("TORCHSIM_TOG_HOST_CFLAGS"):
+        return os.environ["TORCHSIM_TOG_HOST_CFLAGS"]
+    if True: #int(os.environ.get("TORCHSIM_TOG_SO_DEBUG", "0")):
+        return (
+            "-g -Og -fno-omit-frame-pointer -fPIC -std=c11 "
+            "-Wall -Wextra -Wno-unused-variable -Wno-unused-parameter"
+        )
+    return (
+        "-O2 -fPIC -std=c11 -Wall -Wextra -Wno-unused-variable -Wno-unused-parameter"
+    )
+
+
+CONFIG_TORCHSIM_TOG_HOST_CFLAGS = _default_tog_host_cflags()
+
+
+def _default_tog_host_ldflags():
+    if os.environ.get("TORCHSIM_TOG_HOST_LDFLAGS"):
+        return os.environ["TORCHSIM_TOG_HOST_LDFLAGS"]
+    # Keep debug sections in .so; optional build-id helps GDB locate DWARF.
+    base = "-shared"
+    if int(os.environ.get("TORCHSIM_TOG_SO_DEBUG", "0")):
+        return base + " -Wl,--build-id"
+    return base
+
+
+CONFIG_TORCHSIM_TOG_HOST_LDFLAGS = _default_tog_host_ldflags()
+
 CONFIG_TORCHSIM_DUMP_MLIR_IR = int(os.environ.get("TORCHSIM_DUMP_MLIR_IR", default=False))
 CONFIG_TORCHSIM_DUMP_LLVM_IR = int(os.environ.get("TORCHSIM_DUMP_LLVM_IR", default=False))
+CONFIG_TORCHSIM_DUMP_PATH = os.environ.get("TORCHSIM_DUMP_PATH", os.path.join(CONFIG_TORCHSIM_DIR, "outputs"))
+CONFIG_TORCHSIM_LOG_PATH = os.environ.get("TORCHSIM_LOG_PATH", os.path.join(CONFIG_TORCHSIM_DIR, "togsim_results"))
+os.environ["TORCHINDUCTOR_CACHE_DIR"] = os.path.join(CONFIG_TORCHSIM_DUMP_PATH, ".torchinductor")
 
 def __getattr__(name):
     # TOGSim config
@@ -99,10 +133,6 @@ def __getattr__(name):
 
     if name == "CONFIG_TOGSIM_DEBUG_LEVEL":
         return os.environ.get("TOGSIM_DEBUG_LEVEL", "")
-    if name == "CONFIG_TORCHSIM_DUMP_PATH":
-        return os.environ.get('TORCHSIM_DUMP_PATH', default = CONFIG_TORCHSIM_DIR)
-    if name == "CONFIG_TORCHSIM_LOG_PATH":
-        return os.environ.get('TORCHSIM_LOG_PATH', default = os.path.join(CONFIG_TORCHSIM_DIR, "togsim_results"))
 
 # SRAM Buffer allocation plan
 def load_plan_from_module(module_path):

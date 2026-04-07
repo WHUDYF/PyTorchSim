@@ -17,6 +17,7 @@ torch._register_device_module("npu", torch_openreg.openreg)
 torch.utils.generate_methods_for_privateuse1_backend(for_storage=True)
 
 sys.path.append(os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim'))
+import PyTorchSimFrontend.extension_config  # noqa: F401
 from PyTorchSimFrontend.mlir.mlir_codegen_backend import ExtensionWrapperCodegen
 from PyTorchSimFrontend.mlir.mlir_scheduling import MLIRScheduling
 torch._inductor.codegen.common.register_backend_for_device(

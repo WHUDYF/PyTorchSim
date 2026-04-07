@@ -4,11 +4,11 @@ import shlex
 import subprocess
 import torch
 
+from PyTorchSimFrontend import extension_config
 from torch._inductor.codecache import get_hash, write
 from torch._inductor.async_compile import AsyncCompile
 from AsmParser.tog_generator import tog_generator
 from PyTorchSimFrontend.mlir.mlir_caller_codegen import MLIRKernelCallerCodeGen
-from PyTorchSimFrontend import extension_config
 from Simulator.simulator import FunctionalSimulator, CycleSimulator, TOGSimulator
 
 # Configure logger for extension_codecache module (WARNING level by default)
@@ -20,7 +20,7 @@ def hash_prefix(hash_value):
     return hash_value[1:12]
 
 def get_write_path(src_code):
-    return os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(get_hash(src_code.strip())))
+    return os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, hash_prefix(get_hash(src_code.strip())))
 
 
 def get_lock_path(write_path):
@@ -283,7 +283,7 @@ class CustomAsyncCompile(AsyncCompile):
             # Wait for compilation
             key = future.result()
             from filelock import FileLock
-            result_path = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(key))
+            result_path = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, hash_prefix(key))
             lock = FileLock(get_lock_path(result_path), timeout=LOCK_TIMEOUT)
             with lock:
                 # Run simulator pass

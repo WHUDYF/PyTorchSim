@@ -21,7 +21,7 @@ def hash_prefix(hash_value):
     return hash_value[1:12]
 
 def get_write_path(src_code):
-    return os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(get_hash(src_code.strip())))
+    return os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, hash_prefix(get_hash(src_code.strip())))
 
 @dataclasses.dataclass
 class MLIRBenchmarkRequest():
@@ -61,7 +61,7 @@ class MLIRBenchmarkRequest():
         # Check already cached result.
         write_path = get_write_path(self.source_code)
         key,  _ = write(self.source_code, "mlir", specified_dir=write_path)
-        result_dir = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(key), "togsim_result")
+        result_dir = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, hash_prefix(key), "togsim_result")
 
         # Find the most recent .log file in the result directory
         if os.path.exists(result_dir) and os.path.isdir(result_dir):

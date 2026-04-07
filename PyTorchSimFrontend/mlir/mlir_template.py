@@ -13,6 +13,7 @@ from collections import OrderedDict
 from typing import List, Optional
 from unittest.mock import patch
 
+from PyTorchSimFrontend import extension_config
 from torch._inductor.codegen.common import KernelTemplate, CSE, DeferredLine
 from torch._inductor.ir import Buffer, IRNode, TemplateBuffer, ChoiceCaller, ir_node_to_tensor
 from torch._inductor.select_algorithm import PartialRender
@@ -29,7 +30,6 @@ from PyTorchSimFrontend.mlir.mlir_codegen_backend import MLIRKernel, reduction_i
 from PyTorchSimFrontend.mlir.mlir_scheduling import SchedulerNode
 from torch._inductor.codegen import common
 
-from PyTorchSimFrontend import extension_config
 from . import mlir_common
 
 # Configure logger for mlir_template module

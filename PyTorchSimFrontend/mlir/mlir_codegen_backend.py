@@ -9,6 +9,8 @@ import torch
 from typing import Optional
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+
+from PyTorchSimFrontend import extension_config
 from torch._dynamo.testing import rand_strided
 from torch._inductor.autotune_process import TensorMeta
 from torch._dynamo.utils import dynamo_timed
@@ -23,7 +25,6 @@ from torch._inductor.utils import (
 )
 from torch.utils._sympy.functions import ModularIndexing, FloorDiv
 from PyTorchSimFrontend import extension_codecache
-from PyTorchSimFrontend import extension_config
 from . import mlir_common
 from .mlir_common import LoopLevel, LoopNest
 from .mlir_ops import ExtensionOverrides
