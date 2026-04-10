@@ -1,5 +1,32 @@
 #include "Dram.h"
 
+#include <iostream>
+
+namespace {
+
+/** Bytes/s effective GB/s and avg-per-channel utilization % for a window of `window_cycles` DRAM ticks. */
+struct DramBwSnapshot {
+  double bandwidth_gbs = 0;
+  double util_avg_ch_pct = 0;
+};
+
+DramBwSnapshot make_dram_bw_snapshot(long long total_rw_transactions, uint64_t window_cycles,
+                                     uint32_t n_ch, uint32_t req_size, uint32_t n_bl,
+                                     double dram_freq_mhz) {
+  DramBwSnapshot out;
+  if (window_cycles == 0 || n_ch == 0)
+    return out;
+  const double tx = static_cast<double>(total_rw_transactions);
+  const double w = static_cast<double>(window_cycles);
+  const double bytes_per_cycle = tx * static_cast<double>(req_size) / w;
+  out.bandwidth_gbs = bytes_per_cycle * dram_freq_mhz / 1000.0;
+  const double avg_per_ch = tx / static_cast<double>(n_ch);
+  out.util_avg_ch_pct = avg_per_ch * 100.0 * static_cast<double>(n_bl) / (2.0 * w);
+  return out;
+}
+
+}  // namespace
+
 uint32_t Dram::get_channel_id(mem_fetch* access) {
   uint32_t channel_id;
   if (_n_ch_per_partition >= 16)
@@ -87,6 +114,39 @@ void DramRamulator2::cycle() {
         _mem[ch]->return_queue_pop();
     }
   }
+
+  if (_n_ch == 0)
+    return;
+  const int iv = _config.dram_print_interval;
+  if (iv <= 0)
+    return;
+  const uint64_t cc = *_core_cycles;
+  if (cc % static_cast<uint64_t>(iv) != 0 || cc == 0)
+    return;
+
+  const double f_mhz = static_cast<double>(_config.dram_freq_mhz);
+  const uint64_t w = static_cast<uint64_t>(iv);
+  long long r_all = 0;
+  long long w_all = 0;
+  for (int ch = 0; ch < _n_ch; ch++) {
+    const long long r = _mem[ch]->interval_reads();
+    const long long wtxn = _mem[ch]->interval_writes();
+    r_all += r;
+    w_all += wtxn;
+    const DramBwSnapshot bw =
+        make_dram_bw_snapshot(r + wtxn, w, 1u, _req_size, _n_bl, f_mhz);
+    spdlog::trace(
+        "[DRAM] ch {} | BW {:.2f} GB/s, {:.2f}% util | {} reads, {} writes (interval {} cycles)",
+        ch, bw.bandwidth_gbs, bw.util_avg_ch_pct, r, wtxn, w);
+  }
+  const DramBwSnapshot bw_all =
+      make_dram_bw_snapshot(r_all + w_all, w, _n_ch, _req_size, _n_bl, f_mhz);
+  spdlog::info(
+      "[DRAM] all {} ch | BW {:.2f} GB/s, {:.2f}% util (avg/ch) | {} reads, {} writes (interval {} cycles)",
+      _n_ch, bw_all.bandwidth_gbs, bw_all.util_avg_ch_pct, r_all, w_all, w);
+  for (int ch = 0; ch < _n_ch; ch++) {
+    _mem[ch]->reset_interval_bw_counters();
+  }
 }
 
 void DramRamulator2::cache_cycle()  {
@@ -120,9 +180,44 @@ void DramRamulator2::pop(uint32_t cid) {
 }
 
 void DramRamulator2::print_stat() {
+  spdlog::info("========= DRAM stat =========");
+  if (_n_ch == 0)
+    return;
+
   for (int ch = 0; ch < _n_ch; ch++) {
-    _mem[ch]->print(stdout);
+    _mem[ch]->finalize_once();
   }
+
+  spdlog::trace("=== Ramulator2 stats (channels 0.. {}) ===", _n_ch - 1);
+  for (int ch = 0; ch < _n_ch; ch++) {
+    std::cout << "--- channel " << ch << " ---\n";
+    _mem[ch]->print_stats_yaml(std::cout);
+  }
+  std::cout.flush();
+
+  const uint64_t cycles = *_core_cycles;
+  if (cycles == 0)
+    return;
+  const double f_mhz = static_cast<double>(_config.dram_freq_mhz);
+  spdlog::info("[DRAM] per-channel avg BW ({} sim cycles):", cycles);
+  long long tr_all = 0;
+  long long tw_all = 0;
+  for (int ch = 0; ch < _n_ch; ch++) {
+    const long long tr = _mem[ch]->total_reads();
+    const long long tw = _mem[ch]->total_writes();
+    tr_all += tr;
+    tw_all += tw;
+    const DramBwSnapshot bw =
+        make_dram_bw_snapshot(tr + tw, cycles, 1u, _req_size, _n_bl, f_mhz);
+    spdlog::info(
+        "[DRAM] ch {} | avg BW {:.2f} GB/s, {:.2f}% util | {} reads, {} writes",
+        ch, bw.bandwidth_gbs, bw.util_avg_ch_pct, tr, tw);
+  }
+  const DramBwSnapshot bw_all = make_dram_bw_snapshot(
+      tr_all + tw_all, cycles, _n_ch, _req_size, _n_bl, f_mhz);
+  spdlog::info(
+      "[DRAM] all ch 0..{} | avg BW {:.2f} GB/s, {:.2f}% util (avg/ch) | {} reads, {} writes",
+      _n_ch - 1, bw_all.bandwidth_gbs, bw_all.util_avg_ch_pct, tr_all, tw_all);
 }
 
 void DramRamulator2::print_cache_stats() {
