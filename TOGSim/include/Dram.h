@@ -29,6 +29,8 @@ class Dram {
   virtual void print_stat() {}
   virtual void print_cache_stats() {};
   uint32_t get_channels_per_partition() { return _n_ch_per_partition; }
+  new_addr_type partition_dram_address(new_addr_type raw_addr) const;
+
  protected:
   SimulationConfig _config;
   CacheConfig _m_cache_config;
@@ -37,6 +39,7 @@ class Dram {
   uint32_t _n_partitions;
   uint32_t _n_ch_per_partition;
   uint32_t _req_size;
+  int _tx_log2 = 0;
   cycle_type _cycles;
   cycle_type* _core_cycles;
   std::vector<DelayQueue<mem_fetch*>> m_cache_latency_queue;
@@ -83,8 +86,6 @@ class SimpleDRAM: public Dram {
   void print_cache_stats() override;
  private:
   int _latency = 1;
-  int _tx_ch_log2;
-  int _tx_log2;
   std::vector<std::unique_ptr<DelayQueue<mem_fetch*>>> _mem;
 };
 

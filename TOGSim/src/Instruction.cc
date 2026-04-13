@@ -108,10 +108,10 @@ std::shared_ptr<std::set<addr_type>> Instruction::get_dram_address(addr_type dra
                               dim1*tile_stride.at(tile_stride.size() - 3) + \
                               dim2*tile_stride.at(tile_stride.size() - 2) + \
                               dim3*tile_stride.at(tile_stride.size() - 1);
-          address = dram_addr + (address * _elem_bits + 7) / 8;
+          address = dram_addr + (address * _elem_bits + 7) >> 3;
           if (indirect_index != NULL) {
             uint64_t index_val = indirect_index[index_count++];
-            address += (index_val * _elem_bits + 7) / 8;
+            address += (index_val * _elem_bits + 7) >> 3;
           }
           address_set->insert(address - (address & dram_req_size-1));
         }

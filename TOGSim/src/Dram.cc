@@ -4,6 +4,28 @@
 
 namespace {
 
+static bool is_power_of_2_u32(uint32_t n) { return n != 0 && (n & (n - 1)) == 0; }
+
+static uint32_t floor_log2_u32(uint32_t n) {
+  uint32_t r = 0;
+  while (n >>= 1)
+    ++r;
+  return r;
+}
+
+/** Smallest power of two >= n (n >= 1). */
+static uint32_t next_power_of_2_u32(uint32_t n) {
+  if (n <= 1)
+    return 1;
+  --n;
+  n |= n >> 1;
+  n |= n >> 2;
+  n |= n >> 4;
+  n |= n >> 8;
+  n |= n >> 16;
+  return n + 1;
+}
+
 /** Bytes/s effective GB/s and avg-per-channel utilization % for a window of `window_cycles` DRAM ticks. */
 struct DramBwSnapshot {
   double bandwidth_gbs = 0;
@@ -27,14 +49,38 @@ DramBwSnapshot make_dram_bw_snapshot(long long total_rw_transactions, uint64_t w
 
 }  // namespace
 
-uint32_t Dram::get_channel_id(mem_fetch* access) {
-  uint32_t channel_id;
-  if (_n_ch_per_partition >= 16)
-    channel_id = ipoly_hash_function((new_addr_type)access->get_addr()/_req_size, 0, _n_ch_per_partition);
-  else
-    channel_id = ipoly_hash_function((new_addr_type)access->get_addr()/_req_size, 0, 16) % _n_ch_per_partition;
+new_addr_type Dram::partition_dram_address(new_addr_type raw_addr) const {
+  if (_req_size == 0 || _n_ch_per_partition == 0)
+    return raw_addr;
+  const new_addr_type tx = raw_addr >> _tx_log2;
+  const new_addr_type q = tx / _n_ch_per_partition;
+  return static_cast<new_addr_type>(q << _tx_log2);
+}
 
-  channel_id += ((access->get_numa_id() % _n_partitions)* _n_ch_per_partition);
+uint32_t Dram::get_channel_id(mem_fetch* access) {
+  uint32_t channel_in_partition = 0;
+  if (_n_ch_per_partition > 1) {
+    const new_addr_type tx = static_cast<new_addr_type>(access->get_addr() >> _tx_log2);
+    new_addr_type rest_high;
+    unsigned init_index = 0;
+    if (is_power_of_2_u32(_n_ch_per_partition)) {
+      const unsigned lb = floor_log2_u32(_n_ch_per_partition);
+      rest_high = tx >> lb;
+      init_index = static_cast<unsigned>(tx & (_n_ch_per_partition - 1u));
+    } else {
+      /* gpgpu-sim "gap" channels: quotient / remainder split at txn granularity. */
+      rest_high = tx / _n_ch_per_partition;
+      init_index = static_cast<unsigned>(tx % _n_ch_per_partition);
+    }
+    /* ipoly_hash_function only implements 16/32/64 (see Hashing.cc); fold like addrdec IPOLY + mod when needed. */
+    const uint32_t poly_n = next_power_of_2_u32(std::max(16u, _n_ch_per_partition));
+    const uint32_t poly_use = std::min(poly_n, 64u);
+    channel_in_partition =
+        static_cast<uint32_t>(ipoly_hash_function(rest_high, init_index, poly_use)) % _n_ch_per_partition;
+  }
+
+  const uint32_t channel_id =
+      channel_in_partition + static_cast<uint32_t>(access->get_numa_id() % _n_partitions) * _n_ch_per_partition;
   return channel_id;
 }
 
@@ -46,6 +92,7 @@ Dram::Dram(SimulationConfig config, cycle_type* core_cycle) {
   _n_partitions = config.dram_num_partitions;
   _n_ch_per_partition = config.dram_channels_per_partitions;
   _config = config;
+  _tx_log2 = static_cast<int>(std::log2(_req_size));
 
   spdlog::info("[Config/DRAM] DRAM Bandwidth {} GB/s, Freq: {} MHz, Channels: {}, Request_size: {}B", config.max_dram_bandwidth(), config.dram_freq_mhz, _n_ch, _req_size);
   /* Initialize DRAM Channels */
@@ -160,7 +207,8 @@ bool DramRamulator2::is_full(uint32_t cid, mem_fetch* request) {
 }
 
 void DramRamulator2::push(uint32_t cid, mem_fetch* request) {
-  addr_type target_addr = (request->get_addr() >> _tx_ch_log2) << _tx_log2;
+  const addr_type raw_addr = request->get_addr();
+  const addr_type target_addr = partition_dram_address(raw_addr);
   request->set_addr(target_addr);
   m_from_crossbar_queue[cid].push(request);
 }
@@ -233,8 +281,6 @@ SimpleDRAM::SimpleDRAM(SimulationConfig config, cycle_type* core_cycle) : Dram(c
     _mem.push_back(std::make_unique<DelayQueue<mem_fetch*>>("SimpleDRAM", true, -1));
   }
   _latency =  config.dram_latency;
-  _tx_log2 = log2(_req_size);
-  _tx_ch_log2 = log2(_n_ch_per_partition) + _tx_log2;
 }
 
 bool SimpleDRAM::running() {
