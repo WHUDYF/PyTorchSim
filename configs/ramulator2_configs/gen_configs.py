@@ -28,7 +28,12 @@ import ramulator.channel_mapper
 import ramulator.memory_system
 
 
-def make_config(dram_obj, clock_ratio=1, refresh_scope="Rank"):
+def _dram_standard_name(dram_obj):
+    """DRAMStandard.name from class or instance (e.g. 'HBM2', 'DDR4')."""
+    return getattr(type(dram_obj), "name", None) or getattr(dram_obj, "name", None) or ""
+
+
+def make_config(dram_obj, clock_ratio=1, refresh_scope="Channel"):
     """Wrap a DRAM object in a single-channel GenericDRAM config for PyTorchSim.
 
     PyTorchSim creates one Ramulator2 instance per channel, so each config
@@ -36,10 +41,22 @@ def make_config(dram_obj, clock_ratio=1, refresh_scope="Rank"):
     The wrapper overrides 'frontend' to ExternalFrontEnd automatically.
 
     refresh_scope: level name for AllBank refresh.
-      - DDR4 / LPDDR5 / LPDDR5X → "Rank"
-      - HBM2 / HBM3              → "PseudoChannel"
+      - DDR4 / LPDDR5 / LPDDR5X -> "Channel"
+      - HBM2 / HBM3             -> "PseudoChannel"
+
+    Controller choice (matches C++ controller impls):
+      - HBM*      -> ramulator.controller.HBM
+      - LPDDR*    -> ramulator.controller.LPDDR5 (incl. LPDDR5X timing on the LPDDR5 DRAM model)
+      - otherwise -> GenericDDR
     """
-    ctrl = ramulator.controller.GenericDDR(
+    dram_name = str(_dram_standard_name(dram_obj)).upper()
+    if dram_name.startswith("HBM"):
+        ctrl_cls = ramulator.controller.HBM
+    elif dram_name.startswith("LPDDR"):
+        ctrl_cls = ramulator.controller.LPDDR5
+    else:
+        ctrl_cls = ramulator.controller.GenericDDR
+    ctrl = ctrl_cls(
         dram=dram_obj,
         scheduler=ramulator.scheduler.FRFCFS(),
         refresh_manager=ramulator.refresh_manager.AllBank(scope=refresh_scope),
@@ -69,7 +86,6 @@ def gen_hbm2_tpuv3():
     # TPUv3 HBM2: 900MHz → ~1.8 Gbps. Closest available preset: HBM2_2000Mbps
     dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_2000Mbps")
     return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
-
 
 def gen_ddr4():
     # Available timing presets — check python/ramulator/dram/ddr4.py

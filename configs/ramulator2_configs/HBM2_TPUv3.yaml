@@ -11,11 +11,11 @@
     },
     "controllers": [
       {
-        "impl": "GenericDDR",
+        "impl": "HBM",
         "wr_low_watermark": 0.2,
         "wr_high_watermark": 0.8,
-        "read_buffer_size": 32,
-        "write_buffer_size": 32,
+        "read_buffer_size": 64,
+        "write_buffer_size": 64,
         "priority_buffer_size": 1568,
         "scheduler": {
           "impl": "FRFCFS"

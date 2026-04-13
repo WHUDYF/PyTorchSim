@@ -22,7 +22,7 @@
         },
         "refresh_manager": {
           "impl": "AllBank",
-          "scope": "Rank"
+          "scope": "Channel"
         },
         "row_policy": {
           "impl": "Open"
