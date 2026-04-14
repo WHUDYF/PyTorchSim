@@ -1,4 +1,7 @@
 #include "Core.h"
+#include "CoreTraceLog.h"
+#include <spdlog/spdlog.h>
+#include <algorithm>
 
 Core::Core(uint32_t id, SimulationConfig config)
     : _id(id),
@@ -6,7 +9,7 @@ Core::Core(uint32_t id, SimulationConfig config)
       _core_cycle(0),
       _stat_dma_cycle(0),
       _num_systolic_array_per_core(config.num_systolic_array_per_core),
-      _dma(id, config.dram_req_size) {
+      _dma(id, config.dram_req_size, config.l2d_type != L2CacheType::NOCACHE) {
   _sa_compute_pipeline.resize(_num_systolic_array_per_core);
   _stat_tot_sa_compute_cycle.resize(_num_systolic_array_per_core);
   _stat_sa_compute_cycle.resize(_num_systolic_array_per_core);
@@ -22,9 +25,9 @@ bool Core::can_issue(const std::shared_ptr<Tile>& op) {
 }
 
 void Core::issue(std::shared_ptr<Tile> op) {
-  if (op->get_instructions().size()){
-    spdlog::trace("[{}][Core {}][TILE_SCHEDULED]",
-      _core_cycle, _id);
+  if (op->get_instructions().size()) {
+    core_trace_log::trace_tile_scheduled(_core_cycle, _id,
+                                         TraceLogTag::pad15(TraceLogTag::kTileScheduled));
   }
   for (const auto& inst : op->get_instructions()) {
     if (inst->is_ready())
@@ -120,13 +123,16 @@ void Core::dma_cycle() {
     if (instruction->is_dma_read() && instruction->is_async_dma()) {
       auto& key = instruction->get_tag_id();
       assert(!_dma.get_tag_finish(instruction->subgraph_id, key));
+      spdlog::trace(
+          "[{}][Core {}] TOG async DMA response (table notify): tag_addr=0x{:016x} global_inst_id={} "
+          "subgraph_id={}",
+          _core_cycle,
+          _id,
+          static_cast<uint64_t>(static_cast<uintptr_t>(instruction->get_addr_id())),
+          instruction->get_global_inst_id(),
+          instruction->subgraph_id);
       _dma.set_tag_finish(instruction->subgraph_id, key);
-      spdlog::trace("[{}][Core {}] {} ASYNC FINISHED, subgraph_id: {} addr_name: {} tag_id: {} tag_idx_list: {} tag_stride_list: {}",
-                    _core_cycle, _id, opcode_to_string(instruction->get_opcode()),
-                    instruction->subgraph_id, instruction->get_addr_name(),
-                    fmt::format("[{}]", fmt::join(instruction->get_tag_id(), ", ")),
-                    fmt::format("[{}]", fmt::join(instruction->get_tag_idx_list(), ", ")),
-                    fmt::format("[{}]", fmt::join(instruction->get_tag_stride_list(), ", ")));
+      finish_instruction(instruction, InstFinishTraceTag::DmaRespComplete);
       for (auto & wait_inst : _dma.get_tag_waiter(instruction->subgraph_id, key)) {
         _dma.mark_tag_used(instruction->subgraph_id, key);
         finish_instruction(wait_inst);
@@ -143,18 +149,18 @@ void Core::dma_cycle() {
         /* Only DMA write operation is finished! */
         finish_instruction(finished_inst);
       } else if (finished_inst->is_dma_read() && finished_inst->is_async_dma()) {
-        /* Register tag table for async dma load */
-        _dma.register_tag(finished_inst->subgraph_id, finished_inst->get_tag_id());
-        finish_instruction(finished_inst);
+        /* Register tag table for async dma load; see TraceLogTag::kAsyncDmaAllRequestsIssued */
+        finish_instruction(finished_inst, InstFinishTraceTag::DmaIssueComplete);
       } else if(!finished_inst->is_dma_read()) {
-        spdlog::error("[{}][Core {}] DMA instruction in not valid", _core_cycle, _id);
+        core_trace_log::log_error_dma_instruction_invalid(_core_cycle, _id);
         exit(EXIT_FAILURE);
       } else if (finished_inst->get_opcode() == Opcode::BAR) {
-        spdlog::trace("[{}][Core {}] {} FINISHED, addr_name: {} tag_id: {} tag_idx_list: {} tag_stride_list: {}", _core_cycle, _id,
-                      opcode_to_string(finished_inst->get_opcode()), finished_inst->get_addr_name(),
-                      fmt::format("[{}]", fmt::join(finished_inst->get_tag_id(), ", ")),
-                      fmt::format("[{}]", fmt::join(finished_inst->get_tag_idx_list(), ", ")),
-                      fmt::format("[{}]", fmt::join(finished_inst->get_tag_stride_list(), ", ")));
+        core_trace_log::trace_instruction_line(_core_cycle,
+                                               _id,
+                                               TraceLogTag::pad15(TraceLogTag::kInstructionFinished),
+                                               finished_inst->get_global_inst_id(),
+                                               core_trace_log::format_instruction_detail_line(
+                                                   *finished_inst));
       }
       /*Pass to waiting queue */
       _dma_waiting_queue[finished_inst.get()] = std::move(finished_inst);
@@ -223,34 +229,37 @@ void Core::cycle() {
                 finish_instruction(inst);
               else
                 _dma.register_tag_waiter(inst->subgraph_id, key, inst);
-              spdlog::trace("[{}][Core {}][SIKIPPED] {}, addr_name: {} tag_id: {} tag_idx_list: {} tag_stride_list: {}", _core_cycle, _id,
-                            opcode_to_string(inst->get_opcode()),
-                            inst->get_addr_name(),
-                            fmt::format("[{}]", fmt::join(inst->get_tag_id(), ", ")),
-                            fmt::format("[{}]", fmt::join(inst->get_tag_idx_list(), ", ")),
-                            fmt::format("[{}]", fmt::join(inst->get_tag_stride_list(), ", ")));
+              core_trace_log::trace_instruction_line(_core_cycle,
+                                                       _id,
+                                                       TraceLogTag::pad15(
+                                                           TraceLogTag::kInstructionSkipped),
+                                                       inst->get_global_inst_id(),
+                                                       core_trace_log::format_dma_inst_issued_trace_line(
+                                                           *inst));
               issued = true;
               _stat_tot_skipped_inst.at(static_cast<size_t>(inst->get_opcode()))++;
               break;
             } else {
-              spdlog::trace("[{}][Core {}][INST_ISSUED] {}, addr_name: {} tag_id: {} tag_idx_list: {} tag_stride_list: {}", _core_cycle, _id,
-                            opcode_to_string(inst->get_opcode()),
-                            inst->get_addr_name(),
-                            fmt::format("[{}]", fmt::join(inst->get_tag_id(), ", ")),
-                            fmt::format("[{}]", fmt::join(inst->get_tag_idx_list(), ", ")),
-                            fmt::format("[{}]", fmt::join(inst->get_tag_stride_list(), ", ")));
+              core_trace_log::trace_instruction_line(_core_cycle,
+                                                       _id,
+                                                       TraceLogTag::pad15(
+                                                           TraceLogTag::kInstructionIssued),
+                                                       inst->get_global_inst_id(),
+                                                       core_trace_log::format_dma_inst_issued_trace_line(
+                                                           *inst));
+              _dma.register_tag(inst->subgraph_id, inst->get_tag_id());
               _ld_inst_queue.push(inst);
               issued = true;
               break;
             }
           }
         case Opcode::MOVOUT:
-          spdlog::trace("[{}][Core {}][INST_ISSUED] {}, addr_name: {} tag_id: {} tag_idx_list: {} tag_stride_list: {}", _core_cycle, _id,
-                        opcode_to_string(inst->get_opcode()),
-                        inst->get_addr_name(),
-                        fmt::format("[{}]", fmt::join(inst->get_tag_id(), ", ")),
-                        fmt::format("[{}]", fmt::join(inst->get_tag_idx_list(), ", ")),
-                        fmt::format("[{}]", fmt::join(inst->get_tag_stride_list(), ", ")));
+          core_trace_log::trace_instruction_line(_core_cycle,
+                                                   _id,
+                                                   TraceLogTag::pad15(TraceLogTag::kInstructionIssued),
+                                                   inst->get_global_inst_id(),
+                                                   core_trace_log::format_dma_inst_issued_trace_line(
+                                                       *inst));
           _st_inst_queue.push(inst);
           issued = true;
           break;
@@ -273,8 +282,13 @@ void Core::cycle() {
               _stat_tot_skipped_inst.at(static_cast<size_t>(inst->get_opcode()))++;
               instructions.erase(it);
             } else {
-              spdlog::trace("[{}][Core {}][INST_ISSUED][SA {}] {}-{}, finsh at {}", _core_cycle, _id, _systolic_array_rr,
-                            opcode_to_string(inst->get_opcode()), inst->get_compute_type(), inst->finish_cycle);
+              core_trace_log::trace_instruction_line(_core_cycle,
+                                                       _id,
+                                                       TraceLogTag::pad15(
+                                                           TraceLogTag::kInstructionIssued),
+                                                       inst->get_global_inst_id(),
+                                                       core_trace_log::format_instruction_detail_line(
+                                                           *inst));
               target_pipeline.push(inst);
               issued = true;
               if (inst->get_compute_type()) {
@@ -300,16 +314,18 @@ void Core::cycle() {
             } else {
               _dma.register_tag_waiter(inst->subgraph_id, key, inst);
             }
-            spdlog::trace("[{}][Core {}][INST_ISSUED] {},  addr_name: {} tag_id: {} tag_idx_list: {} tag_stride_list: {}", _core_cycle, _id,
-                            opcode_to_string(inst->get_opcode()), inst->get_addr_name(),
-                            fmt::format("[{}]", fmt::join(inst->get_tag_id(), ", ")),
-                            fmt::format("[{}]", fmt::join(inst->get_tag_idx_list(), ", ")),
-                            fmt::format("[{}]", fmt::join(inst->get_tag_stride_list(), ", ")));
+            core_trace_log::trace_instruction_line(_core_cycle,
+                                                     _id,
+                                                     TraceLogTag::pad15(
+                                                         TraceLogTag::kInstructionIssued),
+                                                     inst->get_global_inst_id(),
+                                                     core_trace_log::format_instruction_detail_line(
+                                                         *inst));
             issued = true;
           }
           break;
         default:
-          spdlog::error("Undefined instruction opcode type");
+          core_trace_log::log_error_undefined_opcode();
           exit(EXIT_FAILURE);
       }
 
@@ -341,27 +357,34 @@ void Core::cycle() {
   }
 }
 
-void Core::finish_instruction(std::shared_ptr<Instruction>& inst) {
+void Core::finish_instruction(std::shared_ptr<Instruction>& inst, InstFinishTraceTag tag) {
+  if (tag == InstFinishTraceTag::DmaRespComplete) {
+    if (!inst->finished) {
+      core_trace_log::log_error_dram_responses_trace_not_finished(_core_cycle, _id);
+      exit(EXIT_FAILURE);
+    }
+    core_trace_log::trace_instruction_line(_core_cycle,
+                                             _id,
+                                             TraceLogTag::pad15(TraceLogTag::kAllDramResponsesReceived),
+                                             inst->get_global_inst_id(),
+                                             core_trace_log::format_instruction_detail_line(*inst));
+    return;
+  }
   if (inst->finished) {
-    spdlog::error("[{}][Core {}][ERROR] {} inst already finished!!", _core_cycle, _id,
-                  opcode_to_string(inst->get_opcode()));
+    core_trace_log::log_error_instruction_already_finished(_core_cycle, _id,
+                                                           opcode_to_string(inst->get_opcode()));
     exit(EXIT_FAILURE);
   }
   inst->finish_instruction();
   static_cast<Tile*>(inst->get_owner())->inc_finished_inst();
-  if (inst->get_opcode() == Opcode::COMP) {
-    spdlog::trace("[{}][Core {}][INST_FINISHED] {}-{}",
-      _core_cycle, _id, opcode_to_string(inst->get_opcode()), inst->get_compute_type());
-  } else if (inst->get_opcode() != Opcode::BAR && inst->is_async_dma()){
-    spdlog::trace("[{}][Core {}][ASYNC] {} subgraph_id: {} addr_name: {} tag_id: {} tag_idx_list: {} tag_stride_list: {}",
-      _core_cycle, _id, opcode_to_string(inst->get_opcode()), inst->subgraph_id, inst->get_addr_name(),
-      inst->get_tag_id(),
-      fmt::format("[{}]", fmt::join(inst->get_tag_idx_list(), ", ")),
-      fmt::format("[{}]", fmt::join(inst->get_tag_stride_list(), ", ")));
-  } else if ((inst->get_opcode() == Opcode::MOVIN || inst->get_opcode() == Opcode::MOVOUT) && !inst->is_async_dma()) {
-    spdlog::trace("[{}][Core {}][INST_FINISHED] {} addr_name: {}", _core_cycle, _id,
-      opcode_to_string(inst->get_opcode()), inst->get_addr_name());
-  }
+  const char* trace_tag = (tag == InstFinishTraceTag::DmaIssueComplete)
+                              ? TraceLogTag::kAsyncDmaAllRequestsIssued
+                              : TraceLogTag::kInstructionFinished;
+  core_trace_log::trace_instruction_line(_core_cycle,
+                                           _id,
+                                           TraceLogTag::pad15(trace_tag),
+                                           inst->get_global_inst_id(),
+                                           core_trace_log::format_instruction_detail_line(*inst));
 }
 
 bool Core::running() {

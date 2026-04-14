@@ -1,9 +1,11 @@
 #include "DMA.h"
 #include "TileGraph.h"
+#include "TraceLogTags.h"
 
-DMA::DMA(uint32_t id, uint32_t dram_req_size) {
+DMA::DMA(uint32_t id, uint32_t dram_req_size, bool l2_datacache_enabled) {
   _id = id;
   _dram_req_size = dram_req_size;
+  _l2_datacache_enabled = l2_datacache_enabled;
   _current_inst = nullptr;
   _finished = true;
 }
@@ -31,12 +33,27 @@ std::shared_ptr<std::vector<mem_fetch*>> DMA::get_memory_access(cycle_type core_
     bool is_cacheable =
       owner_subgraph->is_cacheable(base_daddr, base_daddr + _dram_req_size);
 
-    spdlog::trace("[{}][Core {}][SRAM] Address: 0x{:016x}, Is_cacheable: {}",
-                    core_cycle, _id, base_daddr, is_cacheable);
-    spdlog::trace("[{}][Core {}][NUMA] Subgraph id: {} , Numa id: {}, Arg: {} is_write: {}",
-                    core_cycle, _id, owner_subgraph->get_core_id(),
-                    _current_inst->get_numa_id(), _current_inst->get_addr_name(),
-                    _current_inst->is_dma_write());
+    if (_l2_datacache_enabled) {
+      spdlog::trace(
+          "[{}][Core {}][{}][INST_ID={}] dram=0x{:016x} cacheable={}",
+          core_cycle,
+          _id,
+          TraceLogTag::pad15(TraceLogTag::kL2CacheableStatusForAddress),
+          _current_inst->get_global_inst_id(),
+          base_daddr,
+          is_cacheable);
+    }
+    spdlog::trace(
+        "[{}][Core {}][{}][INST_ID={}] core_id={} subgraph_id={} numa_id={} addr_name={} is_write={}",
+        core_cycle,
+        _id,
+        TraceLogTag::pad15(TraceLogTag::kDmaNumaPlacement),
+        _current_inst->get_global_inst_id(),
+        owner_subgraph->get_core_id(),
+        _current_inst->subgraph_id,
+        _current_inst->get_numa_id(),
+        _current_inst->get_addr_name(),
+        _current_inst->is_dma_write());
     for (const auto& addr : *addr_set) {
       mem_access_type acc_type =
         _current_inst->is_dma_write() ? mem_access_type::GLOBAL_ACC_W

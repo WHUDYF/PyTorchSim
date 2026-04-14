@@ -10,6 +10,14 @@
 #include "Tile.h"
 #include "SimulationConfig.h"
 #include "DMA.h"
+#include "TraceLogTags.h"
+
+/** Log tag kind for Core::finish_instruction (see TraceLogTag names in TraceLogTags.h). */
+enum class InstFinishTraceTag {
+  Fnshed,
+  DmaIssueComplete,
+  DmaRespComplete,
+};
 
 class Core {
  public:
@@ -22,7 +30,8 @@ class Core {
   virtual void cycle();
   virtual void print_stats();
   virtual void print_current_stats();
-  virtual void finish_instruction(std::shared_ptr<Instruction>& inst);
+  virtual void finish_instruction(std::shared_ptr<Instruction>& inst,
+                                  InstFinishTraceTag tag = InstFinishTraceTag::Fnshed);
   virtual bool has_memory_request();
   virtual void pop_memory_request();
   virtual mem_fetch* top_memory_request() { return _request_queue.front(); }

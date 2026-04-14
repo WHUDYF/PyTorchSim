@@ -59,7 +59,8 @@ public:
   void print_stats() override;
   void print_current_stats() override;
   std::shared_ptr<Tile> pop_finished_tile() override;
-  void finish_instruction(std::shared_ptr<Instruction>& inst) override;
+  void finish_instruction(std::shared_ptr<Instruction>& inst,
+                          InstFinishTraceTag tag = InstFinishTraceTag::Fnshed) override;
   void dumpTrace(int stonne_core_id, const std::string& path);
   bool isTraceMode(int stonne_core_id) { return traceMode.at(stonne_core_id); }
   void setTraceMode(int stonne_core_id, bool mode) { traceMode.at(stonne_core_id) = mode; }
