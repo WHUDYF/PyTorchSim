@@ -1,6 +1,7 @@
 import contextlib
 import sympy
 import sys
+import time
 import re
 import os
 from functools import reduce
@@ -1028,25 +1029,58 @@ class MLIRKernel(mlir_common.BaseMLIRKernel):
         return choices
 
     def autotune(self, *args):
-        def get_cycle(choice):
+        def get_cycle(choice, subprocess_timeout_sec=None):
             bench_runner = choice[0]
             for n_try in range(extension_config.codegen_autotune_max_retry): # TODO: make simple
                 try:
-                    out = bench_runner()
+                    if subprocess_timeout_sec is not None:
+                        out = bench_runner(
+                            autotune_subprocess_timeout_sec=subprocess_timeout_sec
+                        )
+                    else:
+                        out = bench_runner()
                     return out[-1]
-                except (extension_codecache.SpadOverflowError, RuntimeError) as e:
+                except (extension_codecache.SpadOverflowError, RuntimeError):
                     return float("inf")
             return float("inf") # Exceeded maximum number of autotuning attempts
         choices = self.make_choices(*args)
         if len(choices) == 0: # Can't autotune
             return [None, None, None]
 
+        slack_sec = float(extension_config.codegen_autotune_wall_slack_sec)
+
         # Get cycle time for each choice
         # Show progress bar only when CONFIG_DEBUG_MODE is off
         show_progress = not extension_config.CONFIG_DEBUG_MODE
         with ProgressBar("[Auto-tune] Running benchmarks", silent_mode=not show_progress) if show_progress else contextlib.nullcontext():
-            with ThreadPoolExecutor(max_workers=8) as executor:
-                results = list(executor.map(get_cycle, choices))
+            results = [float("inf")] * len(choices)
+            baseline_wall = None
+            parallel_from = 0
+
+            for idx, choice in enumerate(choices):
+                t0 = time.perf_counter()
+                c = get_cycle(choice, None)
+                elapsed = time.perf_counter() - t0
+                results[idx] = c
+                parallel_from = idx + 1
+                if c != float("inf"):
+                    baseline_wall = elapsed
+                    break
+
+            pending = choices[parallel_from:]
+            if baseline_wall is not None and pending:
+                timeout_sec = baseline_wall + slack_sec
+                workers = min(8, len(pending), os.cpu_count())
+                executor = ThreadPoolExecutor(max_workers=workers)
+                try:
+                    tail = list(
+                        executor.map(
+                            lambda ch: get_cycle(ch, timeout_sec), pending
+                        )
+                    )
+                finally:
+                    executor.shutdown(wait=True, cancel_futures=True)
+                results[parallel_from : parallel_from + len(tail)] = tail
 
         min_idx = results.index(min(results))
         if min(results) == float("inf"):

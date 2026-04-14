@@ -509,7 +509,14 @@ class TOGSimulator():
         return cmd
 
     @staticmethod
-    def run_standalone(model_path, attribute_path="", autotune_mode=False, config_path=None, togsim_path=None):
+    def run_standalone(
+        model_path,
+        attribute_path="",
+        autotune_mode=False,
+        config_path=None,
+        togsim_path=None,
+        timeout_sec=None,
+    ):
         """
         Run a single kernel simulation in standalone mode.
         This method starts a new TOGSim process, runs the kernel, and waits for completion.
@@ -521,6 +528,8 @@ class TOGSimulator():
             autotune_mode: If True, run in autotune mode (silent)
             config_path: Path to TOGSim config file (required)
             togsim_path: Path to TOGSim directory (optional, defaults to CONFIG_TORCHSIM_DIR/TOGSim)
+            timeout_sec: If set, terminate the Simulator subprocess after this many seconds
+                (autotune uses this to skip very slow tile candidates).
 
         Returns:
             Path to the simulation result log file
@@ -559,7 +568,19 @@ class TOGSimulator():
                 logger.debug(f"[TOGSim] cmd> {cmd}")
                 logger.info("[TOGSim] TOGSim simulation started")
             with ProgressBar("[TOGSim] Running simulation", silent_mode=autotune_mode):
-                result = subprocess.check_output(shlex.split(cmd))
+                completed = subprocess.run(
+                    shlex.split(cmd),
+                    capture_output=True,
+                    check=True,
+                    timeout=timeout_sec,
+                )
+                result = completed.stdout
+        except subprocess.TimeoutExpired as e:
+            logger.warning(
+                "[TOGSim] Simulator subprocess exceeded timeout (%.1f s); terminating.",
+                float(timeout_sec) if timeout_sec is not None else -1.0,
+            )
+            raise RuntimeError("TOGSim subprocess timeout") from e
         except subprocess.CalledProcessError as e:
             logger.error(f"[TOGSim] Command failed with exit code {e.returncode}")
             logger.error(f"[TOGSim] Error output: {e.output.decode() if isinstance(e.output, bytes) else e.output}")

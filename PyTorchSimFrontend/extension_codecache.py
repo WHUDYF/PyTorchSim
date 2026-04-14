@@ -279,7 +279,7 @@ class CustomAsyncCompile(AsyncCompile):
             return key
         future = self.submit(task)
 
-        def run_kernel_simulation(*args, **kwargs):
+        def run_kernel_simulation(*args, autotune_subprocess_timeout_sec=None, **kwargs):
             # Wait for compilation
             key = future.result()
             from filelock import FileLock
@@ -311,7 +311,11 @@ class CustomAsyncCompile(AsyncCompile):
                     result = None # No result for non-autotune mode
                 else:
                     result_path = TOGSimulator.run_standalone(
-                        onnx_path, kernel_attribute_path, autotune_mode=autotune)
+                        onnx_path,
+                        kernel_attribute_path,
+                        autotune_mode=autotune,
+                        timeout_sec=autotune_subprocess_timeout_sec,
+                    )
                     result = TOGSimulator.get_result_from_file(result_path)
                 return result
         return run_kernel_simulation

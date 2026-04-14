@@ -89,6 +89,10 @@ def __getattr__(name):
         return config_yaml["codegen_autotune_max_retry"]
     if name == "codegen_autotune_template_topk":
         return config_yaml["codegen_autotune_template_topk"]
+    # Added to first candidate wall time for other candidates' TOGSim subprocess timeout (>= 1 s).
+    if name == "codegen_autotune_wall_slack_sec":
+        v = float(config_yaml.get("codegen_autotune_wall_slack_sec", 15))
+        return max(1.0, v)
 
     # Compiler Optimization
     if name == "codegen_compiler_optimization":

@@ -1,4 +1,3 @@
-import functools
 import torch
 import os
 import dataclasses
@@ -76,7 +75,7 @@ class MLIRBenchmarkRequest():
                 latest_log_file = log_files_with_time[0][0]
                 result_path = os.path.join(result_dir, latest_log_file)
                 result = TOGSimulator.get_result_from_file(result_path)
-                def cached_run_fn(*args, **kwargs):
+                def cached_run_fn(*args, autotune_subprocess_timeout_sec=None, **kwargs):
                     return result
                 return cached_run_fn
 
@@ -93,11 +92,10 @@ class MLIRBenchmarkRequest():
             for tensor in list(input_tensors) + list(output_tensors)
         ]
 
-        # Generate partial function.
-        return functools.partial(
-            run_method,
-            *args,
-        )
+        def schedule_run(autotune_subprocess_timeout_sec=None):
+            return run_method(*args, autotune_subprocess_timeout_sec=autotune_subprocess_timeout_sec)
+
+        return schedule_run
 
     def update_workspace_size(self) -> None:
         # FIXME: Not implemented yet. Checkout torch/_inductor/codegen/rocm/rocm_benchmark_request.py
