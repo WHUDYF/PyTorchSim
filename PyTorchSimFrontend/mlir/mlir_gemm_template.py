@@ -340,6 +340,7 @@ class MLIRGemmTemplate(MLIRTemplate):
         for idx, (TILE_M, TILE_N, TILE_K) in enumerate(tile_candidates):
             # Case 1: calculate sub tile size for fine-grained DMA
             if extension_config.CONFIG_SUBTILE:
+                full_tile_candidates.append([TILE_M, TILE_N, TILE_K]*2)
                 SUB_TILE_M = TILE_M if (TILE_M < kernel.vector_lane or n_prologue_node) else kernel.vector_lane
                 if (TILE_M == M and TILE_N == N and TILE_N <= 512):
                     SUB_TILE_N = TILE_N if TILE_N < kernel.vector_lane else kernel.vector_lane
