@@ -1,5 +1,5 @@
 import math
-from typing import List, Optional, Sequence
+from typing import Any, Callable, List, Optional, Sequence
 
 import torch
 from torch._inductor.lowering import lowerings, index_impl
@@ -29,26 +29,67 @@ aten = torch.ops.aten
 aten_spmm = MLIRExternKernelChoice(torch.sparse.mm, "custom_op::sparse_addmm")
 _orig_sort_values_stable_lowering = lowerings.get(aten.sort.values_stable)
 
-def tuned_mm(mat1, mat2, * ,layout=None):
+
+def _device_is_npu(device: Optional[torch.device]) -> bool:
+    return device is not None and device.type == "npu"
+
+
+def _tensor_args_all_npu(*roots, optional=()) -> bool:
+    """True only if every tensor-like IR node under roots/optional is on an NPU device."""
+    stack: list = list(roots) + list(optional)
+    while stack:
+        n = stack.pop()
+        if n is None:
+            continue
+        if isinstance(n, (list, tuple)):
+            stack.extend(n)
+            continue
+        get_dev = getattr(n, "get_device", None)
+        if get_dev is None:
+            continue
+        if not _device_is_npu(get_dev()):
+            return False
+    return True
+
+
+def _override_lowerings_npu(
+    aten_op: Any,
+    mlir_impl: Callable[..., Any],
+    npu_ok: Callable[..., bool],
+) -> None:
+    """Register mlir_impl for each overload; fall back to the prior lowering if npu_ok is false."""
+    for overload in aten_op.overloads():
+        op = getattr(aten_op, overload)
+        orig = lowerings.get(op)
+
+        def wrapped(*args, _orig=orig, **kwargs):
+            if not npu_ok(*args, **kwargs):
+                return _orig(*args, **kwargs)
+            return mlir_impl(*args, **kwargs)
+
+        lowerings[op] = wrapped
+
+
+def _mlir_tuned_mm(mat1, mat2, *, layout=None):
     m, n, k, layout, mat1, mat2 = mm_args(mat1, mat2, layout=layout)
     mlir_template = MLIRGemmTemplate([mat1, mat2], layout)
 
     return mlir_template.generate(input_nodes=[mat1, mat2], layout=layout).output_node()
 
-def tuned_addmm(inp, mat1, mat2, *, alpha=1, beta=1, layout=None):
+def _mlir_tuned_addmm(inp, mat1, mat2, *, alpha=1, beta=1, layout=None):
     m, n, k, layout, mat1, mat2, inp_expanded = mm_args(mat1, mat2, inp, layout=layout)
     mlir_template = MLIRGemmTemplate([mat1, mat2, inp_expanded], layout)
 
     return mlir_template.generate().output_node()
 
-def tuned_bmm(mat1, mat2, *, layout=None):
+def _mlir_tuned_bmm(mat1, mat2, *, layout=None):
     m, n, k, layout, mat1, mat2 = mm_args(mat1, mat2, layout=layout)
     mlir_template = MLIRBMMTemplate([mat1, mat2], layout)
 
     return mlir_template.generate().output_node()
 
 
-def tuned_flash_sdpa(
+def _mlir_tuned_flash_sdpa(
         query             : TensorBox,
         key               : TensorBox,
         value             : TensorBox,
@@ -67,7 +108,6 @@ def tuned_flash_sdpa(
     N, Hq, H, L, S, E, Ev, layout, query, key, value = flash_sdpa_args(query, key, value)
     mlir_template = MLIRFlashSDPATemplate([query, key, value], layout, scale)
     return (mlir_template.generate().output_node(), None, None, None, None, None, None, None, None)
-
 
 
 def conv_layout(
@@ -104,7 +144,7 @@ def conv_layout(
         stride,
     )
 
-def convolution(
+def _mlir_convolution(
     x: TensorBox,
     weight: TensorBox,
     bias: TensorBox,
@@ -176,7 +216,7 @@ def maxpool_layout(
         stride,
     )
 
-def custom_maxpool(
+def _mlir_custom_maxpool(
     x: TensorBox,
     kernel_size: List[int],
     stride: List[int],
@@ -197,7 +237,7 @@ def custom_maxpool(
     template_node = mlir_template.generate().output_node()
     return template_node, x # FIXME: x is dummy IRNode, indices are not used in our case
 
-def sparse_addmm(*args, **kwargs):
+def _mlir_sparse_addmm(*args, **kwargs):
     _, sp_mat1, sp_mat2 = args
     mat1_layout = sp_mat1.layout
     out_range = args[0].data.data.data.ranges
@@ -207,7 +247,7 @@ def sparse_addmm(*args, **kwargs):
         )
     return aten_spmm.bind((sp_mat1, sp_mat2), layout).output_node()
 
-def custom_unsafe_index(x, indices):
+def _mlir_custom_unsafe_index(x, indices):
     # We can't fuse indirect access + indexed_expression + computation
     if isinstance(x, TensorBox):
         x.realize()
@@ -229,7 +269,7 @@ def _cat_layout(tensors: Sequence[TensorBox], dim: int) -> ir.Layout:
         stride,
     )
 
-def custom_cat_default(tensors: Sequence[TensorBox], dim: int = 0):
+def _mlir_custom_cat_default(tensors: Sequence[TensorBox], dim: int = 0):
     if tensors and dim < 0:
         dim += len(tensors[0].get_size())
     copy_default_lowering = lowerings.get(aten.copy_.default)
@@ -255,7 +295,7 @@ def custom_cat_default(tensors: Sequence[TensorBox], dim: int = 0):
     mlir_template = MLIRCatTemplate(list(new_tensors), layout, dim=dim)
     return mlir_template.generate().output_node()
 
-def custom_sort_default(
+def _mlir_custom_sort_default(
     value: TensorBox,
     dim: int = -1,
     descending: bool = False,
@@ -303,15 +343,63 @@ def _sort_layouts(x: TensorBox, dim: int, descending: bool):
     index_layout = ir.FixedLayout(x.get_device(), torch.int64, i_sizes, i_stride)
     return value_layout, index_layout
 
-lowerings.update({getattr(aten.mm, overload): tuned_mm for overload in aten.mm.overloads()})
-lowerings.update({getattr(aten.addmm, overload): tuned_addmm for overload in aten.addmm.overloads()})
-lowerings.update({getattr(aten.convolution, overload): convolution for overload in aten.convolution.overloads()})
-lowerings.update({getattr(aten.bmm, overload): tuned_bmm for overload in aten.bmm.overloads()})
-lowerings.update({getattr(aten._sparse_addmm, overload): sparse_addmm for overload in aten._sparse_addmm.overloads()})
-lowerings.update({getattr(aten._unsafe_index, overload): custom_unsafe_index for overload in aten._unsafe_index.overloads()})
-lowerings.update({getattr(aten.cat, overload): custom_cat_default for overload in aten.cat.overloads()})
-lowerings.update({getattr(aten.sort, overload): custom_sort_default for overload in aten.sort.overloads()})
-    
+_override_lowerings_npu(
+    aten.mm,
+    _mlir_tuned_mm,
+    lambda mat1, mat2, **_: _tensor_args_all_npu(mat1, mat2),
+)
+_override_lowerings_npu(
+    aten.addmm,
+    _mlir_tuned_addmm,
+    lambda inp, mat1, mat2, **_: _tensor_args_all_npu(inp, mat1, mat2),
+)
+_override_lowerings_npu(
+    aten.convolution,
+    _mlir_convolution,
+    lambda *a, **_: len(a) >= 2
+    and _tensor_args_all_npu(a[0], a[1], optional=(a[2] if len(a) > 2 else None,)),
+)
+_override_lowerings_npu(
+    aten.bmm,
+    _mlir_tuned_bmm,
+    lambda mat1, mat2, **_: _tensor_args_all_npu(mat1, mat2),
+)
+_override_lowerings_npu(
+    aten._sparse_addmm,
+    _mlir_sparse_addmm,
+    lambda *a, **_: len(a) >= 3 and _tensor_args_all_npu(a[1], a[2]),
+)
+_override_lowerings_npu(
+    aten._unsafe_index,
+    _mlir_custom_unsafe_index,
+    lambda x, indices, **_: _tensor_args_all_npu(x, indices),
+)
+_override_lowerings_npu(
+    aten.cat,
+    _mlir_custom_cat_default,
+    lambda *a, **_k: a and _tensor_args_all_npu(a[0]),
+)
+_override_lowerings_npu(
+    aten.sort,
+    _mlir_custom_sort_default,
+    lambda *a, **_k: a and _tensor_args_all_npu(a[0]),
+)
+
 if extension_config.CONFIG_USE_TIMING_POOLING:
-    lowerings.update({getattr(aten.max_pool2d_with_indices, overload): custom_maxpool for overload in aten.max_pool2d_with_indices.overloads()}) # FIXME: maxpool should be implemented as a template
-lowerings.update({getattr(aten._scaled_dot_product_fused_attention_overrideable, overload): tuned_flash_sdpa for overload in aten._scaled_dot_product_fused_attention_overrideable.overloads()})
+    _override_lowerings_npu(
+        aten.max_pool2d_with_indices,
+        _mlir_custom_maxpool,
+        lambda *a, **_: bool(a) and _tensor_args_all_npu(a[0]),
+    )
+
+_override_lowerings_npu(
+    aten._scaled_dot_product_fused_attention_overrideable,
+    _mlir_tuned_flash_sdpa,
+    lambda *a, **k: len(a) >= 3
+    and _tensor_args_all_npu(
+        a[0],
+        a[1],
+        a[2],
+        optional=(a[3] if len(a) > 3 else k.get("attn_bias"),),
+    ),
+)
