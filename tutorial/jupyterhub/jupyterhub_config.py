@@ -6,11 +6,11 @@ c = get_config()
 # Spawner config
 # ------------------------------------------------------------------------------
 c.JupyterHub.spawner_class = 'dockerspawner.DockerSpawner'
-c.DockerSpawner.image = "ghcr.io/psal-postech/torchsim_ksc2025:latest"
+c.DockerSpawner.image = "ghcr.io/psal-postech/torchsim-tutorial:ispass2026"
 
 # Resource limit
-c.DockerSpawner.mem_limit = '16G'
-c.DockerSpawner.cpu_limit = 4.0
+c.DockerSpawner.mem_limit = '32G'
+c.DockerSpawner.cpu_limit = 8.0
 
 c.DockerSpawner.network_name = 'jupyterhub-network'
 c.Spawner.default_url = '/lab'
