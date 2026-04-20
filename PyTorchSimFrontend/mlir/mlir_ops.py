@@ -331,6 +331,13 @@ class ExtensionOverrides(common.OpOverrides):
         # Hands-on part: implement exp2 using math.exp2
         # V.kernel.var_info = {operand: [tile_size, dtype]}
         # Ex) V.kernel.var_info[operand] = [8, "f32"]
+        #
+        # tile_size, dtype = V.kernel.var_info[operand]
+        # if tile_size > 1:
+        #     shape = f"vector<{tile_size}x{dtype}>"
+        # else:
+        #     shape = dtype
+        # return f'math.exp2 %{operand} : {shape}', [tile_size, dtype]
 
         ln2 = math.log(2)
         coeff = ops.constant(ln2, "f32")
