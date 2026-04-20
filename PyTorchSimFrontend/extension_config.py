@@ -41,9 +41,6 @@ CONFIG_TORCHSIM_TOG_HOST_LDFLAGS = _default_tog_host_ldflags()
 
 CONFIG_TORCHSIM_DUMP_MLIR_IR = int(os.environ.get("TORCHSIM_DUMP_MLIR_IR", default=False))
 CONFIG_TORCHSIM_DUMP_LLVM_IR = int(os.environ.get("TORCHSIM_DUMP_LLVM_IR", default=False))
-CONFIG_TORCHSIM_DUMP_PATH = os.environ.get("TORCHSIM_DUMP_PATH", os.path.join(CONFIG_TORCHSIM_DIR, "outputs"))
-CONFIG_TORCHSIM_LOG_PATH = os.environ.get("TORCHSIM_LOG_PATH", os.path.join(CONFIG_TORCHSIM_DIR, "togsim_results"))
-os.environ["TORCHINDUCTOR_CACHE_DIR"] = os.path.join(CONFIG_TORCHSIM_DUMP_PATH, ".torchinductor")
 
 def __getattr__(name):
     # TOGSim config
@@ -137,6 +134,12 @@ def __getattr__(name):
 
     if name == "CONFIG_TOGSIM_DEBUG_LEVEL":
         return os.environ.get("TOGSIM_DEBUG_LEVEL", "")
+    if name == "CONFIG_TORCHSIM_DUMP_PATH":
+        dump_path = os.environ.get('TORCHSIM_DUMP_PATH', default = os.path.join(CONFIG_TORCHSIM_DIR, "outputs"))
+        os.environ["TORCHINDUCTOR_CACHE_DIR"] = os.path.join(dump_path, ".torchinductor")
+        return dump_path
+    if name == "CONFIG_TORCHSIM_LOG_PATH":
+        return os.environ.get('TORCHSIM_LOG_PATH', default = os.path.join(CONFIG_TORCHSIM_DIR, "togsim_results"))
 
 # SRAM Buffer allocation plan
 def load_plan_from_module(module_path):
