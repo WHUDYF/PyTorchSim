@@ -25,11 +25,11 @@ Simulator::Simulator(SimulationConfig config, YAML::Node hardware_config_yaml)
   _cores.resize(_n_cores);
   for (int core_index = 0; core_index < _n_cores; core_index++) {
     if (config.core_type[core_index] == CoreType::WS_MESH) {
-      spdlog::info("[Config/Core] Core {}: {} MHz, Systolic array per core: {}",
-        core_index, config.core_freq_mhz, config.num_systolic_array_per_core);
+      spdlog::info("[Config/Core] Core {}: core_freq_mhz: {}, systolic_arrays_per_core: {}",
+                   core_index, config.core_freq_mhz, config.num_systolic_array_per_core);
       _cores.at(core_index) = std::make_unique<Core>(core_index, _config);
     } else if(config.core_type[core_index] == CoreType::STONNE) {
-      spdlog::info("[Config/Core] Core {}: {} MHz, Stonne Core selected", core_index, config.core_freq_mhz);
+      spdlog::info("[Config/Core] Core {}: core_freq_mhz: {}, core_type: Stonne", core_index, config.core_freq_mhz);
       _cores.at(core_index) = std::make_unique<SparseCore>(core_index, _config);
     } else {
       throw std::runtime_error(fmt::format("Not implemented Core type {} ",
@@ -46,8 +46,7 @@ Simulator::Simulator(SimulationConfig config, YAML::Node hardware_config_yaml)
                                        .string();
     spdlog::info("[Config/DRAM] Ramulator2 config path: {}", ramulator_config);
     YAML::Node dram_config = YAML::LoadFile(ramulator_config);
-    spdlog::info("Ramulator2 config: ");
-    std::cout << dram_config << std::endl;
+    spdlog::info("[Config/DRAM] Ramulator2 configuration:\n{}", YAML::Dump(dram_config));
     config.dram_config_path = ramulator_config;
     _dram = std::make_unique<DramRamulator2>(config, &_core_cycles);
   } else {
@@ -56,12 +55,12 @@ Simulator::Simulator(SimulationConfig config, YAML::Node hardware_config_yaml)
   }
 
   // Create interconnect object
-  spdlog::info("[Config/Interconnect] Interconnect freq: {} MHz", config.icnt_freq_mhz);
+  spdlog::info("[Config/Interconnect] interconnect_freq_mhz: {}", config.icnt_freq_mhz);
   if (config.icnt_type == IcntType::SIMPLE) {
-    spdlog::info("[Config/Interconnect] SimpleInerconnect selected");
+    spdlog::info("[Config/Interconnect] Simple interconnect selected");
     _icnt = std::make_unique<SimpleInterconnect>(config);
   } else if (config.icnt_type == IcntType::BOOKSIM2) {
-    spdlog::info("[Config/Interconnect] BookSim2 selected");
+    spdlog::info("[Config/Interconnect] BookSim2 interconnect selected");
     _icnt = std::make_unique<Booksim2Interconnect>(config);
   } else {
     spdlog::error("[Configuration] Invalid interconnect type...!");

@@ -151,8 +151,6 @@ void DramRamulator2::apply_ramulator_config_to_simulation_config(
           "value, or align the Ramulator YAML with the top-level yml. ramulator_config_path={}",
           *dram_freq_mhz_stated, cfg.dram_freq_mhz, static_cast<double>(tck_ns), ramulator_config_path));
     }
-    spdlog::info("[Config/DRAM] ramulator2: dram_freq_mhz {} matches Ramulator-derived DRAM clock (tCK={:.6g} ns)",
-                 *dram_freq_mhz_stated, static_cast<double>(tck_ns));
   }
 }
 
@@ -200,7 +198,8 @@ Dram::Dram(SimulationConfig config, cycle_type* core_cycle) {
   _config = config;
   _tx_log2 = static_cast<int>(std::log2(_req_size));
 
-  spdlog::info("[Config/DRAM] DRAM Bandwidth {} GB/s, Freq: {} MHz, Channels: {}, Request_size: {}B", config.max_dram_bandwidth(), config.dram_freq_mhz, _n_ch, _req_size);
+  spdlog::info("[Config/DRAM] Total bandwidth {:.2f} GB/s, {} MHz, {} channels, {} bytes per request",
+               static_cast<double>(config.max_dram_bandwidth()), config.dram_freq_mhz, _n_ch, _req_size);
   /* Initialize DRAM Channels */
   for (int ch = 0; ch < _n_ch; ch++) {
     m_to_crossbar_queue.push_back(std::queue<mem_fetch*>());
@@ -288,13 +287,15 @@ void DramRamulator2::cycle() {
     const DramBwSnapshot bw = make_dram_bw_snapshot(
         r + wtxn, w, 1u, _req_size, f_mhz, _config.dram_bandwidth_gbps_per_channel);
     spdlog::trace(
-        "[DRAM] ch {} | BW {:.2f} GB/s, {:.2f}% util | {} reads, {} writes (interval {} cycles)",
+        "[DRAM] channel {} | {:.2f} GB/s avg., {:.2f}% of utilization | {} reads, {} writes "
+        "(interval {} cycles)",
         ch, bw.bandwidth_gbs, bw.util_avg_ch_pct, r, wtxn, w);
   }
   const DramBwSnapshot bw_all = make_dram_bw_snapshot(
       r_all + w_all, w, _n_ch, _req_size, f_mhz, _config.dram_bandwidth_gbps_per_channel);
   spdlog::info(
-      "[DRAM] all {} ch | BW {:.2f} GB/s, {:.2f}% util (avg/ch) | {} reads, {} writes (interval {} cycles)",
+      "[DRAM] all {} channels combined | {:.2f} GB/s aggregate, {:.2f}% of utilization (avg. per channel) | "
+      "{} reads, {} writes (interval {} cycles)",
       _n_ch, bw_all.bandwidth_gbs, bw_all.util_avg_ch_pct, r_all, w_all, w);
   for (int ch = 0; ch < _n_ch; ch++) {
     _mem[ch]->reset_interval_bw_counters();
@@ -333,7 +334,7 @@ void DramRamulator2::pop(uint32_t cid) {
 }
 
 void DramRamulator2::print_stat() {
-  spdlog::info("========= DRAM stat =========");
+  spdlog::info("=== DRAM statistics ===");
   if (_n_ch == 0)
     return;
 
@@ -352,7 +353,7 @@ void DramRamulator2::print_stat() {
   if (cycles == 0)
     return;
   const double f_mhz = static_cast<double>(_config.dram_freq_mhz);
-  spdlog::info("[DRAM] per-channel avg BW");
+  spdlog::info("[DRAM] Per-channel average bandwidth");
   long long tr_all = 0;
   long long tw_all = 0;
   for (int ch = 0; ch < _n_ch; ch++) {
@@ -363,13 +364,14 @@ void DramRamulator2::print_stat() {
     const DramBwSnapshot bw = make_dram_bw_snapshot(
         tr + tw, cycles, 1u, _req_size, f_mhz, _config.dram_bandwidth_gbps_per_channel);
     spdlog::info(
-        "[DRAM] ch {} | avg BW {:.2f} GB/s, {:.2f}% util | {} reads, {} writes",
+        "[DRAM] channel {} | {:.2f} GB/s avg., {:.2f}% of utilization | {} reads, {} writes",
         ch, bw.bandwidth_gbs, bw.util_avg_ch_pct, tr, tw);
   }
   const DramBwSnapshot bw_all = make_dram_bw_snapshot(
       tr_all + tw_all, cycles, _n_ch, _req_size, f_mhz, _config.dram_bandwidth_gbps_per_channel);
   spdlog::info(
-      "[DRAM] all ch 0..{} | avg BW {:.2f} GB/s, {:.2f}% util (avg/ch) | {} reads, {} writes",
+      "[DRAM] channels 0..{} combined | {:.2f} GB/s aggregate, {:.2f}% of utilization (avg. per channel) | "
+      "{} reads, {} writes",
       _n_ch - 1, bw_all.bandwidth_gbs, bw_all.util_avg_ch_pct, tr_all, tw_all);
 }
 

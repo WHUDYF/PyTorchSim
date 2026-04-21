@@ -7,7 +7,7 @@
 bool loadConfig(const std::string& config_path, YAML::Node& config_yaml) {
   try {
     config_yaml = YAML::LoadFile(config_path);
-    spdlog::info("[LoadConfig] Success to open \"{}\"", config_path);
+    spdlog::info("[LoadConfig] Loaded configuration file \"{}\"", config_path);
     return true;
   } catch (const YAML::BadFile& e) {
     spdlog::error("[LoadConfig] Failed to open \"{}\" (File not found or inaccessible)", config_path);
@@ -159,16 +159,16 @@ SimulationConfig initialize_config(const YAML::Node& config,
       if (config["partition"][core_partition]) {
           uint32_t partition_id = config["partition"][core_partition].as<uint32_t>();
           parsed_config.partiton_map[i] = partition_id;
-          spdlog::info("[Config/Core] CPU {}: Partition {}", i, partition_id);
+          spdlog::info("[Config/Core] core_id: {}, partition_id: {}", i, partition_id);
       } else {
-          spdlog::warn("[Config/Core] CPU {}: Partition key not found, defaulting to 0", i);
+          spdlog::warn("[Config/Core] core_id: {}, partition: missing in config, using partition_id 0", i);
           parsed_config.partiton_map[i] = 0;
       }
     }
   } else {
     for (int i=0; i<parsed_config.num_cores; i++) {
       parsed_config.partiton_map[i] = 0;
-      spdlog::info("[Config/Core] CPU {}: Partition {}", i, 0);
+      spdlog::info("[Config/Core] core_id: {}, partition_id: 0 (no partition section)", i);
     }
   }
   return parsed_config;

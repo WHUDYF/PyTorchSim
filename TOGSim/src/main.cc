@@ -13,13 +13,14 @@ namespace fs = std::filesystem;
 namespace po = boost::program_options;
 
 
-void launchKernel(Simulator* simulator, unsigned int kernel_id, std::string onnx_path, std::string attribute_path, const YAML::Node& config_yaml, cycle_type request_time=0, int partiton_id=0, int device_id=0) {
+void launchKernel(Simulator* simulator, unsigned int kernel_id, std::string onnx_path, std::string attribute_path, const YAML::Node& config_yaml, cycle_type request_time=0, int partition_id=0, int device_id=0) {
   auto graph_praser = TileGraphParser(onnx_path, attribute_path, config_yaml);
   std::unique_ptr<TileGraph>& tile_graph = graph_praser.get_tile_graph();
   tile_graph->set_arrival_time(request_time ? request_time : simulator->get_core_cycle());
   tile_graph->set_kernel_id(kernel_id);
-  spdlog::info("[Scheduler {}] Enqueued kernel id: {}, tog_path: {}, operation: {}, request_time: {}", partiton_id, kernel_id, onnx_path, tile_graph->get_name(), request_time);
-  simulator->enqueue_graph(partiton_id, std::move(tile_graph));
+  spdlog::info("[Scheduler {}] Enqueued kernel_id: {}, tog_path: {}, operation: {}, request_time_cycles: {}",
+               partition_id, kernel_id, onnx_path, tile_graph->get_name(), request_time);
+  simulator->enqueue_graph(partition_id, std::move(tile_graph));
 }
 
 void process_trace_file(Simulator* simulator, std::string trace_file_path, const YAML::Node& config_yaml) {
@@ -30,7 +31,7 @@ void process_trace_file(Simulator* simulator, std::string trace_file_path, const
     spdlog::error("[TOGSim] Failed to open trace file: {}", trace_file_path);
     return;
   }
-  spdlog::info("[TOGSim] Reading from trace file: {}", trace_file_path);
+  spdlog::info("[TOGSim] Reading trace file: {}", trace_file_path);
 
   // Read all available commands and process them
   std::string line;
@@ -123,7 +124,7 @@ int main(int argc, char** argv) {
     if (i > 0) cmd_oss << " ";
     cmd_oss << argv[i];
   }
-  spdlog::info("[TOGSim] Run command: {}", cmd_oss.str());
+  spdlog::info("[TOGSim] Command line: {}", cmd_oss.str());
 
   std::string level = "info";
   cmd_parser.set_if_defined("log_level", &level);
