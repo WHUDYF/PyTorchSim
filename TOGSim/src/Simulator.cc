@@ -1,7 +1,9 @@
 #include "Simulator.h"
 
-Simulator::Simulator(SimulationConfig config)
-    : _config(config), _core_cycles(0) {
+Simulator::Simulator(SimulationConfig config, YAML::Node hardware_config_yaml)
+    : _config(config),
+      _hardware_config_yaml(std::move(hardware_config_yaml)),
+      _core_cycles(0) {
   // Create dram object
   _core_period = 1000000 / (config.core_freq_mhz);
   _icnt_period = 1000000 / (config.icnt_freq_mhz);

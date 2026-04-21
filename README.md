@@ -397,13 +397,18 @@ export TORCHSIM_USE_TIMING_POOLING=0 # use lightweight pooling for timing
   "vpu_spad_size_kb_per_lane" : 128, // Scratchpad memory size per lane (KB)
   "vpu_vector_length_bits" : 256,    // VPU vector register length (Bits)
 
-  "dram_type" : "ramulator2",        // DRAM type (ex. ramulator2, simple)
-  "dram_freq_mhz" : 940,             // DRAM frequency (MHz)
-  "dram_channels": 32,               // Number of DRAM channels
-  "dram_req_size": 32,               // DRAM request size (B)
-  "dram_latency" : 10,               // DRAM latency (cycle)
-  "dram_nbl" : 2,                    // DRAM burst length size
-  "dram_config_path" : "../configs/ramulator2_configs/HBM2_TPUv3.yaml", // Ramulator2 config file path
+  "dram_type" : "ramulator2",        // DRAM type: ramulator2 | simple
+  "dram_channels": 32,               // Number of DRAM channels (topology; required for both types)
+  "dram_stats_print_period_cycles": 10000, // Optional DRAM stats interval
+  // ramulator2: per-request size (bytes), DRAM MHz, and per-channel peak GB/s are derived from ramulator_config_path
+  // (peak ≈ timing[0] as MT/s × channel_width × pseudo-channels for HBM2/3; MHz from Ramulator tCK).
+  // Optional: if you set dram_freq_mhz, it must exactly match that derived MHz or initialization fails
+  // (the error message includes tCK in ns and the derived MHz for debugging stale yml values).
+  // Do not set dram_bandwidth_gbps_* at top level.
+  "ramulator_config_path" : "../configs/ramulator2_configs/HBM2_TPUv3.yaml",
+  // simple: dram_latency + dram_channels + optional dram_req_size_byte (default 32). Omit
+  // dram_bandwidth_gbps_* for latency-only; dram_freq_mhz defaults to core_freq_mhz.
+  // With dram_bandwidth_gbps_* set, dram_freq_mhz is required (credit refill per DRAM cycle).
 
   "l2d_type" : "datacache",
   "l2d_config" : "S:64:128:512,32,L:B:m:W:L,A:192:4,32:0,32",

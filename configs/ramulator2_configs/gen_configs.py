@@ -83,8 +83,11 @@ def gen_hbm2():
 
 
 def gen_hbm2_tpuv3():
-    # TPUv3 HBM2: 900MHz → ~1.8 Gbps. Closest available preset: HBM2_2000Mbps
-    dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_2000Mbps")
+    dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_1880Mbps")
+    return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
+
+def gen_hbm2_tpuv2():
+    dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_1400Mbps")
     return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
 
 def gen_ddr4():
@@ -107,6 +110,7 @@ def gen_lpddr5x():
 CONFIGS = {
     "HBM2.yaml":        gen_hbm2,
     "HBM2_TPUv3.yaml":  gen_hbm2_tpuv3,
+    "HBM2_TPUv2.yaml":  gen_hbm2_tpuv2,
     "DDR4.yaml":        gen_ddr4,
     "LPDDR5.yaml":      gen_lpddr5,
     "LPDDR5X.yaml":     gen_lpddr5x,

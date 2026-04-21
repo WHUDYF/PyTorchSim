@@ -1,6 +1,18 @@
 #include "Dram.h"
 
+#include <cmath>
+#include <filesystem>
 #include <iostream>
+#include <optional>
+#include <stdexcept>
+#include <string>
+
+#include <spdlog/fmt/fmt.h>
+
+#include "ramulator/base/config.h"
+#include "ramulator/base/factory.h"
+#include "ramulator/frontend/i_frontend.h"
+#include "ramulator/memory_system/i_memory_system.h"
 
 namespace {
 
@@ -26,15 +38,15 @@ static uint32_t next_power_of_2_u32(uint32_t n) {
   return n + 1;
 }
 
-/** Bytes/s effective GB/s and avg-per-channel utilization % for a window of `window_cycles` DRAM ticks. */
+/** Bytes/s effective GB/s and utilization % vs `peak_gbps_per_channel` (x n_ch aggregate peak). */
 struct DramBwSnapshot {
   double bandwidth_gbs = 0;
   double util_avg_ch_pct = 0;
 };
 
 DramBwSnapshot make_dram_bw_snapshot(long long total_rw_transactions, uint64_t window_cycles,
-                                     uint32_t n_ch, uint32_t req_size, uint32_t n_bl,
-                                     double dram_freq_mhz) {
+                                     uint32_t n_ch, uint32_t req_size, double dram_freq_mhz,
+                                     float peak_gbps_per_channel) {
   DramBwSnapshot out;
   if (window_cycles == 0 || n_ch == 0)
     return out;
@@ -42,12 +54,107 @@ DramBwSnapshot make_dram_bw_snapshot(long long total_rw_transactions, uint64_t w
   const double w = static_cast<double>(window_cycles);
   const double bytes_per_cycle = tx * static_cast<double>(req_size) / w;
   out.bandwidth_gbs = bytes_per_cycle * dram_freq_mhz / 1000.0;
-  const double avg_per_ch = tx / static_cast<double>(n_ch);
-  out.util_avg_ch_pct = avg_per_ch * 100.0 * static_cast<double>(n_bl) / (2.0 * w);
+  const double peak_total_gbs =
+      static_cast<double>(peak_gbps_per_channel) * static_cast<double>(n_ch);
+  if (peak_gbps_per_channel > 0.f && peak_total_gbs > 0.0)
+    out.util_avg_ch_pct = 100.0 * out.bandwidth_gbs / peak_total_gbs;
   return out;
 }
 
+static float peak_gbps_per_channel_from_ramulator_yaml(const Ramulator::ConfigNode& cfg) {
+  const Ramulator::ConfigNode controllers = cfg["memory_system"]["controllers"];
+  const auto& ctrls = controllers.seq();
+  if (ctrls.empty())
+    throw std::runtime_error("memory_system.controllers is empty");
+  const Ramulator::ConfigNode dram = ctrls[0]["dram"];
+  const int ch_width = dram["channel_width"].as<int>();
+  if (ch_width <= 0)
+    throw std::runtime_error("invalid channel_width");
+  const Ramulator::ConfigNode timing_node = dram["timing"];
+  const auto& timing = timing_node.seq();
+  if (timing.empty())
+    throw std::runtime_error("dram.timing is empty");
+  const int rate = timing[0].as<int>();
+  if (rate <= 0)
+    throw std::runtime_error("invalid dram.timing[0] (rate / MT/s)");
+
+  int pseudo_ch = 1;
+  const std::string impl = dram["impl"].as<std::string>("");
+  if (impl == "HBM2" || impl == "HBM3") {
+    const Ramulator::ConfigNode org = dram["org"];
+    const Ramulator::ConfigNode org_count = org["count"];
+    const auto& counts = org_count.seq();
+    if (counts.size() > 1)
+      pseudo_ch = std::max(1, counts[1].as<int>());
+  }
+
+  return static_cast<float>(static_cast<double>(rate) * static_cast<double>(pseudo_ch) *
+                             static_cast<double>(ch_width) / 8.0 / 1000.0);
+}
+
 }  // namespace
+
+void DramRamulator2::apply_ramulator_config_to_simulation_config(
+    SimulationConfig& cfg, const std::string& ramulator_config_path,
+    std::optional<uint32_t> dram_freq_mhz_stated) {
+  Ramulator::ConfigNode config = Ramulator::Config::parse_config_file(ramulator_config_path);
+  Ramulator::ConfigNode frontend_config;
+  frontend_config.set("impl", std::string("External"));
+  frontend_config.set("clock_ratio", 1u);
+  config.set("frontend", frontend_config);
+
+  float peak_gbps = 0.f;
+  try {
+    peak_gbps = peak_gbps_per_channel_from_ramulator_yaml(config);
+  } catch (const std::exception& e) {
+    throw std::runtime_error(std::string("[Config/DRAM] Ramulator peak GB/s from yaml: ") + e.what() + " (" +
+                             ramulator_config_path + ")");
+  }
+
+  Ramulator::IFrontEnd* fe = Ramulator::Factory::create_frontend(config);
+  Ramulator::IMemorySystem* mem = Ramulator::Factory::create_memory_system(config);
+  fe->connect_memory_system(mem);
+  mem->connect_frontend(fe);
+
+  const float tck_ns = mem->get_tCK();
+  if (tck_ns <= 0.f) {
+    fe->finalize();
+    mem->finalize();
+    delete fe;
+    delete mem;
+    throw std::runtime_error("[Config/DRAM] Ramulator probe: invalid get_tCK() for " + ramulator_config_path);
+  }
+
+  const int tx_bytes = mem->get_tx_bytes();
+  if (tx_bytes <= 0) {
+    fe->finalize();
+    mem->finalize();
+    delete fe;
+    delete mem;
+    throw std::runtime_error("[Config/DRAM] Ramulator probe: invalid get_tx_bytes() for " + ramulator_config_path);
+  }
+
+  fe->finalize();
+  mem->finalize();
+  delete fe;
+  delete mem;
+
+  cfg.dram_req_size = static_cast<uint32_t>(tx_bytes);
+  cfg.dram_freq_mhz = static_cast<uint32_t>(std::lround(1000.0f / tck_ns));
+  cfg.dram_bandwidth_gbps_per_channel = peak_gbps;
+
+  if (dram_freq_mhz_stated.has_value()) {
+    if (*dram_freq_mhz_stated != cfg.dram_freq_mhz) {
+      throw std::runtime_error(fmt::format(
+          "[Config/DRAM] ramulator2: top-level dram_freq_mhz {} does not match Ramulator timing "
+          "(DRAM clock {} MHz from tCK={:.6g} ns, i.e. round(1000/tCK)); remove dram_freq_mhz to use the derived "
+          "value, or align the Ramulator YAML with the top-level yml. ramulator_config_path={}",
+          *dram_freq_mhz_stated, cfg.dram_freq_mhz, static_cast<double>(tck_ns), ramulator_config_path));
+    }
+    spdlog::info("[Config/DRAM] ramulator2: dram_freq_mhz {} matches Ramulator-derived DRAM clock (tCK={:.6g} ns)",
+                 *dram_freq_mhz_stated, static_cast<double>(tck_ns));
+  }
+}
 
 new_addr_type Dram::partition_dram_address(new_addr_type raw_addr) const {
   if (_req_size == 0 || _n_ch_per_partition == 0)
@@ -87,7 +194,6 @@ uint32_t Dram::get_channel_id(mem_fetch* access) {
 Dram::Dram(SimulationConfig config, cycle_type* core_cycle) {
   _core_cycles = core_cycle;
   _n_ch = config.dram_channels;
-  _n_bl = config.dram_nbl;
   _req_size = config.dram_req_size;
   _n_partitions = config.dram_num_partitions;
   _n_ch_per_partition = config.dram_channels_per_partitions;
@@ -127,9 +233,8 @@ DramRamulator2::DramRamulator2(SimulationConfig config, cycle_type* core_cycle) 
   /* Initialize DRAM Channels */
   _mem.resize(_n_ch);
   for (int ch = 0; ch < _n_ch; ch++) {
-    _mem[ch] = std::make_unique<Ramulator2>(
-      ch, _n_ch, config.dram_config_path, "Ramulator2", _config.dram_print_interval, _n_bl,
-      _req_size, config.dram_freq_mhz);
+    _mem[ch] = std::make_unique<Ramulator2>(ch, _n_ch, config.dram_config_path, "Ramulator2",
+                                            _config.dram_print_interval, _req_size, config.dram_freq_mhz);
   }
   _tx_log2 = log2(_req_size);
   _tx_ch_log2 = log2(_n_ch_per_partition) + _tx_log2;
@@ -180,14 +285,14 @@ void DramRamulator2::cycle() {
     const long long wtxn = _mem[ch]->interval_writes();
     r_all += r;
     w_all += wtxn;
-    const DramBwSnapshot bw =
-        make_dram_bw_snapshot(r + wtxn, w, 1u, _req_size, _n_bl, f_mhz);
+    const DramBwSnapshot bw = make_dram_bw_snapshot(
+        r + wtxn, w, 1u, _req_size, f_mhz, _config.dram_bandwidth_gbps_per_channel);
     spdlog::trace(
         "[DRAM] ch {} | BW {:.2f} GB/s, {:.2f}% util | {} reads, {} writes (interval {} cycles)",
         ch, bw.bandwidth_gbs, bw.util_avg_ch_pct, r, wtxn, w);
   }
-  const DramBwSnapshot bw_all =
-      make_dram_bw_snapshot(r_all + w_all, w, _n_ch, _req_size, _n_bl, f_mhz);
+  const DramBwSnapshot bw_all = make_dram_bw_snapshot(
+      r_all + w_all, w, _n_ch, _req_size, f_mhz, _config.dram_bandwidth_gbps_per_channel);
   spdlog::info(
       "[DRAM] all {} ch | BW {:.2f} GB/s, {:.2f}% util (avg/ch) | {} reads, {} writes (interval {} cycles)",
       _n_ch, bw_all.bandwidth_gbs, bw_all.util_avg_ch_pct, r_all, w_all, w);
@@ -247,7 +352,7 @@ void DramRamulator2::print_stat() {
   if (cycles == 0)
     return;
   const double f_mhz = static_cast<double>(_config.dram_freq_mhz);
-  spdlog::info("[DRAM] per-channel avg BW ({} sim cycles):", cycles);
+  spdlog::info("[DRAM] per-channel avg BW");
   long long tr_all = 0;
   long long tw_all = 0;
   for (int ch = 0; ch < _n_ch; ch++) {
@@ -255,14 +360,14 @@ void DramRamulator2::print_stat() {
     const long long tw = _mem[ch]->total_writes();
     tr_all += tr;
     tw_all += tw;
-    const DramBwSnapshot bw =
-        make_dram_bw_snapshot(tr + tw, cycles, 1u, _req_size, _n_bl, f_mhz);
+    const DramBwSnapshot bw = make_dram_bw_snapshot(
+        tr + tw, cycles, 1u, _req_size, f_mhz, _config.dram_bandwidth_gbps_per_channel);
     spdlog::info(
         "[DRAM] ch {} | avg BW {:.2f} GB/s, {:.2f}% util | {} reads, {} writes",
         ch, bw.bandwidth_gbs, bw.util_avg_ch_pct, tr, tw);
   }
   const DramBwSnapshot bw_all = make_dram_bw_snapshot(
-      tr_all + tw_all, cycles, _n_ch, _req_size, _n_bl, f_mhz);
+      tr_all + tw_all, cycles, _n_ch, _req_size, f_mhz, _config.dram_bandwidth_gbps_per_channel);
   spdlog::info(
       "[DRAM] all ch 0..{} | avg BW {:.2f} GB/s, {:.2f}% util (avg/ch) | {} reads, {} writes",
       _n_ch - 1, bw_all.bandwidth_gbs, bw_all.util_avg_ch_pct, tr_all, tw_all);
@@ -274,13 +379,78 @@ void DramRamulator2::print_cache_stats() {
   }
 }
 
+void SimpleDRAM::apply_yaml_to_simulation_config(const YAML::Node& config, SimulationConfig& cfg) {
+  if (!config["dram_latency"])
+    throw std::runtime_error("[Config/DRAM] simple: dram_latency is required");
+  cfg.dram_latency = config["dram_latency"].as<uint32_t>();
+
+  auto yaml_get_u32 = [](const YAML::Node& n, const char* key, uint32_t def) -> uint32_t {
+    if (n[key])
+      return n[key].as<uint32_t>();
+    return def;
+  };
+
+  cfg.dram_req_size = yaml_get_u32(config, "dram_req_size_byte", 32u);
+  if (cfg.dram_req_size == 0)
+    throw std::runtime_error("[Config/DRAM] simple: dram_req_size_byte must be > 0");
+
+  const bool has_per_ch_bw = static_cast<bool>(config["dram_bandwidth_gbps_per_channel"]);
+  const bool has_total_bw = static_cast<bool>(config["dram_bandwidth_gbps_total"]);
+  if (has_per_ch_bw && has_total_bw)
+    throw std::runtime_error(
+        "[Config/DRAM] simple: set only one of dram_bandwidth_gbps_per_channel or dram_bandwidth_gbps_total");
+
+  const bool has_bw_cap = has_per_ch_bw || has_total_bw;
+  if (has_bw_cap) {
+    float per_ch = 0.f;
+    if (has_total_bw) {
+      const float tot = config["dram_bandwidth_gbps_total"].as<float>();
+      if (cfg.dram_channels == 0)
+        throw std::runtime_error("[Config/DRAM] dram_channels must be > 0 for dram_bandwidth_gbps_total");
+      per_ch = tot / static_cast<float>(cfg.dram_channels);
+    } else {
+      per_ch = config["dram_bandwidth_gbps_per_channel"].as<float>();
+    }
+    if (per_ch <= 0.f)
+      throw std::runtime_error("[Config/DRAM] simple: dram_bandwidth_gbps_* must be > 0");
+    cfg.dram_bandwidth_gbps_per_channel = per_ch;
+  } else {
+    cfg.dram_bandwidth_gbps_per_channel = 0.f;
+  }
+
+  if (has_bw_cap && !config["dram_freq_mhz"])
+    throw std::runtime_error(
+        "[Config/DRAM] simple: dram_freq_mhz is required when dram_bandwidth_gbps_per_channel or "
+        "dram_bandwidth_gbps_total is set (credit refill is per simulated DRAM cycle)");
+  cfg.dram_freq_mhz = yaml_get_u32(config, "dram_freq_mhz", cfg.core_freq_mhz);
+
+  if (cfg.dram_freq_mhz == 0) {
+    throw std::runtime_error("[Config/DRAM] simple: dram_freq_mhz must be > 0");
+  }
+}
+
 SimpleDRAM::SimpleDRAM(SimulationConfig config, cycle_type* core_cycle) : Dram(config, core_cycle) {
-  /* Initialize DRAM Channels */
-  spdlog::info("[SimpleDRAM] DRAM latecny: {}", config.dram_latency);
+  spdlog::info("[SimpleDRAM] DRAM latency: {}", config.dram_latency);
   for (int ch = 0; ch < _n_ch; ch++) {
     _mem.push_back(std::make_unique<DelayQueue<mem_fetch*>>("SimpleDRAM", true, -1));
   }
-  _latency =  config.dram_latency;
+  _latency = config.dram_latency;
+  _bw_credit_bytes.assign(static_cast<size_t>(_n_ch), static_cast<double>(_req_size) * 2.0);
+  if (config.dram_freq_mhz > 0 && config.dram_bandwidth_gbps_per_channel > 0.f) {
+    _bytes_per_dram_cycle =
+        static_cast<double>(config.dram_bandwidth_gbps_per_channel) * 1000.0 /
+        static_cast<double>(config.dram_freq_mhz);
+  } else {
+    _bytes_per_dram_cycle = 0.;
+  }
+  if (config.dram_bandwidth_gbps_per_channel > 0.f)
+    spdlog::info("[SimpleDRAM] peak {:.2f} GB/s total, {:.2f} GB/s per channel, {:.4f} B/cycle per channel",
+                 config.max_dram_bandwidth(), config.dram_bandwidth_gbps_per_channel, _bytes_per_dram_cycle);
+  else
+    spdlog::info(
+        "[SimpleDRAM] no bandwidth cap (latency-only); dram_latency {} cycles, dram_freq_mhz {} for tick "
+        "alignment",
+        config.dram_latency, config.dram_freq_mhz);
 }
 
 bool SimpleDRAM::running() {
@@ -297,20 +467,30 @@ void SimpleDRAM::cycle() {
   for (int ch = 0; ch < _n_ch; ch++) {
     _mem[ch]->cycle();
 
+    if (_bytes_per_dram_cycle > 0.0)
+      _bw_credit_bytes[static_cast<size_t>(ch)] += _bytes_per_dram_cycle;
+
     // From Cache to DRAM
     if (mem_fetch* req = _m_caches[ch]->top()) {
-      //spdlog::info("[Cache->DRAM] mem_fetch: addr={:#x}", req->get_addr());
-
-      _mem[ch]->push(req, _latency);
-      _m_caches[ch]->pop();
+      const double need = static_cast<double>(_req_size);
+      bool admit = true;
+      if (_bytes_per_dram_cycle > 0.0) {
+        if (_bw_credit_bytes[static_cast<size_t>(ch)] < need)
+          admit = false;
+        else
+          _bw_credit_bytes[static_cast<size_t>(ch)] -= need;
+      }
+      if (admit) {
+        _mem[ch]->push(req, _latency);
+        _m_caches[ch]->pop();
+      }
     }
 
     // From DRAM to Cache
     if (_mem[ch]->arrived()) {
       mem_fetch* req = _mem[ch]->top();
       req->set_reply();
-      //spdlog::info("[DRAM->Cache] mem_fetch: addr={:#x}", req->get_addr());
-      if(_m_caches[ch]->push(req))
+      if (_m_caches[ch]->push(req))
         _mem[ch]->pop();
     }
   }

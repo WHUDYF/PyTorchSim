@@ -28,4 +28,5 @@ typedef uint64_t addr_type;
 typedef uint64_t cycle_type;
 
 bool loadConfig(const std::string& config_path, YAML::Node& config_yaml);
-SimulationConfig initialize_config(YAML::Node config);
+SimulationConfig initialize_config(const YAML::Node& config,
+                                     const std::string& config_file_path = {});

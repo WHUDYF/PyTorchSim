@@ -23,7 +23,7 @@ namespace fs = std::filesystem;
 
 class Simulator {
  public:
-  Simulator(SimulationConfig config);
+  Simulator(SimulationConfig config, YAML::Node hardware_config_yaml);
   void enqueue_graph(int partion_id, std::unique_ptr<TileGraph> tile_graph) {
     if (partion_id < 0 || static_cast<uint32_t>(partion_id) >= _config.num_partition) {
       spdlog::error("[Enqueue_graph] Invalid partition_id: {} (valid range: 0 to {}). "
@@ -41,6 +41,8 @@ class Simulator {
   std::unique_ptr<Scheduler>& get_partition_scheduler(int core_id) { return _partition_scheduler.at(get_partition_id(core_id)); }
   void print_core_stat();
   void cycle();
+  const SimulationConfig& get_config() const { return _config; }
+  const YAML::Node& get_hardware_config_yaml() const { return _hardware_config_yaml; }
  private:
   void core_cycle();
   void dram_cycle();
@@ -49,6 +51,7 @@ class Simulator {
   void set_cycle_mask();
   uint32_t get_dest_node(mem_fetch *access);
   SimulationConfig _config;
+  YAML::Node _hardware_config_yaml;
   uint32_t _n_cores;
   uint32_t _n_sp_cores;
   uint32_t _noc_node_per_core;

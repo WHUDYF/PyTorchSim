@@ -84,11 +84,13 @@ void process_trace_file(Simulator* simulator, std::string trace_file_path, const
   simulator->cycle();
 }
 
-Simulator* create_simulator(const YAML::Node& config_yaml) {
-  SimulationConfig config = initialize_config(config_yaml);
-
-  auto simulator = new Simulator(config);
-  return simulator;
+Simulator* create_simulator(const std::string& config_path) {
+  YAML::Node config_yaml;
+  if (!loadConfig(config_path, config_yaml)) {
+    return nullptr;
+  }
+  SimulationConfig config = initialize_config(config_yaml, config_path);
+  return new Simulator(config, std::move(config_yaml));
 }
 
 int main(int argc, char** argv) {
@@ -138,21 +140,19 @@ int main(int argc, char** argv) {
   /* Create simulator */
   cmd_parser.set_if_defined("config", &config_path);
 
-  // Load config once for reuse
-  YAML::Node config_yaml;
-  if (!loadConfig(config_path, config_yaml)) {
+  auto simulator = create_simulator(config_path);
+  if (!simulator) {
     spdlog::error("[TOGSim] Failed to load config file: {}", config_path);
     exit(1);
   }
-
-  auto simulator = create_simulator(config_yaml);
 
   // Get trace file path
   cmd_parser.set_if_defined("models_list", &trace_file_path);
 
   if (!trace_file_path.empty()) {
     // Process trace file (unified mode: supports both FIFO and regular file)
-    process_trace_file(simulator, trace_file_path, config_yaml);
+    process_trace_file(simulator, trace_file_path,
+                       simulator->get_hardware_config_yaml());
     spdlog::info("Simulation finished");
     simulator->print_core_stat();
   } else {

@@ -1,5 +1,9 @@
 #include "Common.h"
 
+#include "Dram.h"
+
+#include <optional>
+
 bool loadConfig(const std::string& config_path, YAML::Node& config_yaml) {
   try {
     config_yaml = YAML::LoadFile(config_path);
@@ -26,8 +30,10 @@ T get_config_value(const YAML::Node& config, std::string key) {
   }
 }
 
-SimulationConfig initialize_config(YAML::Node config) {
+SimulationConfig initialize_config(const YAML::Node& config,
+                                     const std::string& config_file_path) {
   SimulationConfig parsed_config;
+  parsed_config.config_file_path = config_file_path;
   YAML::Emitter emitter;
   emitter << config;
   spdlog::info("PyTorchSim config:\n{}", emitter.c_str());
@@ -73,18 +79,25 @@ SimulationConfig initialize_config(YAML::Node config) {
 
   if (dram_type_str == "simple") {
     parsed_config.dram_type = DramType::SIMPLE;
-    parsed_config.dram_latency = get_config_value<uint32_t>(config, "dram_latency");
   } else if (dram_type_str == "ramulator2") {
     parsed_config.dram_type = DramType::RAMULATOR2;
-    parsed_config.dram_config_path = get_config_value<std::string>(config, "ramulator_config_path");
+    const std::string ramulator_config_rel =
+        get_config_value<std::string>(config, "ramulator_config_path");
+    parsed_config.dram_config_path =
+        parsed_config.resolve_against_simulation_config(ramulator_config_rel);
   } else {
     throw std::runtime_error(fmt::format("Not implemented dram type {} ", dram_type_str));
   }
 
-  parsed_config.dram_freq_mhz = get_config_value<uint32_t>(config, "dram_freq_mhz");
   parsed_config.dram_channels = get_config_value<uint32_t>(config, "dram_channels");
-  parsed_config.dram_req_size = get_config_value<uint32_t>(config, "dram_req_size_byte");
-  parsed_config.dram_nbl = get_config_value<uint32_t>(config, "dram_num_burst_length");
+
+  if (parsed_config.dram_type == DramType::RAMULATOR2) {
+    DramRamulator2::apply_ramulator_config_to_simulation_config(
+        parsed_config, parsed_config.dram_config_path,
+        config["dram_freq_mhz"] ? std::optional<uint32_t>(config["dram_freq_mhz"].as<uint32_t>()) : std::nullopt);
+  } else {
+    SimpleDRAM::apply_yaml_to_simulation_config(config, parsed_config);
+  }
 
   if (config["dram_stats_print_period_cycles"])
     parsed_config.dram_print_interval = config["dram_stats_print_period_cycles"].as<uint32_t>();
