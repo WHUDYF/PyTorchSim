@@ -9,6 +9,7 @@ PyTorchSim is a comprehensive, high-speed, cycle-accurate NPU simulation framewo
 
 
 For more details, please refer to our [paper](https://doi.org/10.1145/3725843.3756045)!
+> **Disclaimer.** PyTorchSim is an independent project. It is neither part of the official [PyTorch](https://pytorch.org/) distribution nor affiliated with or endorsed by the PyTorch Foundation. The name reflects that this work builds on the open-source PyTorch compiler stack as its front-end for research purposes.
 
 ## Navigation
 [Overview](#pytorchsim-framework-overview) | [Model Zoo](#model-zoo) | [Getting Started](#getting-started)
@@ -22,12 +23,13 @@ For more details, please refer to our [paper](https://doi.org/10.1145/3725843.37
 ## PyTorchSim Framework Overview
 ![Overview](/docs/overview.jpg)
 PyTorchSim consists of **two main** components:
-- **Compiler**: Integrated of [PyTorch2](https://github.com/pytorch/pytorch) compiler stack and generates NPU machine code and TOG for existing PyTorch models.
+- **Compiler**: Integrated with the [PyTorch2](https://github.com/pytorch/pytorch) compiler stack; it generates NPU machine code and TOG for existing PyTorch models.
 - **TOGSim**: Executes TOG for high-speed simulation and accurately models shared resources (DRAM, NoC) through integrated cycle-accurate simulators ([BookSim](https://github.com/booksim/booksim2) and [Ramulator2](https://github.com/CMU-SAFARI/ramulator2)).
 
 PyTorchSim **supports**:
 - DNN inference and [training](#training)
 - Data-dependent timing modeling (e.g. sparsity)
+- [One continuous TOGSim session](#one-togsim-session-one-continuous-log) (single log across multiple forwards)
 - [Multi-tenancy](#multi-tenancy)
 - [Compiler optimizations](#compiler-optimizations)
 - [Mapping](#mapping)
@@ -38,13 +40,16 @@ PyTorchSim **supports**:
 |---|:-:|:-:|---|
 | ResNet-18 | <img src="https://avatars.githubusercontent.com/u/21003710?s=48&v=4" width="20"/> | ✅ | channel last format |
 | ResNet-50 | <img src="https://avatars.githubusercontent.com/u/21003710?s=48&v=4" width="20"/> | ✅ | channel last format |
+| MobileNet-v2 | <img src="https://avatars.githubusercontent.com/u/21003710?s=48&v=4" width="20"/> | ✅ | `tests/MobileNet/` (torchvision) |
+| YOLOv5 | <img src="https://avatars.githubusercontent.com/u/21003710?s=48&v=4" width="20"/> | ✅ | `tests/Yolov5/` |
 | BERT | <img src="https://avatars.githubusercontent.com/u/21003710?s=48&v=4" width="20"/> | ✅ |  |
 | GPT-2 | <img src="https://avatars.githubusercontent.com/u/21003710?s=48&v=4" width="20"/> | ✅ |  |
-| ViT | <img src="https://avatars.githubusercontent.com/u/21003710?s=48&v=4" width="20"/> | ✅ |  |
+| ViT | <img src="https://avatars.githubusercontent.com/u/21003710?s=48&v=4" width="20"/> | ✅ | `tests/test_vit.py` |
 | Mistral | <img src="https://avatars.githubusercontent.com/u/21003710?s=48&v=4" width="20"/> | ✅ | |
-| Diffusion | 🤗 | ✅ |  |
-| Llama-4 | 🤗 | ⏳ | Under Development |
-| DeepSeek v1 | 🤗 | ⏳ | Under Development |
+| Stable-diffusion v1 | 🤗 | ✅ |  |
+| Llama 2/3 | 🤗 | ✅ | `tests/Llama/` (blocks & decode-style paths) |
+| DeepSeek-V3 (base) | 🤗 | ✅ | `tests/DeepSeek/` — several ops(e.g., gate ops) are not cycle-modeled |
+| Llama-4 | 🤗 | ⏳ | Under development |
 <!-- ## Requirements
 
 ### OS Distribution
@@ -58,7 +63,7 @@ cmake == 3.26.4
 conan == 1.56.0
 python >= 3.10
 pytorch == 2.2.0
-risc-v64-unknown-elf-gcc == 13.2.0
+riscv64-unknown-elf-gcc == 13.2.0
 ```
 Our provided Docker environment resolves software dependencies.
 
@@ -90,16 +95,16 @@ To download the latest Docker image and set up the environment, use the followin
 docker run -it --ipc=host --name torchsim -w /workspace/PyTorchSim ghcr.io/psal-postech/torchsim-ci:v1.0.1 bash
 ```
 ### Manual Setting (Optional)
-This script provides building [Gem5](https://github.com/PSAL-POSTECH/gem5.git), [LLVM](https://github.com/PSAL-POSTECH/llvm-project.git), and [Spike](https://github.com/PSAL-POSTECH/riscv-isa-sim.git) simulator from source code for specific experts.
+This script builds [Gem5](https://github.com/PSAL-POSTECH/gem5.git), [LLVM](https://github.com/PSAL-POSTECH/llvm-project.git), and [Spike](https://github.com/PSAL-POSTECH/riscv-isa-sim.git) from source for advanced users.
 ```bash
-bash script/build_from_source.sh
+bash scripts/build_from_source.sh
 ```
 ### Run Examples
-The `tests` directory contains several AI workloads examples.
+The `tests` directory contains several AI workload examples.
 ```bash
 python tests/test_matmul.py 
 ```
-The result is stored to `TORCHSIM_LOG_PATH/hash/togsim_result/`. The log file contains detailed core, memory, and interconnect stats.
+The result is written to `${TORCHSIM_LOG_PATH}/togsim_result/XXX.log`. The log file contains detailed core, memory, and interconnect stats.
 
 ### Run Your Own Model on PyTorchSim
 You can run your own PyTorch model on PyTorchSim by setting up a custom NPU device.  
@@ -109,7 +114,7 @@ import torch
 
 device = torch.device("npu:0")
 
-# Declare you own model (e.g. resnet18 from torchvision)
+# Declare your own model (e.g. resnet18 from torchvision)
 from torchvision.models import resnet18
 model = resnet18().eval()
 x = torch.randn(1, 3, 224, 224, dtype=torch.float32)
@@ -128,11 +133,11 @@ PyTorchSim automatically generates a Tile-Operation Graph (TOG), and runs it thr
 ### Result
 Running log in CLI
 ```bash
-Wrapper Codegen Path = /tmp/torchinductor_root/fo/cfofsp5nwmpqxctouan2v2t5y7qp5vwrgvw4swssx4ca4us3c5tx.py
-[Gem5] Gem5 is running.
-[Spike] Running Spike simulator
-[TOGSim] TOGSim is running..
-[TOGSim] Simulation log is stored to "/workspace/PyTorchSim/togsim_results/20251205_080553.log"
+[2026-04-22 11:29:20.139] [INFO] [pytorchsimfrontend.mlir.generated_wrapper] Wrapper Codegen Path = /workspace/PyTorchSim/outputs/.torchinductor/ru/cruz5mvhqeci3avet3ebv6outo6rbo7uiv477tj7u2zjlvfp6k5k.py
+[2026-04-22 11:29:20.638] [INFO] [simulator.simulator] [Gem5] Gem5 simulation started
+[2026-04-22 11:29:26.138] [INFO] [simulator.simulator] [Spike] Running Spike simulator
+[2026-04-22 11:29:27.609] [INFO] [simulator.simulator] [TOGSim] TOGSim simulation started
+[2026-04-22 11:29:28.217] [INFO] [simulator.simulator] [TOGSim] Simulation log is stored to "/workspace/PyTorchSim/togsim_results/20260422_112927_6fb9d704.log"
 ----------------------------
 |Matmul Forward Test Passed|
 ----------------------------
@@ -140,61 +145,44 @@ Wrapper Codegen Path = /tmp/torchinductor_root/fo/cfofsp5nwmpqxctouan2v2t5y7qp5v
 
 Simulation consists of three steps
 
-1. `Gem5` obatins compute latency for TOG.
+1. `Gem5` obtains compute latency for TOG.
 2. `Spike` verifies the output code.
-3. `TOGSim` simulates a NPU architecture.
+3. `TOGSim` simulates an NPU architecture.
 
-If you want to turn off the `SpikeSimulator` for fast simulation, you can set as below.
+The log contains memory & core stats.
 ```bash
-export pytorchsim_functional_mode=False
-```
-Log contains memory & core stats.
-```bash
-[2025-12-05 08:05:52.538] [info] HBM2-CH_0: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 956, Row misses: 32, Row conflicts: 36
-[2025-12-05 08:05:52.538] [info] HBM2-CH_1: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 956, Row misses: 32, Row conflicts: 36
-[2025-12-05 08:05:52.538] [info] HBM2-CH_2: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 959, Row misses: 32, Row conflicts: 33
-[2025-12-05 08:05:52.538] [info] HBM2-CH_3: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 956, Row misses: 32, Row conflicts: 36
-[2025-12-05 08:05:52.538] [info] HBM2-CH_4: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 959, Row misses: 32, Row conflicts: 33
-[2025-12-05 08:05:52.538] [info] HBM2-CH_5: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 959, Row misses: 32, Row conflicts: 33
-[2025-12-05 08:05:52.538] [info] HBM2-CH_6: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 956, Row misses: 32, Row conflicts: 36
-[2025-12-05 08:05:52.538] [info] HBM2-CH_7: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 958, Row misses: 32, Row conflicts: 34
-[2025-12-05 08:05:52.538] [info] HBM2-CH_8: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 959, Row misses: 32, Row conflicts: 33
-[2025-12-05 08:05:52.538] [info] HBM2-CH_9: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 959, Row misses: 32, Row conflicts: 33
-[2025-12-05 08:05:52.538] [info] HBM2-CH_10: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 958, Row misses: 32, Row conflicts: 34
-[2025-12-05 08:05:52.538] [info] HBM2-CH_11: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 959, Row misses: 32, Row conflicts: 33
-[2025-12-05 08:05:52.538] [info] HBM2-CH_12: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 958, Row misses: 32, Row conflicts: 34
-[2025-12-05 08:05:52.538] [info] HBM2-CH_13: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 958, Row misses: 32, Row conflicts: 34
-[2025-12-05 08:05:52.538] [info] HBM2-CH_14: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] Row hits: 959, Row misses: 32, Row conflicts: 33
-[2025-12-05 08:05:52.538] [info] HBM2-CH_15: avg BW utilization 49% (768 reads, 256 writes)
-[2025-12-05 08:05:52.538] [info] ===== Instructions count =====
-[2025-12-05 08:05:52.538] [info] Core [0] : MOVIN    inst_count 3
-[2025-12-05 08:05:52.538] [info] Core [0] : MOVOUT   inst_count 1
-[2025-12-05 08:05:52.538] [info] Core [0] : COMP     inst_count 10 (GEMM: 8, Vector: 2)
-[2025-12-05 08:05:52.538] [info] Core [0] : BAR      inst_count 8
-[2025-12-05 08:05:52.538] [info] ========= Core stat =========
-[2025-12-05 08:05:52.538] [info] Core [0] : Systolic array [0] utilization(%) 12.40, active_cycles 256, idle_cycles 1809
-[2025-12-05 08:05:52.538] [info] Core [0] : Systolic array [1] utilization(%) 12.40, active_cycles 256, idle_cycles 1809
-[2025-12-05 08:05:52.538] [info] Core [0] : DMA active_cycles, 1024 DMA idle_cycles 1041, DRAM BW 238.000 GB/s (16384 responses)
-[2025-12-05 08:05:52.538] [info] Core [0] : Vector unit utilization(%) 2.42, active cycle 50, idle_cycle 0
-[2025-12-05 08:05:52.538] [info] Core [0] : NUMA local memory: 16384 requests, remote memory: 0 requests
-[2025-12-05 08:05:52.538] [info] Core [0] : Total_cycles 2065
-[2025-12-05 08:05:52.538] [info] Total execution cycles: 2065
-[2025-12-05 08:05:52.538] [info] Wall-clock time for simulation: 0.147463 seconds
+[2026-04-22 11:29:28.215] [info] [DRAM] Per-channel average bandwidth
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 0 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 1 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 2 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 3 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 4 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 5 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 6 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 7 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 8 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 9 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 10 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 11 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 12 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 13 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 14 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channel 15 | 15.51 GB/s avg., 51.56% of utilization | 4096 reads, 2048 writes
+[2026-04-22 11:29:28.215] [info] [DRAM] channels 0..15 combined | 248.13 GB/s aggregate, 51.56% of utilization (avg. per channel) | 65536 reads, 32768 writes
+[2026-04-22 11:29:28.215] [info] ===== Instructions count =====
+[2026-04-22 11:29:28.215] [info] Core [0] : MOVIN    inst_count: 2
+[2026-04-22 11:29:28.215] [info] Core [0] : MOVOUT   inst_count: 1
+[2026-04-22 11:29:28.215] [info] Core [0] : COMP     inst_count: 81 (GEMM: 80, Vector: 1)
+[2026-04-22 11:29:28.215] [info] Core [0] : BAR      inst_count: 80
+[2026-04-22 11:29:28.215] [info] ========= Core stat =========
+[2026-04-22 11:29:28.215] [info] Core [0] : Systolic array [0] utilization(%): 34.37, active_cycles: 4096, idle_cycles: 7821
+[2026-04-22 11:29:28.215] [info] Core [0] : Systolic array [1] utilization(%): 34.37, active_cycles: 4096, idle_cycles: 7821
+[2026-04-22 11:29:28.215] [info] Core [0] : DMA active_cycles: 6144, DMA idle_cycles: 5773, DRAM BW: 248.000 GB/s (98304 responses)
+[2026-04-22 11:29:28.215] [info] Core [0] : Vector unit utilization(%): 2.55, active cycle: 304, idle_cycle: 0
+[2026-04-22 11:29:28.215] [info] Core [0] : NUMA local memory: 98304 requests, remote memory: 0 requests
+[2026-04-22 11:29:28.215] [info] Core [0] : Total_cycles: 11917
+[2026-04-22 11:29:28.215] [info] Total execution cycles: 11917
+[2026-04-22 11:29:28.215] [info] Wall-clock time for simulation: 0.602899 seconds
 ```
 The log is dumped in `TORCHSIM_LOG_PATH` and you can set the path as below.
 ```bash
@@ -209,17 +197,17 @@ compiled_step = torch.compile(dynamic=False)(optimizer.step)
 
 optimizer.zero_grad()
 loss.backward()
-opt_step()
+compiled_step()
 ```
 `tests/test_mlp.py` provides an example of MLP training.
 
-## Multi-tenancy
+## One TOGSim session, one continuous log
 
-While the **`with TOGSimulator(config_path=...)`** block is active, **`TOGSIM_CONFIG`** is set to that YAML so **compilation and TOGSim use the same** hardware description.
+By default, **each compiled operation** can run TOGSim in a **standalone** way—typically **one simulator process and one log file per kernel**. That matches single-kernel workflows but splits traces when you run many forwards in a row.
 
-### 1. One TOGSim session, one continuous log
+**`with TOGSimulator(config_path=...)`** keeps **one TOGSim session** open for the block: successive calls (e.g. multiple **`compiled_model(...)`** forwards) run **in sequence in the same process**, so the timeline and shared resources **continue in a single log** instead of restarting for every op. **`TOGSIM_CONFIG`** is set to the given YAML for the block so **codegen and TOGSim** still share one hardware file.
 
-If you want **one** log where kernels are simulated **in sequence** as a single run, wrap the code you already use to execute the compiled model with **`with TOGSimulator(config_path=...)`**. No other API is required; every forward inside the block shares that session.
+Use the same API you already use; only wrap the region you want co-simulated:
 
 ```python
 import torch
@@ -231,7 +219,9 @@ with TOGSimulator(config_path=config):
     y = compiled_model(x)
 ```
 
-### 2. Multi-tenancy and explicit scheduling (`launch_model`)
+<a id="multi-tenancy"></a>
+
+## Multi-tenancy and explicit scheduling (`launch_model`)
 
 For **multi-tenant** or **interleaved** execution, you usually need to attach a **timestamp** and a **`stream_index`** to each launch so the simulator can order work correctly. Use **`torch.npu.launch_model(compiled_model, *inputs, stream_index=..., timestamp=...)`** for that; plain `compiled_model(x)` does not carry those parameters.
 
@@ -289,8 +279,6 @@ for t in poisson_request_generator(model1_lambda, max_msec_time=max_time_msec):
     x = torch.randn(128, 768, device=device)
     events.append((t, 1, opt_model1, (x,)))  # stream_index 1 → queue / partition 1
 
-events.sort(key=lambda e: e[0])
-
 with TOGSimulator(config_path=config):
     for t_msec, stream_index, model, args in events:
         torch.npu.launch_model(
@@ -317,16 +305,16 @@ Depending on tensor shape, use different convolution template:
 ## Mapping
 PyTorchSim provides three mapping strategies.
 ### Heuristic-based mapping
-We adopt and modified heuristic-based mapping of [GEMMINI](https://github.com/ucb-bar/gemmini) by default, which maximizes the utilization of scratchpad memory.
+We adopted and modified heuristic-based mapping from [GEMMINI](https://github.com/ucb-bar/gemmini) by default, which maximizes the utilization of scratchpad memory.
 ### Auto-tuning
-Heuristic method may not be optimal for all cases. PyTorchSim provides auto-tuning to find the best mapping for GEMM, CONV, and vector operations. It reduces the search space by sorting candidates based on scratchpad memory utilization and picking the top-k candidates. Search parameters include tile shape and vector lane stride.
+The heuristic method may not be optimal for all cases. PyTorchSim provides auto-tuning to find the best mapping for GEMM, CONV, and vector operations. It reduces the search space by sorting candidates based on scratchpad memory utilization and picking the top-k candidates. Search parameters include tile shape and vector lane stride.
 
 To enable this, update your configuration file as follows:
 ```bash
 "codegen_mapping_strategy" : "autotune"
 ```
-### Manunal setting
-Users can utilizing third-party mapping tools (e.g., Timeloop). You can explicitly set the mapping file path in the configuration file to apply your own mapping strategies.
+### Manual setting
+Users can use third-party mapping tools (e.g., Timeloop). You can explicitly set the mapping file path in the configuration file to apply your own mapping strategies.
 ```bash
 "codegen_mapping_strategy" : "external",
 "codegen_external_mapping_file" : "path/to/mapping_file.json",
@@ -355,7 +343,7 @@ Key: "M_N_K" for GEMM
 ## L2 Cache
 It supports L2 cache as persistent cache. User can provide software-managed allocation/eviction strategy for tensors with persistent cache.
 
-Common Memory (CMEM) is a new feature introduced in the latest TPUs (newer than TPUv3). Multiple cores share this memory, which provides high bandwidth. Reusable tensors are stored and loaded from CMEM to avoid off-chip traffic. Our L2 cache can work like as CMEM
+Common Memory (CMEM) is a new feature introduced in the latest TPUs (newer than TPUv3). Multiple cores share this memory, which provides high bandwidth. Reusable tensors are stored and loaded from CMEM to avoid off-chip traffic. Our L2 cache can work like CMEM.
 
 To allocate a tensor in L2 cache, set the environment variable as shown below. The `tpuv4` directory provides example plans for L2 cache obtained from TPUv4 profiling.
 ```bash
@@ -378,69 +366,103 @@ You can configure these options using environment variables.
 ```bash
 export TORCHSIM_DIR=/workspace/PyTorchSim # home directory
 
-# Plan which tensor allocated in TPUv4's CMEM
+# Plan which tensors are allocated in TPUv4's CMEM
 export SRAM_BUFFER_PLAN_PATH=/workspace/PyTorchSim/tpuv4/gemm_plan.py
-
-export TORCHSIM_TLS_MODE=1 # User can choose TLS or ILS mode
 export TORCHSIM_USE_TIMING_POOLING=0 # use lightweight pooling for timing
 ```
 ## TOGSim Configuration
 ![NPU_Core](./docs/npu_core.jpg)
 
-`configs` directory contains example NPU configuration files in the JSON format.
+The `configs/` directory holds **YAML** (`.yml`) hardware descriptions. Set `TOGSIM_CONFIG` to one of these files. The **same file** is read by the **compiler** (`PyTorchSimFrontend/extension_config.py`) for `vpu_*`, `pytorchsim_*`, and `codegen_*` fields, and by **TOGSim** (`TOGSim/src/Common.cc`) for the simulator-specific keys below.
+
+### Reference layout (matches `configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml`)
+
+```yaml
+# --- Core (TOGSim) ---
+num_cores: 1
+core_freq_mhz: 940
+core_stats_print_period_cycles: 10000
+num_systolic_array_per_core: 2
+# Optional: one entry per core, default ws_mesh
+# core_type: [ws_mesh, ws_mesh]
+# Optional STONNE cores: stonne_config_path, num_stonne_per_core, num_stonne_port
+
+# --- VPU / scratchpad (compiler codegen; same YAML) ---
+vpu_num_lanes: 128
+vpu_spad_size_kb_per_lane: 128
+vpu_vector_length_bits: 256
+
+# --- DRAM config ---
+dram_type: ramulator2          # ramulator2 | simple
+dram_freq_mhz: 940
+dram_channels: 16
+dram_stats_print_period_cycles: 10000
+ramulator_config_path: ../configs/ramulator2_configs/HBM2_TPUv3.yaml  # resolved relative to this YAML’s directory
+# For ramulator2: request size, DRAM MHz, and per-channel peak GB/s are derived from the Ramulator YAML.
+# dram_freq_mhz must exactly match MHz derived from Ramulator tCK or startup fails.
+
+# simple DRAM (alternative to ramulator2):
+# dram_type: simple
+# dram_latency: 100
+# dram_req_size_byte: 32   # optional, default 32
+# dram_freq_mhz: <MHz>     # defaults to core_freq_mhz if omitted
+# Optional bandwidth cap (set only one of the two):
+# dram_bandwidth_gbps_per_channel: ...
+# dram_bandwidth_gbps_total: ...
+# If either bandwidth key is set, dram_freq_mhz is required.
+
+# Optional: NUMA-style DRAM partitions (channels must divide evenly)
+# dram_num_partitions: 2
+
+# --- Interconnect (TOGSim) ---
+icnt_type: simple              # simple | booksim2
+icnt_latency_cycles: 10        # used when icnt_type is simple
+icnt_freq_mhz: 940
+icnt_injection_ports_per_core: 16
+# icnt_stats_print_period_cycles: 0   # optional
+# For icnt_type: booksim2, use booksim_config_path (not icnt_config_path):
+# booksim_config_path: ../configs/booksim2_configs/fly_c16_m16.icnt
+
+# --- Functional / timing flags (compiler; same YAML) ---
+pytorchsim_functional_mode: 1  # 1 = run Spike validation, 0 = skip for faster runs
+pytorchsim_timing_mode: 1
+
+# --- Compiler mapping / optimizations (same YAML) ---
+codegen_mapping_strategy: heuristic   # heuristic | autotune | external-then-heuristic | external-then-autotune
+codegen_external_mapping_file: ''
+codegen_autotune_max_retry: 10
+codegen_autotune_template_topk: 4
+codegen_compiler_optimization: all    # all | none | list of option names
+
+# --- Optional L2 (TOGSim) ---
+# l2d_type: nocache            # default if omitted
+# l2d_type: datacache
+# l2d_config: "S:64:128:512,32,..."   # required when l2d_type is datacache (AccelSim-style string)
+
+# --- Optional scheduler / partitions (TOGSim; multi-queue) ---
+# scheduler: simple
+# num_partition: 2
+# partition:
+#   core_0: 0
+#   core_1: 1
 ```
-  "num_cores" : 2,                   // Number of NPU cores
-  "core_freq_mhz" : 940,             // Core's frequency (MHz)
-  "num_systolic_array_per_core" : 2, // Number of systolic array per core
 
-  "vpu_num_lanes" : 128,             // Number of VPU lanes
-  "vpu_spad_size_kb_per_lane" : 128, // Scratchpad memory size per lane (KB)
-  "vpu_vector_length_bits" : 256,    // VPU vector register length (Bits)
+### Key fields (quick reference)
 
-  "dram_type" : "ramulator2",        // DRAM type: ramulator2 | simple
-  "dram_channels": 32,               // Number of DRAM channels (topology; required for both types)
-  "dram_stats_print_period_cycles": 10000, // Optional DRAM stats interval
-  // ramulator2: per-request size (bytes), DRAM MHz, and per-channel peak GB/s are derived from ramulator_config_path
-  // (peak ≈ timing[0] as MT/s × channel_width × pseudo-channels for HBM2/3; MHz from Ramulator tCK).
-  // Optional: if you set dram_freq_mhz, it must exactly match that derived MHz or initialization fails
-  // (the error message includes tCK in ns and the derived MHz for debugging stale yml values).
-  // Do not set dram_bandwidth_gbps_* at top level.
-  "ramulator_config_path" : "../configs/ramulator2_configs/HBM2_TPUv3.yaml",
-  // simple: dram_latency + dram_channels + optional dram_req_size_byte (default 32). Omit
-  // dram_bandwidth_gbps_* for latency-only; dram_freq_mhz defaults to core_freq_mhz.
-  // With dram_bandwidth_gbps_* set, dram_freq_mhz is required (credit refill per DRAM cycle).
+One-line meaning for each group (details in the YAML block above).
 
-  "l2d_type" : "datacache",
-  "l2d_config" : "S:64:128:512,32,L:B:m:W:L,A:192:4,32:0,32",
+- **Core (`num_cores`, `core_freq_mhz`, `core_stats_print_period_cycles`, `num_systolic_array_per_core`, optional `core_type`, STONNE keys)**: how many cores, their clock, stats cadence, systolic count per core, and optional non-default mesh vs STONNE mix.
+- **VPU (`vpu_*`)**: vector lane count, per-lane scratchpad (KB), and vector register width—**compiler** uses these for tiling/codegen.
+- **DRAM (`dram_type`, `dram_channels`, …)**: `ramulator2` uses `ramulator_config_path`; `simple` uses fixed latency and optional bandwidth caps (`dram_bandwidth_gbps_*`, `dram_freq_mhz` when capped). `dram_num_partitions` splits channels for NUMA-style addressing.
+- **Interconnect (`icnt_*`, `booksim_config_path`)**: `simple` adds fixed hop latency (`icnt_latency_cycles`); `booksim2` points at a BookSim2 topology file.
+- **Codegen (`codegen_*`)**: mapping strategy (heuristic / autotune / external-hybrid), external JSON path, autotune search limits, and fusion/optimization set for the PyTorch compiler path.
+- **L2 (`l2d_type`, `l2d_config`, optional `l2d_hit_latency`)**: optional data cache between cores and DRAM; `l2d_config` uses AccelSim-style cache geometry strings.
+- **Scheduler (`scheduler`, `num_partition`, `partition`)**: request queues per partition and `core_i` → queue index mapping for multi-tenant / `launch_model` routing.
+- **`pytorchsim_functional_mode`**: **`1`** runs **Spike** on generated code; **`0`** skips it for faster iteration.
+- **`pytorchsim_timing_mode`**: **`1`** keeps the cycle-aware tile-graph path that feeds **TOGSim**; **`0`** turns that timing path off (functional-style runs; often paired with `pytorchsim_functional_mode` in tutorial configs).
 
-  "icnt_type" : "simple",              // Interconnect type (ex. booksim, simple)
-  "icnt_latency" : 7,                  // Interconnect latency (cycle)
-  "icnt_freq_mhz" : 940,               // Interconnect frequency (MHz)
-  "icnt_injection_ports_per_core" : 16 // Interconnect injection ports per core
-  "icnt_config_path" : "../configs/booksim2_configs/fly_c4_m32.icnt", // Booksim2 config file path
-
-  "scheduler" : "simple",            // Scheduler type (Now, only support simple scheduler)
-  "num_partition" : 2,               // Multi-core Partitioning
-  "partition": {                     // allocate request queue index
-    "core_0":0,
-    "core_1":1
-  },
-
-  "codegen_mapping_strategy" : "heuristic", // Compiler mapping strategy (ex. "heuristic", "autotune", "external-then-heuristic", "external-then-autotune")
-  "codegen_external_mapping_file" : "",     // Path to external mapping file
-  "codegen_autotune_max_retry": 10,         // Maximum retries for autotuning
-  "codegen_autotune_template_topk": 4,      // Top-K templates to consider during autotuning
-  // Compiler optimization level/options.
-  // Value can be "all", "none", or a list of specific optimizations:
-  // ["fusion", "reduction_epilogue", "reduction_reduction", "prologue", "single_batch_conv", "multi_tile_conv", "subtile"]
-  "codegen_compiler_optimization" : "all"
-```
-You can set TOGSim config path as below.
-```bash
-export TOGSIM_CONFIG=/workspace/PyTorchSim/configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml
-```
 ## Future Works
-Currently, PyTorchSim supports PyTorch 2.2. Support for newer versions will be added soon.
+We plan to broaden **model coverage** (more architectures and workloads), improve **dynamic-shape** support in the compiler and simulator path, and extend **eager-mode** integration so a wider range of PyTorch programs can be exercised without relying solely on `torch.compile`-style flows.
 
 ## Artifact Evaluation
 Artifact evaluation is being prepared for v1.0.0.
