@@ -5,6 +5,9 @@ LOG_DIR=$TORCHSIM_DIR/experiments/artifact/logs
 CONFIG_DIR="$TORCHSIM_DIR/configs"
 EXTRACT_TRACE="$TORCHSIM_DIR/experiments/artifact/speedup/scripts/extract_trace_from_log.py"
 TRACE_CACHE_DIR="$TORCHSIM_DIR/experiments/artifact/speedup/trace_cache"
+# CI: e.g. SKIP_ILS=1, SPEEDUP_ITERS=1 (shorter, no ILS re-runs)
+: "${SKIP_ILS:=0}"
+: "${SPEEDUP_ITERS:=5}"
 mkdir -p "$TRACE_CACHE_DIR"
 
 configs=(
@@ -63,7 +66,7 @@ for log_file in "$LOG_DIR"/*.log; do
     sum_all_iters=0.0
     iter_count=0
 
-    for iter in {1..5}; do
+    for iter in $(seq 1 "${SPEEDUP_ITERS}"); do
       echo "[Iter $iter] Running simulation for workload=$workload config=$config"
       # Build command: replace --config and --models_list in base_cmd with our config and trace
       cmd=$(echo "$base_cmd" | sed -E "s|--config [^ ]+|--config $CONFIG_DIR/$config|" | sed -E "s|--models_list [^ ]+|--models_list $trace_file|")
@@ -92,10 +95,14 @@ for log_file in "$LOG_DIR"/*.log; do
   done
 done
 
-# ILS mode should be run separately
-$TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_matmul.sh
-$TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_conv.sh
-$TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_bert.sh
-$TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_resnet.sh
+# ILS: optional (skip in CI; slow and separate from simple-noc / booksim re-sims)
+if [[ "$SKIP_ILS" != "1" ]]; then
+  $TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_matmul.sh
+  $TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_conv.sh
+  $TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_bert.sh
+  $TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_resnet.sh
+else
+  echo "[*] SKIP_ILS=1 — skipping ILS matmul/conv/bert/resnet."
+fi
 
 python3 $TORCHSIM_DIR/experiments/artifact/speedup/summary_speedup.py | tee "$TORCHSIM_DIR/experiments/artifact/speedup/summary_speedup.log"
