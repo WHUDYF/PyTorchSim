@@ -39,4 +39,5 @@ jobs:
           push: true
           build-args: |
             PYTORCH_IMAGE=${{ env.PYTORCH_IMAGE }}
+            PYTORCHSIM_GIT_REF=${{ github.sha }}
           tags: ghcr.io/psal-postech/torchsim-tutorial:ispass2026

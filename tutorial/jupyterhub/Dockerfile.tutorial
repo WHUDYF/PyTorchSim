@@ -29,6 +29,9 @@
 ARG PYTORCH_IMAGE=pytorch/pytorch:2.8.0-cuda12.6-cudnn9-devel
 FROM ${PYTORCH_IMAGE}
 
+# CI passes ``github.sha``; local builds can use a branch (default) or a tag/SHA.
+ARG PYTORCHSIM_GIT_REF=ispass2026
+
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /workspace
 
@@ -91,11 +94,13 @@ RUN git clone https://github.com/riscv-software-src/riscv-pk.git \
     && ../configure --prefix="$RISCV" --host=riscv64-unknown-elf \
     && make -j"$(nproc)" && make install
 
-# PyTorchSim + TOGSim
+# PyTorchSim + TOGSim (CI checks out the triggering commit; use PYTORCHSIM_GIT_REF for local builds)
 ENV CMAKE_POLICY_VERSION_MINIMUM=3.5
-RUN git clone https://github.com/PSAL-POSTECH/PyTorchSim.git --branch ispass2026 \
-    && cd PyTorchSim/TOGSim \
+RUN git clone https://github.com/PSAL-POSTECH/PyTorchSim.git \
+    && cd PyTorchSim \
+    && git checkout "${PYTORCHSIM_GIT_REF}" \
     && git submodule update --recursive --init \
+    && cd TOGSim \
     && mkdir -p build && cd build \
     && conan install .. --build=missing \
     && cmake -G Ninja .. \
