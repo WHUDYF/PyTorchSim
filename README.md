@@ -49,7 +49,8 @@ PyTorchSim **supports**:
 | Stable-diffusion v1 | 🤗 | ✅ |  |
 | Llama 2/3 | 🤗 | ✅ | `tests/Llama/` (blocks & decode-style paths) |
 | DeepSeek-V3 (base) | 🤗 | ✅ | `tests/DeepSeek/` — several ops(e.g., gate ops) are not cycle-modeled |
-| Llama-4 | 🤗 | ⏳ | Under development |
+| Llama-4 | 🤗 | ⏳ | In development |
+| Broader model support | — | ⏳ | In development |
 <!-- ## Requirements
 
 ### OS Distribution
@@ -92,7 +93,7 @@ To download the latest Docker image and set up the environment, use the followin
 
 ```bash
 # Run the Docker container
-docker run -it --ipc=host --name torchsim -w /workspace/PyTorchSim ghcr.io/psal-postech/torchsim-ci:v1.0.1 bash
+docker run -it --ipc=host --name torchsim -w /workspace/PyTorchSim ghcr.io/psal-postech/torchsim-ci:v1.1.0 bash
 ```
 ### Manual Setting (Optional)
 This script builds [Gem5](https://github.com/PSAL-POSTECH/gem5.git), [LLVM](https://github.com/PSAL-POSTECH/llvm-project.git), and [Spike](https://github.com/PSAL-POSTECH/riscv-isa-sim.git) from source for advanced users.
