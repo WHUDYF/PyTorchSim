@@ -461,6 +461,18 @@ One-line meaning for each group (details in the YAML block above).
 - **`pytorchsim_functional_mode`**: **`1`** runs **Spike** on generated code; **`0`** skips it for faster iteration.
 - **`pytorchsim_timing_mode`**: **`1`** keeps the cycle-aware tile-graph path that feeds **TOGSim**; **`0`** turns that timing path off (functional-style runs; often paired with `pytorchsim_functional_mode` in tutorial configs).
 
+## Tutorial
+Check out our [KSC 2025 tutorial](https://www.youtube.com/watch?v=6vcwKCPdoTw&list=PLYIb5dkr4isISXGhVf6gdePqBVb42j-mb&pp=gAQB) to learn:
+- PyTorchSim architecture, motivation, and design goals
+- The end-to-end PyTorch compilation pipeline (PyTorch code → FX → MLIR → LLVM → ISA)
+- TPU-style NPU architecture and memory hierarchy
+- Running and analyzing operators and DNN models in PyTorchSim
+- Scheduling, mapping, optimization, and performance analysis tools
+- Extending PyTorchSim with custom NPU ISA instructions
+
+KSC 2025 tutorial recordings are only available in Korean. The tutorial materials are in English.
+
+
 ## Future Works
 We plan to broaden **model coverage** (more architectures and workloads), improve **dynamic-shape** support in the compiler and simulator path, and extend **eager-mode** integration so a wider range of PyTorch programs can be exercised without relying solely on `torch.compile`-style flows.
 
