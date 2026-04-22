@@ -116,6 +116,18 @@ CONFIGS = {
     "LPDDR5X.yaml":     gen_lpddr5x,
 }
 
+class CompactJSONEncoder(json.JSONEncoder):
+    def encode(self, o, level=0):
+        indent = '  ' * level
+        if isinstance(o, list):
+            return '[' + ', '.join(self.encode(i, level) for i in o) + ']'
+        if isinstance(o, dict):
+            items = ',\n'.join(
+                f'{indent}  {json.dumps(k)}: {self.encode(v, level + 1)}'
+                for k, v in o.items()
+            )
+            return '{\n' + items + '\n' + indent + '}'
+        return super().encode(o)
 
 if __name__ == "__main__":
     out_dir = os.path.dirname(os.path.abspath(__file__))
@@ -123,7 +135,6 @@ if __name__ == "__main__":
         cfg = gen_fn()
         out_path = os.path.join(out_dir, filename)
         with open(out_path, "w") as f:
-            # json is valid yaml — C++ parse_config_file reads either
-            json.dump(cfg, f, indent=2)
+            f.write(CompactJSONEncoder().encode(cfg))
         print(f"Generated {out_path}")
 

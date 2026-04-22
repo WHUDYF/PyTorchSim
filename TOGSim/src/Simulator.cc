@@ -1,5 +1,9 @@
 #include "Simulator.h"
 
+#include <fstream>
+#include <sstream>
+#include <string>
+
 Simulator::Simulator(SimulationConfig config, YAML::Node hardware_config_yaml)
     : _config(config),
       _hardware_config_yaml(std::move(hardware_config_yaml)),
@@ -45,8 +49,17 @@ Simulator::Simulator(SimulationConfig config, YAML::Node hardware_config_yaml)
                                        .append(config.dram_config_path)
                                        .string();
     spdlog::info("[Config/DRAM] Ramulator2 config path: {}", ramulator_config);
-    YAML::Node dram_config = YAML::LoadFile(ramulator_config);
-    spdlog::info("[Config/DRAM] Ramulator2 configuration:\n{}", YAML::Dump(dram_config));
+    {
+      std::ifstream in(ramulator_config);
+      if (!in) {
+        spdlog::warn("[Config/DRAM] Could not open Ramulator2 config: {}", ramulator_config);
+      } else {
+        std::ostringstream ss;
+        ss << in.rdbuf();
+        const std::string raw = ss.str();
+        spdlog::info("[Config/DRAM] Ramulator2 configuration :\n{}", raw);
+      }
+    }
     config.dram_config_path = ramulator_config;
     _dram = std::make_unique<DramRamulator2>(config, &_core_cycles);
   } else {
