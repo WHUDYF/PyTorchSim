@@ -9,7 +9,7 @@ LOG_DIR = os.path.join(TORCHSIM_DIR, "experiments/artifact/speedup/results")
 BASELINE_CSV = os.path.join(TORCHSIM_DIR, "experiments/artifact/baseline_latency.csv")
 
 
-def plot_speedup_bars(data: dict, filename: str):
+def plot_speedup_bars(data: dict, filename: str, geomean_speedups: tuple | None = None):
     colors = {
         'Accel-Sim': '#A6A6A6',
         'mNPUSim': '#E97132',
@@ -19,6 +19,7 @@ def plot_speedup_bars(data: dict, filename: str):
     }
 
     labels = list(data.keys())
+    geomean_row = bool(labels) and labels[-1] == "Geomean"
     num_sims = len(colors)
     bar_width = 1
     fig, ax = plt.subplots(figsize=(48, 16))
@@ -34,13 +35,18 @@ def plot_speedup_bars(data: dict, filename: str):
         x_pos.append(x_offset + bar_width * (num_sims // 2))
         x_offset += bar_width * (num_sims + 2)
 
-    for sim, (heights, xpos) in grouped_data.items():
+    for sim_i, (sim, (heights, xpos)) in enumerate(grouped_data.items()):
         bars = ax.bar(xpos, heights, width=bar_width, color=colors[sim], label=sim, edgecolor='black')
         mae_val = heights[-1]
+        if geomean_row and geomean_speedups is not None and sim_i < len(geomean_speedups):
+            raw_g = geomean_speedups[sim_i]
+            bar_lbl = "N/A" if raw_g is None else f"{float(raw_g):.2f}x"
+        else:
+            bar_lbl = f"{mae_val:.1f}x"
         ax.text(
             xpos[-1],
             mae_val + 2 if mae_val >= 0 else mae_val - 6,
-            f'{mae_val:.1f}x',
+            bar_lbl,
             ha='center',
             va='bottom' if mae_val >= 0 else 'top',
             fontsize=9,
@@ -76,16 +82,30 @@ def format_with_speedup(value, ref, speedup_list=None):
         return "N/A", 0.0
 
 def compute_geomean(errors):
+    """Geometric mean of positive speedups, or None if unavailable (CI may skip ILS / some sims)."""
     if not errors:
-        return "N/A"
+        return None
     filtered = [abs(e) for e in errors if e > 0]
     if not filtered:
-        return "0.00x"
+        return None
     prod = 1.0
     for e in filtered:
         prod *= e
-    geo = prod ** (1.0 / len(filtered))
-    return geo
+    return prod ** (1.0 / len(filtered))
+
+
+def format_geomean_cell(g):
+    """One table cell for geomean row (25 chars: same as '{x:>24.2f}x')."""
+    if g is None:
+        return f"{'N/A x':>25}"
+    return f"{float(g):>24.2f}x"
+
+
+def geomean_bar_height(g):
+    """Bar height for log-scale plot when geomean is missing."""
+    if isinstance(g, (int, float)) and g > 0:
+        return float(g)
+    return 1.0
 
 if __name__ == "__main__":
     # 1. Generate cycle_map
@@ -149,8 +169,30 @@ if __name__ == "__main__":
     geomean_torchsim_ils_sn = compute_geomean(torchsim_ils_sn_speedup)
     geomean_torchsim_sn = compute_geomean(torchsim_sn_speedup)
     geomean_torchsim_cn = compute_geomean(torchsim_cn_speedup)
-    plot_data["Geomean"] = [geomean_accelsim, geomean_mnpusim, geomean_torchsim_ils_sn, geomean_torchsim_sn, geomean_torchsim_cn]
+    plot_data["Geomean"] = [
+        geomean_accelsim,
+        geomean_bar_height(geomean_mnpusim),
+        geomean_bar_height(geomean_torchsim_ils_sn),
+        geomean_bar_height(geomean_torchsim_sn),
+        geomean_bar_height(geomean_torchsim_cn),
+    ]
     print("=" * 165)
-    print(f"{'Geomean Speedup':>30} {'1x':>25} {geomean_mnpusim:>24.2f}x {geomean_torchsim_ils_sn:>24.2f}x {geomean_torchsim_sn:>24.2f}x {geomean_torchsim_cn:>24.2f}x")
+    print(
+        f"{'Geomean Speedup':>30} {'1x':>25} "
+        f"{format_geomean_cell(geomean_mnpusim)} "
+        f"{format_geomean_cell(geomean_torchsim_ils_sn)} "
+        f"{format_geomean_cell(geomean_torchsim_sn)} "
+        f"{format_geomean_cell(geomean_torchsim_cn)}"
+    )
     path = os.path.join(TORCHSIM_DIR, "experiments/artifact/speedup/speedup.png")
-    plot_speedup_bars(plot_data, path)
+    plot_speedup_bars(
+        plot_data,
+        path,
+        geomean_speedups=(
+            geomean_accelsim,
+            geomean_mnpusim,
+            geomean_torchsim_ils_sn,
+            geomean_torchsim_sn,
+            geomean_torchsim_cn,
+        ),
+    )
