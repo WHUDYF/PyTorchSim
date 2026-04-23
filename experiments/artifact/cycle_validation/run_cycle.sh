@@ -65,7 +65,7 @@ if should_run matmul; then
     echo "==================================================="
     echo "[*] Running Matmul size=$sz"
     echo "==================================================="
-    python3 $TORCHSIM_DIR/experiments/gemm.py --size $sz | tee $LOG_DIR/${name}.log
+    python3 $TORCHSIM_DIR/experiments/gemm.py --size $sz 2>&1 | tee $LOG_DIR/${name}.log
   done
 fi
 
@@ -85,7 +85,7 @@ if should_run conv; then
     echo "==================================================="
     echo "[*] Running Conv size=$sz"
     echo "==================================================="
-    python3 $TORCHSIM_DIR/experiments/conv.py --size $sz | tee $LOG_DIR/${name}.log
+    python3 $TORCHSIM_DIR/experiments/conv.py --size $sz 2>&1 | tee $LOG_DIR/${name}.log
   done
 fi
 
@@ -97,7 +97,7 @@ if should_run layernorm; then
     echo "==================================================="
     echo "[*] Running LayerNorm size=$sz"
     echo "==================================================="
-    python3 $TORCHSIM_DIR/experiments/layernorm.py --size $sz | tee $LOG_DIR/${name}.log
+    python3 $TORCHSIM_DIR/experiments/layernorm.py --size $sz 2>&1 | tee $LOG_DIR/${name}.log
   done
 fi
 
@@ -109,7 +109,7 @@ if should_run softmax; then
     echo "==================================================="
     echo "[*] Running Softmax size=$sz"
     echo "==================================================="
-    python3 $TORCHSIM_DIR/experiments/softmax.py --size $sz | tee $LOG_DIR/${name}.log
+    python3 $TORCHSIM_DIR/experiments/softmax.py --size $sz 2>&1 | tee $LOG_DIR/${name}.log
   done
 fi
 
@@ -121,7 +121,7 @@ if should_run attention; then
     echo "==================================================="
     echo "[*] Running Attention size=$sz"
     echo "==================================================="
-    python3 $TORCHSIM_DIR/experiments/attention.py --size $sz | tee $LOG_DIR/${name}.log
+    python3 $TORCHSIM_DIR/experiments/attention.py --size $sz 2>&1 | tee $LOG_DIR/${name}.log
   done
 fi
 
@@ -132,7 +132,7 @@ if should_run resnet; then
     echo "==================================================="
     echo "[*] Running $model"
     echo "==================================================="
-    python3 $TORCHSIM_DIR/experiments/${model}.py | tee $LOG_DIR/${model}.log
+    python3 $TORCHSIM_DIR/experiments/${model}.py 2>&1 | tee $LOG_DIR/${model}.log
   done
 fi
 
@@ -143,11 +143,11 @@ if should_run bert; then
     echo "==================================================="
     echo "[*] Running BERT size=$model"
     echo "==================================================="
-    python3 $TORCHSIM_DIR/experiments/BERT.py --size $model | tee $LOG_DIR/bert_${model}.log
+    python3 $TORCHSIM_DIR/experiments/BERT.py --size $model 2>&1 | tee $LOG_DIR/bert_${model}.log
   done
 fi
 
 # Cycle Summary
 if should_run summary; then
-  python3 $TORCHSIM_DIR/experiments/artifact/cycle_validation/summary_cycle.py | tee "$TORCHSIM_DIR/experiments/artifact/cycle_validation/summary_cycle.out"
+  python3 $TORCHSIM_DIR/experiments/artifact/cycle_validation/summary_cycle.py 2>&1 | tee "$TORCHSIM_DIR/experiments/artifact/cycle_validation/summary_cycle.out"
 fi

@@ -3,12 +3,9 @@ set -e
 
 LOG_DIR=$TORCHSIM_DIR/experiments/artifact/logs
 CONFIG_DIR="$TORCHSIM_DIR/configs"
-EXTRACT_TRACE="$TORCHSIM_DIR/experiments/artifact/speedup/scripts/extract_trace_from_log.py"
-TRACE_CACHE_DIR="$TORCHSIM_DIR/experiments/artifact/speedup/trace_cache"
 # CI: e.g. SKIP_ILS=1, SPEEDUP_ITERS=1 (shorter, no ILS re-runs)
 : "${SKIP_ILS:=0}"
 : "${SPEEDUP_ITERS:=5}"
-mkdir -p "$TRACE_CACHE_DIR"
 
 configs=(
     "systolic_ws_128x128_c2_simple_noc_tpuv3.yml"
@@ -32,7 +29,7 @@ output_dir="$TORCHSIM_DIR/experiments/artifact/speedup/results"
 mkdir -p "$output_dir"
 
 echo "[*] Scanning log files in: $LOG_DIR"
-echo "[*] Extracting [TOGSim] Run command and trace from logs"
+echo "[*] Extracting Simulator command and trace path from logs ([TOGSim] Run command|Command line, Trace log is stored to)"
 echo ""
 
 for log_file in "$LOG_DIR"/*.log; do
@@ -45,17 +42,24 @@ for log_file in "$LOG_DIR"/*.log; do
   fi
   echo "==> Workload: $workload"
 
-  # === Extract [TOGSim] Run command from log ===
-  base_cmd=$(grep "\[TOGSim\] Run command:" "$log_file" 2>/dev/null | sed 's/.*\[TOGSim\] Run command: //' | head -1)
+  # === Extract Simulator invocation from log (TOGSim renamed the log tag) ===
+  # Legacy logs: "[TOGSim] Run command: ..."  Current TOGSim/main.cc: "[TOGSim] Command line: ..."
+  base_cmd=$(grep -E "\[TOGSim\] (Run command|Command line):" "$log_file" 2>/dev/null | sed -E 's/.*\[TOGSim\] (Run command|Command line): //' | head -1)
   if [[ -z "$base_cmd" ]]; then
-    echo "    Skipping: no [TOGSim] Run command found in $log_file"
+    echo "    Skipping: no [TOGSim] Run command / Command line found in $log_file"
     continue
   fi
 
-  # === Get trace file (replace FIFO in command; stored trace or generate from log) ===
-  trace_file=$(python3 "$EXTRACT_TRACE" "$log_file" "$TRACE_CACHE_DIR/${workload}.trace" 2>/dev/null) || true
+  # === Trace file: PyTorchSim logs it as "[TOGSim] Trace log is stored to \"<path>.trace\"" (often on stderr, now merged in cycle logs) ===
+  trace_line=$(grep -F '[TOGSim] Trace log is stored to' "$log_file" 2>/dev/null | tail -n 1) || true
+  if [[ -z "$trace_line" ]]; then
+    echo "    Skipping: no [TOGSim] Trace log is stored to ... line in $log_file"
+    continue
+  fi
+  trace_file="${trace_line#*Trace log is stored to \"}"
+  trace_file="${trace_file%%\"*}"
   if [[ -z "$trace_file" || ! -f "$trace_file" ]]; then
-    echo "    Skipping: could not extract trace from $log_file"
+    echo "    Skipping: trace path missing or not a file: ${trace_file:-<empty>} (from $log_file)"
     continue
   fi
 

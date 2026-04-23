@@ -11,7 +11,7 @@ dram_type: ramulator2
 dram_freq_mhz: 1200
 dram_channels: 16
 dram_stats_print_period_cycles: 10000
-ramulator_config_path: ../configs/ramulator2_configs/HBM2.yaml
+ramulator_config_path: ../configs/ramulator2_configs/HBM2_TPUv4.yaml
 l2d_type: datacache
 l2d_config: S:128:128:512,32,L:T:m:W:L,A:192:4,32:0,32
 

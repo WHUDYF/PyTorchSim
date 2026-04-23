@@ -51,18 +51,31 @@ def make_config(dram_obj, clock_ratio=1, refresh_scope="Channel"):
     """
     dram_name = str(_dram_standard_name(dram_obj)).upper()
     if dram_name.startswith("HBM"):
-        ctrl_cls = ramulator.controller.HBM
+        ctrl = ramulator.controller.HBM(
+            dram=dram_obj,
+            scheduler=ramulator.scheduler.FRFCFS(),
+            refresh_manager=ramulator.refresh_manager.AllBank(scope=refresh_scope),
+            row_policy=ramulator.row_policy.Open(),
+            addr_mapper=ramulator.addr_mapper.RoBaRaCoCh(),
+            read_buffer_size=64,
+            write_buffer_size=64,
+        )
     elif dram_name.startswith("LPDDR"):
-        ctrl_cls = ramulator.controller.LPDDR5
+        ctrl = ramulator.controller.LPDDR5(
+            dram=dram_obj,
+            scheduler=ramulator.scheduler.FRFCFS(),
+            refresh_manager=ramulator.refresh_manager.AllBank(scope=refresh_scope),
+            row_policy=ramulator.row_policy.Open(),
+            addr_mapper=ramulator.addr_mapper.RoBaRaCoCh(),
+        )
     else:
-        ctrl_cls = ramulator.controller.GenericDDR
-    ctrl = ctrl_cls(
-        dram=dram_obj,
-        scheduler=ramulator.scheduler.FRFCFS(),
-        refresh_manager=ramulator.refresh_manager.AllBank(scope=refresh_scope),
-        row_policy=ramulator.row_policy.Open(),
-        addr_mapper=ramulator.addr_mapper.RoBaRaCoCh(),
-    )
+        ctrl = ramulator.controller.GenericDDR(
+            dram=dram_obj,
+            scheduler=ramulator.scheduler.FRFCFS(),
+            refresh_manager=ramulator.refresh_manager.AllBank(scope=refresh_scope),
+            row_policy=ramulator.row_policy.Open(),
+            addr_mapper=ramulator.addr_mapper.RoBaRaCoCh(),
+        )
     ms = ramulator.memory_system.GenericDRAM(
         clock_ratio=clock_ratio,
         controllers=[ctrl],
@@ -81,6 +94,9 @@ def gen_hbm2():
     dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_2000Mbps")
     return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
 
+def gen_hbm2_tpuv4():
+    dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_2400Mbps")
+    return make_config(dram, clock_ratio=1, refresh_scope="PseudoChannel")
 
 def gen_hbm2_tpuv3():
     dram = ramulator.dram.HBM2(org_preset="HBM2_8Gb", timing_preset="HBM2_1880Mbps")
@@ -109,6 +125,7 @@ def gen_lpddr5x():
 
 CONFIGS = {
     "HBM2.yaml":        gen_hbm2,
+    "HBM2_TPUv4.yaml":  gen_hbm2_tpuv4,
     "HBM2_TPUv3.yaml":  gen_hbm2_tpuv3,
     "HBM2_TPUv2.yaml":  gen_hbm2_tpuv2,
     "DDR4.yaml":        gen_ddr4,
