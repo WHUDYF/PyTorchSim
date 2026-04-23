@@ -7,6 +7,7 @@ c = get_config()
 # ------------------------------------------------------------------------------
 c.JupyterHub.spawner_class = 'dockerspawner.DockerSpawner'
 c.DockerSpawner.image = "ghcr.io/psal-postech/torchsim-tutorial:ispass2026"
+c.DockerSpawner.environment = {'SHELL': '/bin/bash'}
 
 # Resource limit
 c.DockerSpawner.mem_limit = '32G'
