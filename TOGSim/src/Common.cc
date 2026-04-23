@@ -139,7 +139,10 @@ SimulationConfig initialize_config(const YAML::Node& config,
       parsed_config.icnt_latency = config["icnt_latency_cycles"].as<uint32_t>();
   } else if (icnt_type_str == "booksim2") {
     parsed_config.icnt_type = IcntType::BOOKSIM2;
-    parsed_config.icnt_config_path = get_config_value<std::string>(config, "booksim_config_path");
+    const std::string booksim_config_rel =
+        get_config_value<std::string>(config, "booksim_config_path");
+    parsed_config.icnt_config_path =
+        parsed_config.resolve_against_simulation_config(booksim_config_rel);
   } else
     throw std::runtime_error(fmt::format("Not implemented icnt type {} ", icnt_type_str));
 
