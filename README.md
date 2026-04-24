@@ -147,7 +147,7 @@ Running log in CLI
 Simulation consists of three steps
 
 1. `Gem5` obtains compute latency for TOG.
-2. `Spike` verifies the output code.
+2. `Spike` verifies the output code. It can also be used to model data-dependent timings.
 3. `TOGSim` simulates an NPU architecture.
 
 The log contains memory & core stats.
@@ -204,9 +204,9 @@ compiled_step()
 
 ## One TOGSim session, one continuous log
 
-By default, **each compiled operation** can run TOGSim in a **standalone** way—typically **one simulator process and one log file per kernel**. That matches single-kernel workflows but splits traces when you run many forwards in a row.
+By default, each compiled operation can run TOGSim in a standalone way—typically **one simulator process and one log file per kernel**. That matches single-kernel workflows but splits traces when you run many forwards in a row.
 
-**`with TOGSimulator(config_path=...)`** keeps **one TOGSim session** open for the block: successive calls (e.g. multiple **`compiled_model(...)`** forwards) run **in sequence in the same process**, so the timeline and shared resources **continue in a single log** instead of restarting for every op. **`TOGSIM_CONFIG`** is set to the given YAML for the block so **codegen and TOGSim** still share one hardware file.
+`with TOGSimulator(config_path=...)` keeps **one TOGSim session** open for the block: successive calls (e.g. multiple `compiled_model(...)` forwards) run in sequence in the same process, so the timeline and shared resources continue in a single log instead of restarting for every op. `TOGSIM_CONFIG` is set to the given YAML for the block so codegen and TOGSim still share one hardware file.
 
 Use the same API you already use; only wrap the region you want co-simulated:
 
@@ -224,11 +224,11 @@ with TOGSimulator(config_path=config):
 
 ## Multi-tenancy and explicit scheduling (`launch_model`)
 
-For **multi-tenant** or **interleaved** execution, you usually need to attach a **timestamp** and a **`stream_index`** to each launch so the simulator can order work correctly. Use **`torch.npu.launch_model(compiled_model, *inputs, stream_index=..., timestamp=...)`** for that; plain `compiled_model(x)` does not carry those parameters.
+For **multi-tenant** or **interleaved** execution, you usually need to attach a **timestamp** and a `stream_index` to each launch so the simulator can order work correctly. Use `torch.npu.launch_model(compiled_model, *inputs, stream_index=..., timestamp=...)` for that; plain `compiled_model(x)` does not carry those parameters.
 
-**`stream_index`** is the **request-queue / partition index** in the TOGSim config: it must match the **values** in the **`partition`** map (each queue index is mapped to a **core**). For example, `stream_index=0` goes to the queue bound to `core_0`, `stream_index=1` to the queue for `core_1`, and so on.
+`stream_index` is the **request-queue / partition index** in the TOGSim config: it must match the **values** in the `partition` map (each queue index is mapped to a **core**). For example, `stream_index=0` goes to the queue bound to `core_0`, `stream_index=1` to the queue for `core_1`, and so on.
 
-**`timestamp`** is in **nanoseconds** (simulation time for ordering launches). Use `0` when you do not need explicit times beyond submission order.
+`timestamp`** is in **nanoseconds** (simulation time for ordering launches). Use `0` when you do not need explicit times beyond submission order.
 
 ```python
 with TOGSimulator(config_path=config):
@@ -239,7 +239,7 @@ with TOGSimulator(config_path=config):
     torch.npu.launch_model(opt_model2, x2, stream_index=1, timestamp=0)
 ```
 
-Here **`synchronize()`** acts as a barrier: it does not return until every **`launch_model`** issued **above** it has finished in the simulator. The later pair of `launch_model` calls therefore runs only after those earlier models have fully completed—so the sync is the point in the timeline where **all preceding launches are done**.
+Here `synchronize()` acts as a barrier: it does not return until every `launch_model` issued **above** it has finished in the simulator. The later pair of `launch_model` calls therefore runs only after those earlier models have fully completed—so the sync is the point in the timeline where **all preceding launches are done**.
 
 ```bash
 python tests/test_scheduler.py
@@ -247,8 +247,8 @@ python tests/test_scheduler.py
 
 Use a TOGSim config(`.yml`) that defines **partitions** when mapping queues to cores, for example:
 
-- **`num_partition`**: Number of independent request queues (valid **`stream_index`** values are `0 … num_partition-1`).
-- **`partition`**: Maps each **core** name to a **queue index**; that index is the same **`stream_index`** you pass to **`launch_model`**.
+- `num_partition`: Number of independent request queues (valid `stream_index` values are `0 … num_partition-1`).
+- `partition`: Maps each **core** name to a **queue index**; that index is the same `stream_index` you pass to `launch_model`.
 
 ```
   "num_partition" : 2,
@@ -262,7 +262,7 @@ Here `stream_index=0` selects queue `0` (core_0), `stream_index=1` selects queue
 
 ### 3. Load generation (Poisson arrivals)
 
-The **`poisson_request_generator`** in **`Scheduler.scheduler`** yields synthetic **arrival times** (in **milliseconds**). Merge those with **`launch_model`**: convert each time to **nanoseconds** for **`timestamp`**, set **`stream_index`** to the target partition queue, and run all launches inside one **`with TOGSimulator(...)`** so a **single** log captures the full trace.
+The `poisson_request_generator` in `Scheduler.scheduler` yields synthetic **arrival times** (in **milliseconds**). Merge those with `launch_model`: convert each time to **nanoseconds** for `timestamp`, set `stream_index` to the target partition queue, and run all launches inside one `with TOGSimulator(...)` so a **single** log captures the full trace.
 
 ```python
 from Scheduler.scheduler import poisson_request_generator
@@ -376,7 +376,7 @@ export TORCHSIM_USE_TIMING_POOLING=0 # use lightweight pooling for timing
 
 The `configs/` directory holds **YAML** (`.yml`) hardware descriptions. Set `TOGSIM_CONFIG` to one of these files. The **same file** is read by the **compiler** (`PyTorchSimFrontend/extension_config.py`) for `vpu_*`, `pytorchsim_*`, and `codegen_*` fields, and by **TOGSim** (`TOGSim/src/Common.cc`) for the simulator-specific keys below.
 
-### Reference layout (matches `configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml`)
+### Reference layout
 
 ```yaml
 # --- Core (TOGSim) ---
@@ -475,7 +475,7 @@ KSC 2025 tutorial recordings are only available in Korean. The tutorial material
 
 
 ## Future Works
-We plan to broaden **model coverage** (more architectures and workloads), improve **dynamic-shape** support in the compiler and simulator path, and extend **eager-mode** integration so a wider range of PyTorch programs can be exercised without relying solely on `torch.compile`-style flows.
+We plan to broaden **model coverage** (more workloads), support **dynamic-shape**, and extend **eager-mode** integration so a wider range of PyTorch programs can be simulated.
 
 ## Artifact Evaluation
 Artifact evaluation is available for v1.0.0.
