@@ -478,7 +478,7 @@ KSC 2025 tutorial recordings are only available in Korean. The tutorial material
 We plan to broaden **model coverage** (more architectures and workloads), improve **dynamic-shape** support in the compiler and simulator path, and extend **eager-mode** integration so a wider range of PyTorch programs can be exercised without relying solely on `torch.compile`-style flows.
 
 ## Artifact Evaluation
-Artifact evaluation is being prepared for v1.0.0.
+Artifact evaluation is available for v1.0.0.
 The following scripts reproduce the validation and speedup results from the paper.
 ### Build
 ```bash
