@@ -1,18 +1,22 @@
 import dataclasses
 import math
+import contextvars
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Dict
-from typing import List
+from typing import Dict, Iterable, List, Optional, Sequence, Union
 from collections import defaultdict
 from functools import reduce
 from operator import mul
 import torch
+
+from PyTorchSimFrontend import extension_config
 from torch._inductor.codegen import common
 from torch._inductor.codegen import cpp
 from torch._inductor.virtualized import V
 from torch._inductor.ir import MultiOutputLayout
 from torch._inductor.dependencies import MemoryDep, StarDep, WeakDep
-from torch.utils._sympy.functions import ModularIndexing, FloorDiv, Mod
+from torch._inductor.codegen.wrapper import KernelDefinitionLine
+from torch.utils._sympy.functions import ModularIndexing, FloorDiv, Mod, Identity
 import sympy
 import contextlib
 
@@ -20,18 +24,20 @@ from typing import Callable
 
 import sympy
 
-import torch.fx
 from torch.utils._sympy.value_ranges import ValueRanges
 from torch._inductor.utils import (
-    free_symbol_startswith,
     get_sympy_Expr_dtype,
     IndentedBuffer,
     sympy_subs,
-    sympy_symbol,
     unique,
 )
-from PyTorchSimFrontend import extension_config
 from PyTorchSimFrontend import extension_codecache
+
+from PyTorchSimFrontend.extension_utils import (
+    free_symbol_startswith,
+    sympy_symbol
+)
+
 schedule_log = torch._logging.getArtifactLogger(__name__, "schedule")
 
 DTYPE_TO_MLIR = {
@@ -61,14 +67,14 @@ MLIR_TO_DTYPE = {
 DTYPE_TO_C = {
     torch.float32: "float",
     torch.float64: "double",
-    torch.float16: "half",
+    torch.float16: "uint16_t",
     torch.int64: "int64_t",
     torch.int32: "int32_t",
     torch.int16: "int16_t",
     torch.int8: "int8_t",
     torch.uint8: "uint8_t",
     torch.bool: "uint8_t",
-    torch.bfloat16: "bfloat16",
+    torch.bfloat16: "uint16_t",
 }
 
 MLIR_TO_BIT = {
@@ -84,6 +90,12 @@ MLIR_TO_BIT = {
     "index": 64
 }
 
+def get_dtype_nbytes(dtype):
+    mlir_dtype = DTYPE_TO_MLIR.get(dtype)
+    if mlir_dtype is None or mlir_dtype not in MLIR_TO_BIT:
+        raise NotImplementedError(f"Unsupported dtype for precision calculation: {dtype}")
+    return MLIR_TO_BIT[mlir_dtype] // 8
+
 DTYPE_LOWP_FP = [
     torch.bfloat16,
     torch.float16,
@@ -91,18 +103,42 @@ DTYPE_LOWP_FP = [
 
 MLIR_INF = {
     "inf" : {
+        "f16" : 0x7C00,
         "f32" : 0x7F800000,
         "f64" : 0x7FF0000000000000
     },
     "-inf" : {
+        "f16" : 0xFC00,
         "f32" : 0xFF800000,
         "f64" : 0xFFF0000000000000
     },
     "nan" : {
+        "f16" : 0x7C00,
         "f32" : 0x7FC00000,
         "f64" : 0x7FF8000000000000
     }
 }
+
+def format_dma_op_attributes(
+    dram_stride: Sequence,
+    sram_stride: Sequence,
+    padding: int = 0,
+    *,
+    subtile_size: Optional[Sequence] = None,
+    async_type: Optional[int] = None,
+) -> str:
+    """Attribute dict for memref.dma_start; stride lists as bracketed integer lists."""
+    parts = [
+        f"dram_stride = {dram_stride}",
+        f"sram_stride = {sram_stride}",
+        f"padding = {int(padding)}",
+    ]
+    if subtile_size:
+        parts.append(f"subtile_size = {subtile_size}")
+        av = int(async_type) if async_type is not None else 1
+        parts.append(f"async = {av} : i64")
+    return "{" + ", ".join(parts) + "}"
+
 
 class ParallelLoopBuffer(IndentedBuffer):
     def indent(self, offset=1, attribute="", suffix=""):
@@ -167,7 +203,11 @@ class MLIRKernelArgs(common.KernelArgs):
     def mlir_argdefs(self, extra_node=dict()):
         buffer_types = {}
         for x in V.graph.buffers:
-            if not isinstance(x.layout, MultiOutputLayout): # FIXME: MultiOutputLayout should be handled
+            if isinstance(x.layout, MultiOutputLayout):
+                # MultiOutput kernel containers own concrete output nodes in `outputs`.
+                for out in getattr(x, "outputs", []):
+                    buffer_types[out.get_name()] = [out.get_dtype(), out.get_numel(), out.get_size(), out.get_stride()]
+            else:
                 buffer_types[x.get_name()] = [x.get_dtype(), x.get_numel(), x.get_size(), x.get_stride()]
         for name, val in V.graph.graph_inputs.items():
             if isinstance(val, sympy.Expr):
@@ -244,17 +284,23 @@ class VectorLaneMapping():
         return tile_stride
 
     def get_compute_vec_size(self, tile_size: list[int], reduction_numel: int, nr_rdim: int) -> int:
-        if self.forced_vec_size is not None:
-            return self.forced_vec_size
-
         per_lane = self.get_numel_per_lane(tile_size)
         stride = self.vlane_stride
         if nr_rdim:
             val = per_lane // max(reduction_numel, 1)
+            result = val
             for mult in [8, 4, 2]:
                 if per_lane >= val * mult:
-                    return val * mult
-            return val
+                    result = val * mult
+                    break
+            if self.forced_vec_size is not None:
+                # Cap while keeping result divisible by val (= reduction_size).
+                # This preserves the assert(vec_len % reduction_size == 0) invariant.
+                capped = (min(result, self.forced_vec_size) // max(val, 1)) * max(val, 1)
+                result = max(capped, val)
+            return result
+        if self.forced_vec_size is not None:
+            return self.forced_vec_size
         for mult in [8, 4, 2]:
             if (per_lane // stride) >= mult:
                 return stride * mult
@@ -330,8 +376,8 @@ class TileAdjustMixin():
         remain = candidate_tile_size[axis] % stride
 
         if remain:
-            candidate_tile_size[axis] += stride - remain
-            self.tile_constraint[axis].must_divide_dim = False
+            # #201: relax vlane_stride constraints
+            self.vmap.vlane_stride = 1
         return candidate_tile_size
 
     def scale_tile_dim(self, axis, dim_sz, scale_factor=2):
@@ -486,7 +532,7 @@ class MLIRMultiDimTile(TileAdjustMixin):
         self.name = ""
         self._tile_size = list(tile_size)
         self._tile_stride = None
-        self.tile_constraint = [TileConstraint(vlane_stride) for _ in tile_size]
+        self.tile_constraint = [TileConstraint(vlane_stride if idx == vlane_split_axis else 1) for idx, _ in enumerate(tile_size)]
         self.tile_axis_order = list(range(len(tile_size)))
         self.update_tile_stride()
 
@@ -498,7 +544,7 @@ class MLIRMultiDimTile(TileAdjustMixin):
             vlane_stride=vlane_stride
         )
 
-        self.implicit_dim_size = None
+        self.implicit_dim_size = {}
         self.nr_rdim = 0
         self.offset = sympy.Integer(0) # Dram offset
 
@@ -569,7 +615,6 @@ class BaseMLIRHardwareInfo():
         # Default HW setting
         self.vector_lane = extension_config.vpu_num_lanes
         self.spad_info = extension_config.CONFIG_SPAD_INFO
-        self.precision = extension_config.CONFIG_PRECISION
         self.num_cores = extension_config.CONFIG_NUM_CORES
         self.vlen = extension_config.vpu_vector_length_bits
 
@@ -588,6 +633,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         self.ranges = None
         self.reduction_depth = None
         self.itervars = None
+        self.itervar_cses = None
         # Code buffer
         self.vector_compute = IndentedBuffer()
         self.reductions_suffix = IndentedBuffer()
@@ -595,13 +641,19 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         # MLIR SSA tracker
         self.var_info = {} # MLIR variable info
         self.buffer_types : dict = None # format: dtype, numel, size, stride
-        self.compute_idx = "compute_idx"
+        # Create compute idx
+        self.compute_idx = self.register_var_cse("compute_idx", 1, "index")
         self.compute_body_loop = LoopLevel(self.compute_idx, 1)
         self.prologue_compute_body_loop = LoopLevel(self.compute_idx, 1)
         self.recodegen = reason # spad overflow, tile size, vlane stride
         self.stop_autotune = False
 
-    def set_ranges(self, lengths, reduction_lengths):
+        instance_id = id(self)
+        self.target_buffer_override = contextvars.ContextVar(f"Handler_compute_override_{instance_id}", default=self.compute)
+        self.target_cse_override = contextvars.ContextVar(f"Handler_cse_override_{instance_id}", default=self.cse)
+        self._nested_context_depth = 0
+
+    def set_ranges(self, lengths, reduction_lengths, index_names=None):
         if self.call_ranges:
             assert self.call_ranges == tuple(lengths) + tuple(
                 reduction_lengths
@@ -610,7 +662,13 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         else:
             self.call_ranges = tuple(lengths) + tuple(reduction_lengths)
             self.ranges = [self.rename_indexing(x) for x in self.call_ranges]
-            self.itervars = [sympy.Symbol(f"index{n}") for n in range(len(self.ranges))]
+            if index_names is None:
+                self.itervars = [sympy.Symbol(f"index{n}") for n in range(len(self.ranges))]
+            else:
+                assert len(index_names) == len(self.ranges), f"Index names length mismatch: {len(index_names)} != {len(self.ranges)}"
+                self.itervars = [sympy.Symbol(str(n)) for n in index_names]
+
+            self.itervar_cses = {str(index) : self.register_var_cse(str(index), 1, "index") for index in self.itervars}
             self.reduction_depth = len(lengths)
         return (
             self.itervars[: self.reduction_depth],
@@ -632,9 +690,14 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
     def reduction(self, dtype, src_dtype, reduction_type, value):
         raise NotImplementedError()
 
-    def indirect_indexing(self, index_var, size, check):
+    def indirect_indexing(self, index_var, size, check, wrap_neg):
         raise NotImplementedError()
 
+    def check_bounds(self, expr, size, lower, upper):
+        # MLIR backend currently relies on masked paths for out-of-bounds handling.
+        # Keep this hook as a no-op to satisfy Inductor's check_bounds callback.
+        return
+    
     def codegen_global_init(self):
         raise NotImplementedError()
 
@@ -645,7 +708,7 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         wrapper = V.graph.wrapper_code
         _, call_args, _, _ = self.kernel_group.args.mlir_argdefs()
        # generate the code to call this
-        wrapper.generate_kernel_call(kernel_name, call_args, cuda=False)
+        wrapper.generate_kernel_call(kernel_name, call_args, triton=False)
 
     def is_modular_indexing(self, expr):
         return "ModularIndexing" in str(expr)
@@ -679,7 +742,9 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             }
             new_index = operand.index.subs(subs_map)
             for arg in new_index.args:
-                if len(arg.free_symbols) != 1:
+                if arg.is_number:
+                    continue
+                if len(arg.free_symbols) > 1:
                     raise NotImplementedError("Not supporting this view operation...!")
                 if arg.is_Mul and arg.args[0].is_number:
                     arg = arg.args[1]
@@ -709,13 +774,13 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             init_tile_desc.nr_rdim = len(reduction_vars)
             self.kernel_group.set_tile_info(init_tile_desc)
 
-        # Handle edge case
-        if len(self.ranges)==1 and self.ranges[0] == 1: # Scalar case 2
-            self.kernel_group.tile_desc.vmap.vlane_stride = 1
-            self.kernel_group.tile_desc.vmap.vlane_split_axis = 0
-        elif vlane_split_axis == -1: # Reduction only case
-            self.kernel_group.tile_desc.vmap.vlane_split_axis = 0
-            self.kernel_group.tile_desc.vmap.vlane_stride = self.kernel_group.tile_desc.get_tile_size()[0]
+            # Handle edge case
+            if len(self.ranges)==1 and self.ranges[0] == 1: # Scalar case 2
+                self.kernel_group.tile_desc.vmap.vlane_stride = 1
+                self.kernel_group.tile_desc.vmap.vlane_split_axis = 0
+            elif vlane_split_axis == -1: # Reduction only case
+                self.kernel_group.tile_desc.vmap.vlane_split_axis = 0
+                self.kernel_group.tile_desc.vmap.vlane_stride = self.kernel_group.tile_desc.get_tile_size()[0]
 
         # Handle implict dims. Input operand could be high dimension tensor.
         # Note: https://github.com/PSAL-POSTECH/PyTorchSim/issues/173
@@ -752,10 +817,24 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             # Set node range info
             vars, reduction_vars = self.set_ranges(group, reduction_group)
             tile_desc = self.compute_tile_size(nodes, vars, reduction_vars)
+            _, _, _, self.buffer_types = self.kernel_group.args.mlir_argdefs()
+            safe_vec_size = self.get_safe_vec_size(tile_desc.get_compute_vec_size())
+            # For pointwise (non-reduction) kernels, cap the MLIR vector size so that
+            # f16->f32 widening stays within LMUL<=4 (step and forced_vec_size must match).
+            # Reduction kernels are left unchanged: their accumulator/multi_reduction
+            # structure assumes compute_vec_size == step, so we must not split them here.
+            tile_desc.vmap.forced_vec_size = safe_vec_size
+            compute_vec = tile_desc.get_compute_vec_size()
+            # RVV requires vector lengths that produce integer power-of-2 LMUL values.
+            # Non-power-of-2 element counts (e.g. 24) cause LLVM WidenVectorResult crashes.
+            # Raise BEFORE the try/except so this propagates to make_choices (not retried).
+            if compute_vec > 1 and (compute_vec & (compute_vec - 1)) != 0:
+                raise RecompileSignal(
+                    f"Non-power-of-2 compute_vec_size {compute_vec}: tile rejected (RVV requires power-of-2 LMUL)"
+                )
             self.compute_body_loop.size = tile_desc.get_numel_per_lane()
-            self.compute_body_loop.step = tile_desc.get_compute_vec_size()
+            self.compute_body_loop.step = compute_vec
             try:
-                _, _, _, self.buffer_types = self.kernel_group.args.mlir_argdefs()
                 with self as kernel:
                     for node in nodes:
                         node.run(vars, reduction_vars)
@@ -769,8 +848,8 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             V.graph.removed_buffers |= self.removed_buffers
             # V.graph.inplaced_to_remove |= self.inplaced_to_remove
             src_code = self.codegen_kernel(kernel_name=kernel_name)
-            self.meta_kernel()
-            return src_code
+            meta_code = self.meta_kernel()
+            return src_code, meta_code
 
     def codegen_kernel(self, kernel_name):
         arg_defs, _, _, _ = self.kernel_group.args.mlir_argdefs()
@@ -783,44 +862,17 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         code.splice(self.codegen_global_init())
         code.writeline(f'func.func @{kernel_decl_name}({arg_defs})')
         with code.indent():
-            for old, new in self.kernel_group.args.aliases():
-                code.writeline(f"auto {old} = {new};")
             # Loop body part
             code.splice(self.codegen_loops())
         return code.getvalue()
 
     def meta_kernel(self):
-        wrapper = V.graph.wrapper_code
         _, _, arg_attributes, _ = self.kernel_group.args.mlir_argdefs()
-        wrapper.add_import_once('\nprint(f\'Wrapper Codegen Path = {__file__}\')')
-        # Dump loop and load/store information
-        wrapper.add_import_once(f"arg_attributes = {arg_attributes}")
-        return arg_attributes
+        meta_code = arg_attributes
+        return meta_code
 
     def get_constant_vector(self, expr):
         constant_vector = [[int(expr.coeff(var)),None] for var in self.itervars]
-        return constant_vector
-
-    def get_constant_vector2(self, expr):
-        # Case 0. symbol ex) index 0
-        # Case 1. inner product form ex) 16 * index0 + 1 * index1
-        # Case 2. Complicated form ex) 16 * index0 + 8 * (index//4) + (index % 4)
-        constant_vector = []
-        if expr.is_symbol:
-            constant_vector.append(tuple([1, expr]))
-            return constant_vector
-
-        for arg in expr.args:
-            if arg.is_symbol:
-                constant_vector.append(tuple([1,arg]))
-                continue
-            if len(arg.args) == 0: #TODO: check this
-                continue
-            if arg.args[0].is_number:
-                constant_vector.append(arg.args)
-            else:
-                constant_vector.append([1, arg])
-
         return constant_vector
 
     def find_node_by_name(self, name):
@@ -837,6 +889,11 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
     def roundup_vectorlane(self, size, amp=1):
         return ((size + self.vector_lane - 1) // self.vector_lane) * self.vector_lane * amp
 
+    def register_var_cse(self, name, size, dtype):
+        var = self.create_cse_var(name, ValueRanges.unknown())
+        self.register_var_info(var, [size, dtype])
+        return var
+
     def register_var_info(self, var, var_info):
         self.var_info[var] = var_info
 
@@ -845,6 +902,18 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         # and renames variables in index expressions to kernel arg names
         if isinstance(index, (list, tuple)):
             return [self.rename_indexing(x) for x in index]
+
+        # FIXME. This is a temporary solution to remove Identity wrappers from index expression.
+        # Remove Identity wrappers from index expression
+        # Check if index itself is Identity
+        if isinstance(index, Identity):
+            index = index.args[0] if index.args else index
+
+        # Replace Identity arguments with Identity.args[0]
+        Identity_args = [expr for expr in sympy.preorder_traversal(index) if isinstance(expr, Identity)]
+        for expr in Identity_args:
+            index = index.replace(expr, expr.args[0] if expr.args else expr)
+
         index = V.graph.sizevars.simplify(index)
         sorted_symbols = sorted(index.free_symbols, key=lambda s: s.name)
         replacements = {
@@ -854,6 +923,27 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
         }
         return sympy_subs(index, replacements)
 
+    @contextmanager
+    def override_buffer_cse(self, *, buffer=None, cse=None):
+        buffer_override = self.target_buffer_override
+        cse_override = self.target_cse_override
+        buffer_token = cse_token = None
+        try:
+            # Store tokens for proper restoration in nested contexts
+            # contextvars.set() returns the previous value (token) which can be used for reset()
+            if buffer is not None:
+                buffer_token = buffer_override.set(buffer)
+            if cse is not None:
+                cse_token = cse_override.set(cse)
+            yield self
+        finally:
+            # Restore using tokens - contextvars automatically handles nested contexts
+            # Each level restores to its own previous value
+            if cse_token is not None:
+                cse_override.reset(cse_token)
+            if buffer_token is not None:
+                buffer_override.reset(buffer_token)
+
     def __enter__(self):
         class CSEProxy:
             self.name = "CSEProxy"
@@ -861,27 +951,38 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
             @staticmethod
             def __getattr__(name: str) -> Callable[..., common.CSEVariable]:  # type: ignore[misc]
                 def inner(*args, **kwargs):
-                    code, ret_info = getattr(parent_handler, name)(*args, var_info=self.var_info)
-                    csevar = self.cse.generate(
-                        self.compute,
-                        code,
-                        bounds=ValueRanges.unknown(),
-                        assignment=(ret_info[0] is not None)
-                    )
-                    if ret_info[0] is not None:
-                        self.register_var_info(csevar, ret_info)
-                        csevar.update_on_args(name, args, kwargs)
+                    code, ret_info = getattr(parent_handler, name)(*args, **kwargs)
+                    target_buffer = self.target_buffer_override.get()
+                    target_cse = self.target_cse_override.get()
+                    if isinstance(code, common.DeferredLine):
+                        target_buffer.writeline(code)
+                        return None
+                    else:
+                        csevar = target_cse.generate(
+                            target_buffer,
+                            code,
+                            bounds=ValueRanges.unknown(),
+                            assignment=(ret_info[0] is not None)
+                        )
+                        if ret_info[0] is not None:
+                            self.register_var_info(csevar, ret_info)
+                            csevar.update_on_args(name, args, kwargs)
                     return csevar
 
                 return inner
 
             @staticmethod
-            def indirect_indexing(index_var, size, check=True):
+            def indirect_indexing(index_var, size, check=True, wrap_neg=True):
                 # Skip CSE since this doesn't return an expression
-                return self.indirect_indexing(index_var, size, check)
+                return self.indirect_indexing(index_var, size, check, wrap_neg)
+
+            @staticmethod
+            def check_bounds(index, size, lower, upper):
+                return self.check_bounds(index, size, lower, upper)
 
             @staticmethod
             def load(name: str, index: sympy.Expr):
+                index = self.rename_indexing(index)
                 if name in self.cse.invalidated_stores:
                     # A load from an invalidated store requires us to
                     # keep the actual buffer around
@@ -892,10 +993,10 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 if name in store_cache:
                     return store_cache[name]
                 key = name+str(index)
-                if key not in self.cse.cache:
+                if key not in self.cse._cache:
                     result = self.load(name, index)
-                    self.cse.cache[key] = result
-                return self.cse.cache[key]
+                    self.cse._cache[key] = result
+                return self.cse._cache[key]
 
             @staticmethod
             def store(name, index, value, mode=None):
@@ -903,9 +1004,10 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 if mode is None:
                     self.cse.store_cache[name] = value
                     if self.current_node:
-                        for other_name in self.current_node.get_mutations():
+                        for other_name in self.current_node.get_output(name).get_mutations():
                             self.cse.store_cache[other_name] = value
                 if name not in V.graph.removed_buffers:
+                    index = self.rename_indexing(index)
                     return self.store(name, index, value, mode=mode)
 
             @staticmethod
@@ -913,10 +1015,11 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 self.store_buffer_names.add(name)
                 self.cse.store_cache[name] = value
                 if self.current_node:
-                    for other_name in self.current_node.get_mutations():
+                    for other_name in self.current_node.get_output(name).get_mutations():
                         self.cse.store_cache[other_name] = value
 
                 if name not in V.graph.removed_buffers:
+                    index = self.rename_indexing(index)
                     return self.store_reduction(name, index, value)
 
             @staticmethod
@@ -924,11 +1027,16 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                 return self.reduction(dtype, src_dtype, reduction_type, value)
 
             @staticmethod
+            def check_bounds(index, size, lower, upper):
+                return self.check_bounds(index, size, lower, upper)
+
+            @staticmethod
             def _index_expr(tile_size, buffer, renamed_expression, index):
                 return self._index_expr(tile_size, buffer, renamed_expression, index)
 
             @staticmethod
             def index_expr(index, dtype):
+                index = self.rename_indexing(index)
                 return self.index_expr(index, dtype)
 
             @staticmethod
@@ -957,13 +1065,56 @@ class BaseMLIRKernel(common.Kernel, BaseMLIRHardwareInfo):
                     values, offsets_name, offsets_size, indexing_dtype, right
                 )
 
-        super().__enter__()
-        assert self.overrides
-        parent_handler = self.overrides(V.get_ops_handler())
-        self.exit_stack.enter_context(V.set_ops_handler(CSEProxy()))
-        self.exit_stack.enter_context(V.set_kernel_handler(self))
+        if self._nested_context_depth == 0:
+            self.exit_stack.__enter__()
+            assert self.overrides
+            parent_handler = self.overrides()
+
+            self.exit_stack.enter_context(V.set_ops_handler(CSEProxy()))
+            self.exit_stack.enter_context(V.set_kernel_handler(self))
+        self._nested_context_depth += 1
         return self
 
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._nested_context_depth -= 1
+        if self._nested_context_depth == 0:
+            super().__exit__(exc_type, exc_val, exc_tb)
+    
+    def get_safe_vec_size(self, default_vec_size: int = 64) -> int:
+        """
+        Cap forced vector size for low-precision paths so widening ops
+        (e.g., f16/bf16 -> f32) do not exceed RVV LMUL limits.
+
+        Widening is legal up to source LMUL<=4 (destination LMUL<=8).
+        Using RVV relation LMUL = (SEW * VL) / VLEN, the safe source VL is:
+            VL <= 4 * VLEN / SEW
+        """
+
+        if not hasattr(self, "buffer_types") or not self.buffer_types:
+            return default_vec_size
+
+        lowp_bits = []
+        for info in self.buffer_types.values():
+            dtype = info[0] if info else None
+            if dtype in DTYPE_LOWP_FP:
+                mlir_dtype = DTYPE_TO_MLIR[dtype]
+                lowp_bits.append(MLIR_TO_BIT[mlir_dtype])
+
+        if not lowp_bits:
+            return default_vec_size
+
+        min_lowp_bits = min(lowp_bits)
+        # Constraint: Vector element count must be compatible across all types.
+        # VLEN=256: f16 (LMUL=2) and f32 (LMUL=4) both yield 32 elements.
+        # Note: Gem5 version restricts widening ops to LMUL < 8 for destination registers.
+        # Max LMUL set to 1 to ensure compatibility/safety.
+
+        widen_safe_cap = self.vlen // min_lowp_bits
+        if widen_safe_cap <= 0:
+            return default_vec_size
+
+        vec_size = min(default_vec_size, widen_safe_cap)
+        return vec_size
 
 @dataclasses.dataclass
 class LoopLevel:

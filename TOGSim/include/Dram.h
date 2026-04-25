@@ -1,5 +1,6 @@
 #ifndef DRAM_H
 #define DRAM_H
+#include <optional>
 #include <robin_hood.h>
 #include <cstdint>
 #include <queue>
@@ -29,14 +30,16 @@ class Dram {
   virtual void print_stat() {}
   virtual void print_cache_stats() {};
   uint32_t get_channels_per_partition() { return _n_ch_per_partition; }
+  new_addr_type partition_dram_address(new_addr_type raw_addr) const;
+
  protected:
   SimulationConfig _config;
   CacheConfig _m_cache_config;
   uint32_t _n_ch;
-  uint32_t _n_bl;
   uint32_t _n_partitions;
   uint32_t _n_ch_per_partition;
   uint32_t _req_size;
+  int _tx_log2 = 0;
   cycle_type _cycles;
   cycle_type* _core_cycles;
   std::vector<DelayQueue<mem_fetch*>> m_cache_latency_queue;
@@ -48,6 +51,10 @@ class Dram {
 
 class DramRamulator2 : public Dram {
  public:
+  static void apply_ramulator_config_to_simulation_config(
+      SimulationConfig& cfg, const std::string& ramulator_config_path,
+      std::optional<uint32_t> dram_freq_mhz_stated = std::nullopt);
+
   DramRamulator2(SimulationConfig config, cycle_type *core_cycle);
 
   virtual bool running() override;
@@ -69,6 +76,8 @@ class DramRamulator2 : public Dram {
 
 class SimpleDRAM: public Dram {
  public:
+  static void apply_yaml_to_simulation_config(const YAML::Node& config, SimulationConfig& cfg);
+
   SimpleDRAM(SimulationConfig config, cycle_type *core_cycle);
 
   virtual bool running() override;
@@ -83,9 +92,9 @@ class SimpleDRAM: public Dram {
   void print_cache_stats() override;
  private:
   int _latency = 1;
-  int _tx_ch_log2;
-  int _tx_log2;
   std::vector<std::unique_ptr<DelayQueue<mem_fetch*>>> _mem;
+  std::vector<double> _bw_credit_bytes;
+  double _bytes_per_dram_cycle = 0.;
 };
 
 #endif

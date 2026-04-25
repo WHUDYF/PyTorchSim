@@ -4,7 +4,6 @@ import sys
 import copy
 import matplotlib.pyplot as plt
 
-
 import torch
 import torch.nn as nn
 from torch.distributions.normal import Normal
@@ -16,6 +15,20 @@ import torch.utils.cpp_extension
 from torch._inductor import config
 
 sys.path.append(os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim'))
+
+# FIXME. This is a Dynamo bug. Solution to avoid is_forward conflict during backward
+def patch_metrics_context_update():
+    """Patch MetricsContext.update to set overwrite=True by default."""
+    from torch._dynamo.utils import get_metrics_context
+    ctx = get_metrics_context()
+    original_update = ctx.update
+
+    def patched_update(values, overwrite=True):
+        """Patched version that sets overwrite=True by default."""
+        return original_update(values, overwrite=True)
+
+    # Patch the method
+    get_metrics_context().update = patched_update
 
 def test_result(name, out, cpu_out, rtol=1e-4, atol=1e-4):
     pass_message = f"|{name} Test Passed|"
@@ -64,6 +77,7 @@ class SparseDispatcher(object):
     `Tensor`s for expert i only the batch elements for which `gates[b, i] > 0`.
     """
 
+    @torch.compiler.disable(recursive=True)
     def __init__(self, num_experts, gates):
         """Create a SparseDispatcher."""
         gates = gates.cpu()
@@ -443,6 +457,7 @@ def test_moe(device):
     total_cpu_loss = cpu_loss + cpu_aux_loss
     total_loss.to(device)
 
+    patch_metrics_context_update()
     print("Backward Started!")
     total_loss.backward()
     total_cpu_loss.backward()
@@ -469,6 +484,9 @@ def test_moe(device):
         print("\n")
 
 def train_moe(device):
+    # Patch CompileEventLogger to avoid metric conflicts
+    patch_metrics_context_update()
+
     def perceptron(a, b, c):
         return a * b + c
 
@@ -589,6 +607,9 @@ def train_moe(device):
     plt.savefig('result.png')
 
 def train_moe_mnist(device):
+    # Patch CompileEventLogger to avoid metric conflicts
+    patch_metrics_context_update()
+
     torch.manual_seed(0)
     batch_size = 32
     input_size = 28*28
@@ -670,6 +691,9 @@ def train_moe_mnist(device):
     plt.savefig(f'{name}_result.png')
 
 def train_moe_single_iteration(device, iter_idx, is_evaluation=0):
+    # Patch CompileEventLogger to avoid metric conflicts
+    patch_metrics_context_update()
+
     # Training moe with mnist dataset for sinlge iteration
     torch.manual_seed(0)
     batch_size = 128
@@ -783,10 +807,8 @@ def train_moe_single_iteration(device, iter_idx, is_evaluation=0):
         train(opt_model, train_loader)
 
 if __name__ == "__main__":
-    from Scheduler.scheduler import PyTorchSimRunner
     torch.set_printoptions(threshold=float('inf'), linewidth=600)
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
 
     test_moe(device)
     # train_moe(device)

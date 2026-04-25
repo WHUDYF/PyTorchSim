@@ -1,10 +1,7 @@
 import os
-import json
-import shutil
+import yaml
 import argparse
 import torch
-import torch._dynamo
-import torch.utils.cpp_extension
 
 def test_result(name, out, cpu_out, rtol=1e-4, atol=1e-4):
     if torch.allclose(out.cpu(), cpu_out, rtol=rtol, atol=atol):
@@ -41,9 +38,11 @@ def modify_file(dump_path, name, address_numa_stride=None, subgraph_map=None):
     if not os.path.exists(file_path):
         print(f"File {file_path} does not exist.")
         return
+
     with open(file_path, 'r') as f:
-        data = json.load(f)
-    # address_numa_stride와 subgraph_map 추가
+        data = yaml.safe_load(f)
+
+    # address_numa_stride, subgraph_map
     if address_numa_stride:
         data['address_numa_stride'] = address_numa_stride
     if subgraph_map:
@@ -52,25 +51,20 @@ def modify_file(dump_path, name, address_numa_stride=None, subgraph_map=None):
     output_path = file_path = os.path.join(dump_path, 'runtime_0000', 'attribute')
     os.makedirs(output_path, exist_ok=True)
     output_file = os.path.join(output_path, name)
+
     with open(output_file, 'w') as f:
-        json.dump(data, f, indent=4)
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
     print(f"Modified file saved to {output_file}")
 
 if __name__ == "__main__":
-    import os
-    import sys
-    sys.path.append(os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim'))
-
-    from Scheduler.scheduler import PyTorchSimRunner
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
     parser = argparse.ArgumentParser(description='Process folder argument.')
     parser.add_argument('size', type=int, help='Folder value', default=256)
     args = parser.parse_args()
 
     folder = int(args.size)
     print("Taget size: ", folder)
-    folder_path = os.environ.get("TORCHSIM_DUMP_PATH")
+    folder_path = os.environ.get("TORCHSIM_LOG_PATH")
     print(folder_path)
     os.makedirs(folder_path, exist_ok=True)
     test_matmul(device, folder, folder, folder)

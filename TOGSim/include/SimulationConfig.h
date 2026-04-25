@@ -1,19 +1,23 @@
 #pragma once
 
-#include <nlohmann/json.hpp>
+#include <cstdint>
+#include <filesystem>
+#include <map>
 #include <string>
-
-using json = nlohmann::json;
+#include <yaml-cpp/yaml.h>
 
 enum class CoreType { WS_MESH, STONNE };
 
-enum class DramType { SIMPLE, RAMULATOR1, RAMULATOR2 };
+enum class DramType { SIMPLE, RAMULATOR2 };
 
 enum class IcntType { SIMPLE, BOOKSIM2 };
 
 enum class L2CacheType { NOCACHE, DATACACHE };
 
 struct SimulationConfig {
+  /* Path to the top-level hardware YAML passed to the simulator (empty if not from a file). */
+  std::string config_file_path;
+
   /* Core config */
   std::vector<CoreType> core_type;
   std::string stonne_config_path;
@@ -32,7 +36,7 @@ struct SimulationConfig {
   uint32_t dram_channels;
   uint32_t dram_req_size;
   uint32_t dram_latency;
-  uint32_t dram_nbl = 1;
+  float dram_bandwidth_gbps_per_channel = 0.f;
   uint32_t dram_print_interval;
   std::string dram_config_path;
 
@@ -63,7 +67,24 @@ struct SimulationConfig {
     return addr - (addr % dram_req_size);
   }
 
-  float max_dram_bandwidth() {
-    return dram_freq_mhz * dram_channels * dram_req_size * 2 / dram_nbl / 1000; // GB/s
+  float max_dram_bandwidth() const {
+    if (dram_bandwidth_gbps_per_channel > 0.f)
+      return dram_bandwidth_gbps_per_channel * static_cast<float>(dram_channels);
+    return 0.f;
+  }
+
+  /** Resolve `path` for opening on disk: absolute paths as-is; relative paths against top-level config dir. */
+  std::string resolve_against_simulation_config(const std::string& path) const {
+    namespace fs = std::filesystem;
+    if (path.empty())
+      return path;
+    fs::path p(path);
+    fs::path abs = p.is_absolute() ? fs::absolute(p)
+                 : !config_file_path.empty()
+                     ? fs::absolute(fs::path(config_file_path).parent_path() / p)
+                     : fs::absolute(p);
+    std::error_code ec;
+    fs::path canon = fs::weakly_canonical(abs, ec);
+    return (ec ? abs : canon).string();
   }
 };

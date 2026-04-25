@@ -1,7 +1,13 @@
 #include "Simulator.h"
 
-Simulator::Simulator(SimulationConfig config)
-    : _config(config), _core_cycles(0) {
+#include <fstream>
+#include <sstream>
+#include <string>
+
+Simulator::Simulator(SimulationConfig config, YAML::Node hardware_config_yaml)
+    : _config(config),
+      _hardware_config_yaml(std::move(hardware_config_yaml)),
+      _core_cycles(0) {
   // Create dram object
   _core_period = 1000000 / (config.core_freq_mhz);
   _icnt_period = 1000000 / (config.icnt_freq_mhz);
@@ -23,11 +29,11 @@ Simulator::Simulator(SimulationConfig config)
   _cores.resize(_n_cores);
   for (int core_index = 0; core_index < _n_cores; core_index++) {
     if (config.core_type[core_index] == CoreType::WS_MESH) {
-      spdlog::info("[Config/Core] Core {}: {} MHz, Systolic array per core: {}",
-        core_index, config.core_freq_mhz, config.num_systolic_array_per_core);
+      spdlog::info("[Config/Core] Core {}: core_freq_mhz: {}, systolic_arrays_per_core: {}",
+                   core_index, config.core_freq_mhz, config.num_systolic_array_per_core);
       _cores.at(core_index) = std::make_unique<Core>(core_index, _config);
     } else if(config.core_type[core_index] == CoreType::STONNE) {
-      spdlog::info("[Config/Core] Core {}: {} MHz, Stonne Core selected", core_index, config.core_freq_mhz);
+      spdlog::info("[Config/Core] Core {}: core_freq_mhz: {}, core_type: Stonne", core_index, config.core_freq_mhz);
       _cores.at(core_index) = std::make_unique<SparseCore>(core_index, _config);
     } else {
       throw std::runtime_error(fmt::format("Not implemented Core type {} ",
@@ -43,9 +49,17 @@ Simulator::Simulator(SimulationConfig config)
                                        .append(config.dram_config_path)
                                        .string();
     spdlog::info("[Config/DRAM] Ramulator2 config path: {}", ramulator_config);
-    YAML::Node dram_config = YAML::LoadFile(ramulator_config);
-    spdlog::info("Ramulator2 config: ");
-    std::cout << dram_config << std::endl;
+    {
+      std::ifstream in(ramulator_config);
+      if (!in) {
+        spdlog::warn("[Config/DRAM] Could not open Ramulator2 config: {}", ramulator_config);
+      } else {
+        std::ostringstream ss;
+        ss << in.rdbuf();
+        const std::string raw = ss.str();
+        spdlog::info("[Config/DRAM] Ramulator2 configuration :\n{}", raw);
+      }
+    }
     config.dram_config_path = ramulator_config;
     _dram = std::make_unique<DramRamulator2>(config, &_core_cycles);
   } else {
@@ -54,12 +68,12 @@ Simulator::Simulator(SimulationConfig config)
   }
 
   // Create interconnect object
-  spdlog::info("[Config/Interconnect] Interconnect freq: {} MHz", config.icnt_freq_mhz);
+  spdlog::info("[Config/Interconnect] interconnect_freq_mhz: {}", config.icnt_freq_mhz);
   if (config.icnt_type == IcntType::SIMPLE) {
-    spdlog::info("[Config/Interconnect] SimpleInerconnect selected");
+    spdlog::info("[Config/Interconnect] Simple interconnect selected");
     _icnt = std::make_unique<SimpleInterconnect>(config);
   } else if (config.icnt_type == IcntType::BOOKSIM2) {
-    spdlog::info("[Config/Interconnect] BookSim2 selected");
+    spdlog::info("[Config/Interconnect] BookSim2 interconnect selected");
     _icnt = std::make_unique<Booksim2Interconnect>(config);
   } else {
     spdlog::error("[Configuration] Invalid interconnect type...!");
@@ -121,7 +135,7 @@ void Simulator::icnt_cycle() {
         front->set_core_id(core_id);
         if (!_icnt->is_full(port_id, front)) {
           int node_id = _dram->get_channel_id(front) / _config.dram_channels_per_partitions;
-          if (core_id == node_id)
+          if (get_partition_id(core_id) == node_id)
             _cores[core_id]->inc_numa_local_access();
           else
             _cores[core_id]->inc_numa_remote_access();
@@ -170,55 +184,8 @@ void Simulator::icnt_cycle() {
   _icnt->cycle();
 }
 
-int Simulator::until(cycle_type until_cycle) {
-  std::vector<bool> partition_scheudler_status;
-  for (auto &scheduler : _partition_scheduler)
-    partition_scheudler_status.push_back(scheduler->empty());
-
-  while (until_cycle == -1 || _core_cycles < until_cycle) {
-    set_cycle_mask();
-    // Core Cycle
-    if (IS_CORE_CYCLE(_cycle_mask))
-      core_cycle();
-
-    // DRAM cycle
-    if (IS_DRAM_CYCLE(_cycle_mask))
-      dram_cycle();
-
-    // Interconnect cycle
-    if (IS_ICNT_CYCLE(_cycle_mask))
-      icnt_cycle();
-
-    // Check if core status has changed
-    if (_core_cycles % 10 == 0) {
-      int bitmap = 0;
-      for (int i=0; i<_partition_scheduler.size(); i++) {
-        /* Skip this */
-        if (partition_scheudler_status.at(i))
-          continue;
-
-        if (_partition_scheduler.at(i)->empty()) {
-          bitmap |= (1 << i);
-        }
-      }
-      if (bitmap)
-        return bitmap;
-    }
-  }
-  int bitmap = 0;
-  for (int i=0; i<_partition_scheduler.size(); i++) {
-    /* Skip this */
-    if (partition_scheudler_status.at(i))
-      continue;
-
-    if (_partition_scheduler.at(i)->empty())
-      bitmap |= (1ULL << i);
-  }
-  return bitmap;
-}
-
 void Simulator::cycle() {
-  while (running()) {
+  while (running() || _core_cycles < 1) {
     set_cycle_mask();
     // Core Cycle
     if (IS_CORE_CYCLE(_cycle_mask))
@@ -232,7 +199,6 @@ void Simulator::cycle() {
     if (IS_ICNT_CYCLE(_cycle_mask))
       icnt_cycle();
   }
-  spdlog::info("Simulation finished");
   for (auto &core: _cores) {
     core->check_tag();
   }

@@ -1,4 +1,3 @@
-import functools
 import torch
 import os
 import dataclasses
@@ -21,7 +20,7 @@ def hash_prefix(hash_value):
     return hash_value[1:12]
 
 def get_write_path(src_code):
-    return os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(get_hash(src_code.strip())))
+    return os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, hash_prefix(get_hash(src_code.strip())))
 
 @dataclasses.dataclass
 class MLIRBenchmarkRequest():
@@ -49,6 +48,9 @@ class MLIRBenchmarkRequest():
         self.extra_args = extra_args
         #self.hash_key, self.source_file = CUDACodeCache.write(self.source_code, "so")
 
+    def __str__(self) -> str:
+        return f"{self.kernel_name=}, {self.source_file=}, {self.hash_key=}"
+
     def make_run_fn(
         self, input_tensors: torch.Tensor, output_tensors: torch.Tensor
     ) -> Callable[[], None]:
@@ -58,31 +60,43 @@ class MLIRBenchmarkRequest():
         # Check already cached result.
         write_path = get_write_path(self.source_code)
         key,  _ = write(self.source_code, "mlir", specified_dir=write_path)
-        result_path = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, "outputs", hash_prefix(key), "togsim_result/0")
-        if os.path.exists(result_path):
-            result = TOGSimulator.get_result_from_file(result_path)
-            def cached_run_fn(*args, **kwargs):
-                return result
-            return cached_run_fn
+        result_dir = os.path.join(extension_config.CONFIG_TORCHSIM_DUMP_PATH, hash_prefix(key), "togsim_result")
+
+        # Find the most recent .log file in the result directory
+        if os.path.exists(result_dir) and os.path.isdir(result_dir):
+            log_files = [f for f in os.listdir(result_dir) if f.endswith('.log')]
+            if log_files:
+                # Sort by modification time, get the most recent file
+                log_files_with_time = [
+                    (f, os.path.getmtime(os.path.join(result_dir, f)))
+                    for f in log_files
+                ]
+                log_files_with_time.sort(key=lambda x: x[1], reverse=True)
+                latest_log_file = log_files_with_time[0][0]
+                result_path = os.path.join(result_dir, latest_log_file)
+                result = TOGSimulator.get_result_from_file(result_path)
+                def cached_run_fn(*args, autotune_subprocess_timeout_sec=None, **kwargs):
+                    return result
+                return cached_run_fn
 
         # Run a candidate code
         run_method = custom_async_compile.mlir(
             self.source_code, vectorlane_size=self.extra_args["vector_lane"],
-            loop_size=None, spad_info=self.extra_args["spad_info"],
+            loop_size=self.extra_args["loop_size"], spad_info=self.extra_args["spad_info"],
             vlen=self.extra_args["vlen"], arg_attributes=self.extra_args["arg_attributes"],
-            origins="Unknown", silent_mode=True,
-            validate=self.extra_args['validate'], autotune=self.extra_args['autotune'])
+            origins=self.extra_args["origins"], silent_mode=True,
+            autotune=self.extra_args['autotune'])
 
         args = [
             tensor
             for tensor in list(input_tensors) + list(output_tensors)
         ]
 
-        # Generate partial function.
-        return functools.partial(
-            run_method,
-            *args,
-        )
+        def schedule_run(autotune_subprocess_timeout_sec=None):
+            return run_method(*args, autotune_subprocess_timeout_sec=autotune_subprocess_timeout_sec)
 
-    def __str__(self) -> str:
-        return f"{self.kernel_name=}, {self.source_file=}, {self.hash_key=}"
+        return schedule_run
+
+    def update_workspace_size(self) -> None:
+        # FIXME: Not implemented yet. Checkout torch/_inductor/codegen/rocm/rocm_benchmark_request.py
+        return

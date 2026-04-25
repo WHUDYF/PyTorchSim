@@ -47,7 +47,7 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_conv_kernel(inputs=[X, W, BIAS], output
   {{ kernel.def_sram_buffer("X", X_tile_desc, indent_size=2) }}
   {{ kernel.def_sram_buffer("W", W_tile_desc, indent_size=2) }}
   {{ kernel.def_sram_buffer("Y", Y_tile_desc, indent_size=2) }}
-  %v0 = arith.constant dense<0.0> : vector<{{ kernel.get_spad_size_per_lane(TILE_O_H * TILE_M, TILE_N) }}xf32>
+  %v0 = arith.constant dense<0.0> : vector<{{ kernel.get_spad_size_per_lane(TILE_O_H * TILE_M, TILE_N) }}x{{DATA_STYPE}}>
   %c0 = arith.constant 0 : index
   {{- kernel.def_local_vars(indent_size=2) }}
 
@@ -59,7 +59,7 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_conv_kernel(inputs=[X, W, BIAS], output
           {%- if BIAS %}
           {{ kernel.def_dma_op("MVIN", "Bias", Bias_idx, Bias_tile_desc, subtile_size=[SUB_TILE_M, SUB_TILE_N, TILE_O_H, TILE_O_W], indent_size=10) }}
           {%- else %}
-          affine.vector_store %v0, %output_buffer[%c0, %c0, %c0, %c0] : {{ Y_tile_desc.get_mlir_shape(DATA_STYPE) }}, vector<{{ kernel.get_spad_size_per_lane(TILE_O_H * TILE_M, TILE_N) }}xf32>
+          affine.vector_store %v0, %output_buffer[%c0, %c0, %c0, %c0] : {{ Y_tile_desc.get_mlir_shape(DATA_STYPE) }}, vector<{{ kernel.get_spad_size_per_lane(TILE_O_H * TILE_M, TILE_N) }}x{{DATA_STYPE}}>
           {%- endif %}
           affine.for %k_h = 0 to {{ K_H }} step {{ TILE_K_H }} {
             affine.for %tile_k = 0 to {{ I_C * K_W }} step {{ TILE_K }} {
@@ -71,16 +71,16 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_conv_kernel(inputs=[X, W, BIAS], output
               affine.for %tile_k_h = 0 to {{ TILE_K_H }} { // loop order should be fixed for timing simulation. Do not change this order.
                 affine.for %tile_k_w = 0 to 1 {
                   %offset_w = affine.apply #offset_w_map(%tile_k_h, %tile_k_w)
-                  %W_buffer = memref.reinterpret_cast %weight_buffer to offset: [%offset_w], sizes: [{{ TILE_K }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : {{ W_tile_desc.get_mlir_shape(DATA_STYPE) }} to memref<{{ TILE_K }}x{{ TILE_N }}xf32, strided<[{{ TILE_N }}, 1], offset: ?>, 1>
+                  %W_buffer = memref.reinterpret_cast %weight_buffer to offset: [%offset_w], sizes: [{{ TILE_K }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : {{ W_tile_desc.get_mlir_shape(DATA_STYPE) }} to memref<{{ TILE_K }}x{{ TILE_N }}x{{DATA_STYPE}}, strided<[{{ TILE_N }}, 1], offset: ?>, 1>
                   affine.for %tile_o_h = 0 to {{ TILE_O_H }} {
                     affine.for %tile_o_w = 0 to {{ TILE_O_W }} {
                       %tile_i_h = affine.apply #map_I_H(%tile_o_h, %tile_k_h)
                       %offset_x = affine.apply #offset_x_map(%tile_i_h, %tile_o_w)
                       %offset_y = affine.apply #offset_y_map(%tile_o_h, %tile_o_w)
-                      %X_buffer = memref.reinterpret_cast %input_buffer to offset: [%offset_x], sizes: [{{ TILE_M }}, {{ TILE_K }}], strides: [{{ TILE_K }}, 1] : {{ X_tile_desc.get_mlir_shape(DATA_STYPE) }} to memref<{{ TILE_M }}x{{ TILE_K }}xf32, strided<[{{ TILE_K }}, 1], offset: ?>, 1>
-                      %Y_buffer = memref.reinterpret_cast %output_buffer to offset: [%offset_y], sizes: [{{ TILE_M }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : {{ Y_tile_desc.get_mlir_shape(DATA_STYPE) }} to memref<{{ TILE_M }}x{{ TILE_N }}xf32, strided<[{{ TILE_N }}, 1], offset: ?>, 1>
-                      linalg.matmul ins(%X_buffer, %W_buffer : memref<{{ TILE_M }}x{{ TILE_K }}xf32, strided<[{{ TILE_K }}, 1], offset: ?>, 1>, memref<{{ TILE_K }}x{{ TILE_N }}xf32, strided<[{{ TILE_N }}, 1], offset: ?>, 1>)
-                            outs(%Y_buffer : memref<{{ TILE_M }}x{{ TILE_N }}xf32, strided<[{{ TILE_N }}, 1], offset: ?>, 1>)
+                      %X_buffer = memref.reinterpret_cast %input_buffer to offset: [%offset_x], sizes: [{{ TILE_M }}, {{ TILE_K }}], strides: [{{ TILE_K }}, 1] : {{ X_tile_desc.get_mlir_shape(DATA_STYPE) }} to memref<{{ TILE_M }}x{{ TILE_K }}x{{DATA_STYPE}}, strided<[{{ TILE_K }}, 1], offset: ?>, 1>
+                      %Y_buffer = memref.reinterpret_cast %output_buffer to offset: [%offset_y], sizes: [{{ TILE_M }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : {{ Y_tile_desc.get_mlir_shape(DATA_STYPE) }} to memref<{{ TILE_M }}x{{ TILE_N }}x{{DATA_STYPE}}, strided<[{{ TILE_N }}, 1], offset: ?>, 1>
+                      linalg.matmul ins(%X_buffer, %W_buffer : memref<{{ TILE_M }}x{{ TILE_K }}x{{DATA_STYPE}}, strided<[{{ TILE_K }}, 1], offset: ?>, 1>, memref<{{ TILE_K }}x{{ TILE_N }}x{{DATA_STYPE}}, strided<[{{ TILE_N }}, 1], offset: ?>, 1>)
+                            outs(%Y_buffer : memref<{{ TILE_M }}x{{ TILE_N }}x{{DATA_STYPE}}, strided<[{{ TILE_N }}, 1], offset: ?>, 1>)
                     } { inner_loop=true }
                   } { inner_loop=true }
                 } { inner_loop=true }
@@ -104,7 +104,7 @@ def {{ FUNC_NAME }}{{kernel.def_wrapper()}}:
     padded_shape = list(X.shape)
     padded_shape[2] += 2 * {{ PADDING_H }}
     padded_shape[3] += 2 * {{ PADDING_W }}
-    X_padding = torch.zeros(padded_shape, device=X.device)
+    X_padding = torch.zeros(padded_shape).to(device=X.device)
     X_padding[:, :, {{ PADDING_H }}:X.shape[2] + {{ PADDING_H }}, {{ PADDING_W }}:X.shape[3] + {{ PADDING_W }}] = X
 
     # Tanspose inputs
@@ -120,9 +120,6 @@ def {{ FUNC_NAME }}{{kernel.def_wrapper()}}:
 
     # Launch kernel
     {{ KERNEL_NAME }}<DEF_CONV_WRAPPER>
-    {%- if TOGSIM_EAGER_MODE %}
-    yield ({{KERNEL_NAME}}, <DEF_CONV_WRAPPER>)
-    {%- endif %}
 """
     def __init__(self, input_nodes, layout, input_reorder=None, **kwargs):
         super().__init__(input_nodes, layout, input_reorder, **kwargs)
@@ -134,12 +131,12 @@ def {{ FUNC_NAME }}{{kernel.def_wrapper()}}:
                tile_info = None,
                **kwargs):
         # Extract input arguments info
-        X, W, Y, Bias, n_extra_node, BATCH, I_C, I_H, I_W, O_C, K_H, K_W, O_H, O_W, PADDING_H, PADDING_W, STRIDE_H, STRIDE_W = self.extract_info(kernel, template_buffer_node, epilogue_nodes)
+        X, W, Y, Bias, n_extra_node, BATCH, I_C, I_H, I_W, O_C, K_H, K_W, O_H, O_W, PADDING_H, PADDING_W, STRIDE_H, STRIDE_W, precision_bytes = self.extract_info(kernel, template_buffer_node, epilogue_nodes)
 
         # Select tile size adn template
         conv_template = CONV_TEMPLATE
         if tile_info is None:
-            TILE_K_H, TILE_K_W, TILE_O_H, TILE_O_W, TILE_M, TILE_N, TILE_K, TILE_I_H, TILE_I_W, SUB_TILE_I_H, SUB_TILE_I_W, SUB_TILE_K_H, SUB_TILE_K_W, SUB_TILE_M, SUB_TILE_N, SUB_TILE_K = self.select_tile(kernel, n_extra_node, BATCH, I_C, O_C, K_H, K_W, O_H, O_W)[0]
+            TILE_K_H, TILE_K_W, TILE_O_H, TILE_O_W, TILE_M, TILE_N, TILE_K, TILE_I_H, TILE_I_W, SUB_TILE_I_H, SUB_TILE_I_W, SUB_TILE_K_H, SUB_TILE_K_W, SUB_TILE_M, SUB_TILE_N, SUB_TILE_K = self.select_tile(kernel, n_extra_node, BATCH, I_C, O_C, K_H, K_W, O_H, O_W, precision_bytes)[0]
         else:
             TILE_K_H, TILE_K_W, TILE_O_H, TILE_O_W, TILE_M, TILE_N, TILE_K, TILE_I_H, TILE_I_W, SUB_TILE_I_H, SUB_TILE_I_W, SUB_TILE_K_H, SUB_TILE_K_W, SUB_TILE_M, SUB_TILE_N, SUB_TILE_K = tile_info
         SUB_TILE_N = TILE_N if TILE_N > 512 else SUB_TILE_N
@@ -173,7 +170,7 @@ def {{ FUNC_NAME }}{{kernel.def_wrapper()}}:
         Y_tile_desc.set_name("output_buffer")
         Y_dim = [Symbol("tile_m"), Symbol("tile_n"), Symbol("o_h"), Symbol("o_w")]
         Y_idx = [Y_dim[0]*O_C*O_H*O_W, Y_dim[1]*O_H*O_W, Y_dim[2]*O_W, Y_dim[3]]
-        
+
         # Extract Bias info
         Bias_idx = [Number(0), Symbol("tile_n"), Number(0), Number(0)]
         Bias_tile_desc = mlir_common.MLIRMultiDimTile(Y_tile_size, kernel.vector_lane, vlane_split_axis, vlane_stride)
@@ -181,6 +178,8 @@ def {{ FUNC_NAME }}{{kernel.def_wrapper()}}:
         Bias_tile_desc.set_name("output_buffer")
         if Bias is not None:
           Bias_tile_desc.offset = Bias.get_layout().offset
+
+        data_stype = mlir_common.DTYPE_TO_MLIR[X.get_dtype()]
 
         kernel.render_options = dict(
             KERNEL_NAME=self.name,
@@ -223,7 +222,7 @@ def {{ FUNC_NAME }}{{kernel.def_wrapper()}}:
             X_idx = X_idx,
             W_idx = W_idx,
             Bias_idx = Bias_idx,
-            DATA_STYPE="f32",
+            DATA_STYPE=data_stype,
             input_reorder=self.input_reorder
         )
 
@@ -240,8 +239,8 @@ def {{ FUNC_NAME }}{{kernel.def_wrapper()}}:
         kernel.add_loop_info([kernel.render_options["K_H"], kernel.render_options["K_W"], kernel.render_options["O_H"], kernel.render_options["O_W"], kernel.render_options["BATCH"], kernel.render_options["O_C"], kernel.render_options["I_C"]], [kernel.render_options["TILE_M"], kernel.render_options["TILE_N"], kernel.render_options["TILE_K"]])
         return code
 
-    def select_tile(self, kernel, n_extra_node, BATCH, I_C, O_C, K_H, K_W, O_H, O_W): 
-        tile_candidates = kernel.conv_multi_tile_mapping(BATCH, O_C, I_C, K_H, K_W, O_H, O_W, self.stride, self.dilation, n_extra_node)
+    def select_tile(self, kernel, n_extra_node, BATCH, I_C, O_C, K_H, K_W, O_H, O_W, precision_bytes):
+        tile_candidates = kernel.conv_multi_tile_mapping(BATCH, O_C, I_C, K_H, K_W, O_H, O_W, self.stride, self.dilation, n_extra_node, precision_bytes=precision_bytes)
         for idx, (TILE_K_H, TILE_K_W, TILE_O_H, TILE_O_W, TILE_M, TILE_N, TILE_K) in enumerate(tile_candidates):
             TILE_I_W = 1 + (TILE_O_W - 1) * self.stride[1]
             TILE_I_H = 1 + (TILE_O_H - 1) * self.stride[0] + (TILE_K_H - 1) * self.dilation[0]

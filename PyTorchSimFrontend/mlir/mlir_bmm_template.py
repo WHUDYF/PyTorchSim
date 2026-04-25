@@ -26,20 +26,20 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_kernel(inputs=[X, W, Bias], outputs=[Y]
   {{ kernel.def_sram_buffer("W", W_tile_desc, indent_size=2) }}
   {{ kernel.def_sram_buffer("Y", Y_tile_desc, indent_size=2) }}
   {% if not Bias %}
-  %v0 = arith.constant dense<0.0> : vector<{{ kernel.get_spad_size_per_lane(TILE_M, TILE_N) }}xf32>
+  %v0 = arith.constant dense<0.0> : vector<{{ kernel.get_spad_size_per_lane(TILE_M, TILE_N) }}x{{DATA_STYPE}}>
   {% endif %}
   %c0 = arith.constant 0 : index
   {{ kernel.def_local_vars(indent_size=2) }}
   affine.for %index0 = 0 to {{ B }} {
     affine.for %index1 = 0 to {{ M }} step {{ TILE_M }} {
       affine.for %index2 = 0 to {{ N }} step {{ TILE_N }} {
-        %X_buffer2D = memref.reinterpret_cast %X_buffer to offset: [0], sizes: [{{ TILE_M }}, {{ TILE_K }}], strides: [{{ TILE_K }}, 1] : {{ X_tile_desc.get_mlir_shape(DATA_STYPE) }} to memref<{{ TILE_M }}x{{ TILE_K }}xf32, 1>
-        %W_buffer2D = memref.reinterpret_cast %W_buffer to offset: [0], sizes: [{{ TILE_K }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : {{ W_tile_desc.get_mlir_shape(DATA_STYPE) }} to memref<{{ TILE_K }}x{{ TILE_N }}xf32, 1>
-        %Y_buffer2D = memref.reinterpret_cast %Y_buffer to offset: [0], sizes: [{{ TILE_M }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : {{ Y_tile_desc.get_mlir_shape(DATA_STYPE) }} to memref<{{ TILE_M }}x{{ TILE_N }}xf32, 1>
+        %X_buffer2D = memref.reinterpret_cast %X_buffer to offset: [0], sizes: [{{ TILE_M }}, {{ TILE_K }}], strides: [{{ TILE_K }}, 1] : {{ X_tile_desc.get_mlir_shape(DATA_STYPE) }} to memref<{{ TILE_M }}x{{ TILE_K }}x{{ DATA_STYPE }}, 1>
+        %W_buffer2D = memref.reinterpret_cast %W_buffer to offset: [0], sizes: [{{ TILE_K }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : {{ W_tile_desc.get_mlir_shape(DATA_STYPE) }} to memref<{{ TILE_K }}x{{ TILE_N }}x{{ DATA_STYPE }}, 1>
+        %Y_buffer2D = memref.reinterpret_cast %Y_buffer to offset: [0], sizes: [{{ TILE_M }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : {{ Y_tile_desc.get_mlir_shape(DATA_STYPE) }} to memref<{{ TILE_M }}x{{ TILE_N }}x{{ DATA_STYPE }}, 1>
         {% if Bias -%}
         {{ kernel.def_dma_op("MVIN", "Bias", Bias_idx, Y_tile_desc, subtile_size=[1, SUB_TILE_M, SUB_TILE_N], indent_size=8) }}
         {%- else -%}
-        affine.vector_store %v0, %Y_buffer[0, 0, 0] : {{ Y_tile_desc.get_mlir_shape(DATA_STYPE) }}, vector<{{ kernel.get_spad_size_per_lane(TILE_M, TILE_N) }}xf32>
+        affine.vector_store %v0, %Y_buffer[0, 0, 0] : {{ Y_tile_desc.get_mlir_shape(DATA_STYPE) }}, vector<{{ kernel.get_spad_size_per_lane(TILE_M, TILE_N) }}x{{DATA_STYPE}}>
         {% endif %}
 
         affine.for %index3 = 0 to {{ K }} step {{ TILE_K }} {
@@ -74,20 +74,20 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_kernel(inputs=[X, W, Bias], outputs=[Y]
   {{ kernel.def_sram_buffer("W", W_tile_desc, indent_size=2) }}
   {{ kernel.def_sram_buffer("Y", Y_tile_desc, indent_size=2) }}
   {% if not Bias %}
-  %v0 = arith.constant dense<0.0> : vector<{{ kernel.get_spad_size_per_lane(TILE_M, TILE_N) }}xf32>
+  %v0 = arith.constant dense<0.0> : vector<{{ kernel.get_spad_size_per_lane(TILE_M, TILE_N) }}x{{DATA_STYPE}}>
   {% endif %}
   %c0 = arith.constant 0 : index
   {{ kernel.def_local_vars(indent_size=2) }}
   affine.for %index0 = 0 to {{ B }} {
     affine.for %index1 = 0 to {{ M }} step {{ TILE_M }} {
       affine.for %index2 = 0 to {{ N }} step {{ TILE_N }} {
-        %X_buffer2D = memref.reinterpret_cast %X_buffer to offset: [0], sizes: [{{ TILE_M }}, {{ TILE_K }}], strides: [{{ TILE_K }}, 1] : memref<1x{{ TILE_M }}x{{ TILE_K }}xf32, 1> to memref<{{ TILE_M }}x{{ TILE_K }}xf32, 1>
-        %W_buffer2D = memref.reinterpret_cast %W_buffer to offset: [0], sizes: [{{ TILE_K }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : memref<1x{{ TILE_K }}x{{ TILE_N }}xf32, 1> to memref<{{ TILE_K }}x{{ TILE_N }}xf32, 1>
-        %Y_buffer2D = memref.reinterpret_cast %Y_buffer to offset: [0], sizes: [{{ TILE_M }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : memref<1x{{ TILE_M }}x{{ TILE_N }}xf32, 1> to memref<{{ TILE_M }}x{{ TILE_N }}xf32, 1>
+        %X_buffer2D = memref.reinterpret_cast %X_buffer to offset: [0], sizes: [{{ TILE_M }}, {{ TILE_K }}], strides: [{{ TILE_K }}, 1] : memref<1x{{ TILE_M }}x{{ TILE_K }}x{{DATA_STYPE}}, 1> to memref<{{ TILE_M }}x{{ TILE_K }}x{{DATA_STYPE}}, 1>
+        %W_buffer2D = memref.reinterpret_cast %W_buffer to offset: [0], sizes: [{{ TILE_K }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : memref<1x{{ TILE_K }}x{{ TILE_N }}x{{DATA_STYPE}}, 1> to memref<{{ TILE_K }}x{{ TILE_N }}x{{DATA_STYPE}}, 1>
+        %Y_buffer2D = memref.reinterpret_cast %Y_buffer to offset: [0], sizes: [{{ TILE_M }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : memref<1x{{ TILE_M }}x{{ TILE_N }}x{{DATA_STYPE}}, 1> to memref<{{ TILE_M }}x{{ TILE_N }}x{{DATA_STYPE}}, 1>
         {% if Bias -%}
         {{ kernel.def_dma_op("MVIN", "Bias", Bias_idx, Y_tile_desc, subtile_size=[1, SUB_TILE_M, SUB_TILE_N], indent_size=8) }}
         {%- else -%}
-        affine.vector_store %v0, %Y_buffer[0, 0, 0] : {{ Y_tile_desc.get_mlir_shape(DATA_STYPE) }}, vector<{{ kernel.get_spad_size_per_lane(TILE_M, TILE_N) }}xf32>
+        affine.vector_store %v0, %Y_buffer[0, 0, 0] : {{ Y_tile_desc.get_mlir_shape(DATA_STYPE) }}, vector<{{ kernel.get_spad_size_per_lane(TILE_M, TILE_N) }}x{{DATA_STYPE}}>
         {% endif %}
         affine.for %index3 = 0 to {{ K }} step {{ TILE_K }} {
           {{kernel.load_input(indent_size=10)}}
@@ -120,21 +120,21 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_kernel(inputs=[X, W, Bias], outputs=[Y]
   {{ kernel.def_sram_buffer("W", W_tile_desc, indent_size=2) }}
   {{ kernel.def_sram_buffer("Y", Y_tile_desc, indent_size=2) }}
   {% if not Bias %}
-  %v0 = arith.constant dense<0.0> : vector<{{ kernel.get_spad_size_per_lane(TILE_M, TILE_N) }}xf32>
+  %v0 = arith.constant dense<0.0> : vector<{{ kernel.get_spad_size_per_lane(TILE_M, TILE_N) }}x{{DATA_STYPE}}>
   {% endif %}
   %c0 = arith.constant 0 : index
   {{ kernel.def_local_vars(indent_size=2) }}
   affine.for %index0=0 to {{ B }} {
     affine.for %index2 = 0 to {{ N }} step {{ TILE_N }} {
       affine.for %index1 = 0 to {{ M }} step {{ TILE_M }} {
-        %X_buffer2D = memref.reinterpret_cast %X_buffer to offset: [0], sizes: [{{ TILE_M }}, {{ TILE_K }}], strides: [{{ TILE_K }}, 1] : memref<1x{{ TILE_M }}x{{ TILE_K }}xf32, 1> to memref<{{ TILE_M }}x{{ TILE_K }}xf32, 1>
-        %W_buffer2D = memref.reinterpret_cast %W_buffer to offset: [0], sizes: [{{ TILE_K }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : memref<1x{{ TILE_K }}x{{ TILE_N }}xf32, 1> to memref<{{ TILE_K }}x{{ TILE_N }}xf32, 1>
-        %Y_buffer2D = memref.reinterpret_cast %Y_buffer to offset: [0], sizes: [{{ TILE_M }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : memref<1x{{ TILE_N }}x{{ TILE_M }}xf32, 1> to memref<{{ TILE_M }}x{{ TILE_N }}xf32, 1>
+        %X_buffer2D = memref.reinterpret_cast %X_buffer to offset: [0], sizes: [{{ TILE_M }}, {{ TILE_K }}], strides: [{{ TILE_K }}, 1] : memref<1x{{ TILE_M }}x{{ TILE_K }}x{{DATA_STYPE}}, 1> to memref<{{ TILE_M }}x{{ TILE_K }}x{{DATA_STYPE}}, 1>
+        %W_buffer2D = memref.reinterpret_cast %W_buffer to offset: [0], sizes: [{{ TILE_K }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : memref<1x{{ TILE_K }}x{{ TILE_N }}x{{DATA_STYPE}}, 1> to memref<{{ TILE_K }}x{{ TILE_N }}x{{DATA_STYPE}}, 1>
+        %Y_buffer2D = memref.reinterpret_cast %Y_buffer to offset: [0], sizes: [{{ TILE_M }}, {{ TILE_N }}], strides: [{{ TILE_N }}, 1] : memref<1x{{ TILE_N }}x{{ TILE_M }}x{{DATA_STYPE}}, 1> to memref<{{ TILE_M }}x{{ TILE_N }}x{{DATA_STYPE}}, 1>
 
         {% if Bias -%}
         {{ kernel.def_dma_op("MVIN", "Bias", Bias_idx, Y_tile_desc, subtile_size=[1, SUB_TILE_M, SUB_TILE_N], indent_size=8) }} // Why not N,M? Currently, dma-fine-grained pass assume M->N order...
         {%- else -%}
-        affine.vector_store %v0, %Y_buffer[0, 0, 0] : memref<1x{{ TILE_N }}x{{ TILE_M }}xf32, 1>, vector<{{ kernel.get_spad_size_per_lane(TILE_M, TILE_N) }}xf32>
+        affine.vector_store %v0, %Y_buffer[0, 0, 0] : memref<1x{{ TILE_N }}x{{ TILE_M }}x{{DATA_STYPE}}, 1>, vector<{{ kernel.get_spad_size_per_lane(TILE_M, TILE_N) }}x{{DATA_STYPE}}>
         {% endif %}
         affine.for %index3 = 0 to {{ K }} step {{ TILE_K }} {
           {{ kernel.def_dma_op("MVIN", "X", X_idx, X_tile_desc, subtile_size=[1, SUB_TILE_M, SUB_TILE_K], indent_size=10) }}
@@ -154,6 +154,9 @@ func.func @{{ KERNEL_NAME }}{{kernel.def_kernel(inputs=[X, W, Bias], outputs=[Y]
 class MLIRBMMTemplate(MLIRTemplate):
     def __init__(self, input_nodes, layout, input_reorder=None):
         super().__init__("kernel", input_nodes, layout, input_reorder)
+        self.support_epilogue_fusion = True
+        self.support_prologue_fusion = True
+        self.support_reduction_fusion = True
 
     def render(self,
                kernel: MLIRTemplateKernel,
@@ -163,8 +166,9 @@ class MLIRBMMTemplate(MLIRTemplate):
                tile_info = None,
                **kwargs):
         X, W, Y, Bias, W_tensor, X_tensor, B, M, N, K, n_extra_node, n_prologue_node = self.extract_info(template_buffer_node, epilogue_nodes, prologue_nodes)
+        precision_bytes = mlir_common.get_dtype_nbytes(X.get_dtype())
         if tile_info is None:
-            TILE_M, TILE_N, TILE_K, SUB_TILE_M, SUB_TILE_N, SUB_TILE_K = self.select_tile(kernel, M, N, K, n_extra_node, 0, n_prologue_node)[0]
+            TILE_M, TILE_N, TILE_K, SUB_TILE_M, SUB_TILE_N, SUB_TILE_K = self.select_tile(kernel, M, N, K, n_extra_node, 0, n_prologue_node, precision_bytes)[0]
         else:
             TILE_M, TILE_N, TILE_K, SUB_TILE_M, SUB_TILE_N, SUB_TILE_K = tile_info
 
@@ -234,6 +238,7 @@ class MLIRBMMTemplate(MLIRTemplate):
         else:
           Bias_idx = None
 
+        data_stype = mlir_common.DTYPE_TO_MLIR[X.get_dtype()]
         kernel.render_options = dict(
             KERNEL_NAME=self.name,
             kernel=kernel,
@@ -242,7 +247,7 @@ class MLIRBMMTemplate(MLIRTemplate):
             SUB_TILE_M=SUB_TILE_M,
             SUB_TILE_N=SUB_TILE_N,
             SUB_TILE_K=SUB_TILE_K,
-            DATA_STYPE="f32",
+            DATA_STYPE=data_stype,
             X = X, W = W,Y = Y, Bias = Bias,
             X_idx = X_idx,
             W_idx = W_idx,
@@ -316,6 +321,12 @@ class MLIRBMMTemplate(MLIRTemplate):
         X, W = self.input_nodes[0], self.input_nodes[1]
         Y = self.output_node
         Bias = None if len(self.input_nodes) == 2 else self.input_nodes[2]
+        dtype_infos = [("X", X.get_dtype()), ("W", W.get_dtype()), ("Y", Y.get_dtype())]
+        if Bias is not None:
+            dtype_infos.append(("Bias", Bias.get_dtype()))
+        if len({dtype for _, dtype in dtype_infos}) != 1:
+            dtype_desc = ", ".join(f"{name}={dtype}" for name, dtype in dtype_infos)
+            raise NotImplementedError(f"Mixed dtype BMM is not implemented yet ({dtype_desc})")
 
         W_tensor =  empty_strided(W.layout.size, W.layout.stride)
         X_tensor =  empty_strided(X.layout.size, X.layout.stride)
@@ -340,10 +351,11 @@ class MLIRBMMTemplate(MLIRTemplate):
                prologue_nodes: Optional[List[IRNode]] = None,
                **kwargs):
         X, W, Y, Bias, W_tensor, X_tensor, B, M, N, K, n_extra_node, n_prologue_node = self.extract_info(template_buffer_node, epilogue_nodes, prologue_nodes)
-        return self.select_tile(kernel, M, N, K, n_extra_node, 0, n_prologue_node)
+        precision_bytes = mlir_common.get_dtype_nbytes(X.get_dtype())
+        return self.select_tile(kernel, M, N, K, n_extra_node, 0, n_prologue_node, precision_bytes)
 
-    def select_tile(self, kernel, M, N, K, n_extra_node, n_extra_read, n_prologue_node):
-        tile_candidates = kernel.gemm_combination_mapping(M, N, K, n_extra_node=n_extra_node)
+    def select_tile(self, kernel, M, N, K, n_extra_node, n_extra_read, n_prologue_node, precision_bytes):
+        tile_candidates = kernel.gemm_combination_mapping(M, N, K, n_extra_node=n_extra_node, precision_bytes=precision_bytes)
         for idx, (TILE_M, TILE_N, TILE_K) in enumerate(tile_candidates):
             SUB_TILE_M = TILE_M if (TILE_M < kernel.vector_lane) or n_prologue_node else kernel.vector_lane
             SUB_TILE_N = TILE_N # if (TILE_N < kernel.vector_lane) or prologue_nodes else kernel.vector_lane

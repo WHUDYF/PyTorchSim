@@ -2,10 +2,7 @@
 
 base_dir=$TORCHSIM_DIR/experiments/artifact/speedup
 config=(
-    # "systolic_ws_8x8_c1_simple_noc.json"
-    "systolic_ws_128x128_c2_simple_noc_tpuv3.json"
-    #"systolic_ws_128x128_c2_booksim_tpuv3.json"
-    # "systolic_ws_128x128_c2_simple_noc_tpuv4.json"
+    "systolic_ws_128x128_c2_simple_noc_tpuv3_ils.yml"
 )
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 SHAPE_LIST=(
@@ -30,15 +27,11 @@ for i in "${config[@]}"; do
     for iter in {1..5}; do
       echo "[Iter $iter] Running simulation for workload=ils_$ops config=$config"
       output=$(bash -c "
-        export TORCHSIM_TLS_MODE=0;
-        export TORCHSIM_VALIDATION_MODE=1;
-        export TORCHSIM_CONFIG=$config_path;
-        export AUTOTUNE=0;
-        printenv;
-        python3 $workload 2> /dev/null | $TORCHSIM_DIR/experiments/artifact/speedup/scripts/ils_parser.sh
+        export TOGSIM_CONFIG=$config_path;
+        cd $TORCHSIM_DIR && python3 $workload 2>&1
       ")
 
-      sim_time=$(echo "$output" | grep "Simulation time:" | tail -n 1 | sed -E 's/.*Simulation time: ([0-9]+\.[0-9]+).*/\1/')
+      sim_time=$(echo "$output" | grep "Wall-clock time for simulation:" | tail -n 1 | sed -E 's/.*Wall-clock time for simulation: ([0-9]+\.[0-9]+) seconds.*/\1/')
 
       if [[ -n "$sim_time" ]]; then
         echo "Iteration $iter: simulation_time = $sim_time" >> "$output_file"

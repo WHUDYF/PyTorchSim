@@ -31,18 +31,14 @@ def test_LayerNorm(device, size=(64, 64)):
     test_result("LayerNorm Forward", y, cpu_y)
 
 if __name__ == "__main__":
-    import os
-    import sys
     import argparse
-    sys.path.append(os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim'))
 
     parser = argparse.ArgumentParser(description="Run LayerNorm test with dynamic shape")
     parser.add_argument('--shape', type=str, help="Shape of the tensor in the format (batch_size, features)", default="(512,768)")
     args = parser.parse_args()
     shape = tuple(map(int, args.shape.strip('()').split(',')))
 
-    from Scheduler.scheduler import PyTorchSimRunner
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
-    #test_LayerNorm(device)
-    test_LayerNorm(device, shape)
+    device = torch.device("npu:0")
+    with torch.no_grad():
+        #test_LayerNorm(device)
+        test_LayerNorm(device, shape)

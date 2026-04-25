@@ -42,25 +42,29 @@ def test_softmax(device, size=(128, 128), dim=1):
     #cpu_y = softmax3(x2, cpu_max, cpu_sum)
     #test_result("Softmax", y, cpu_y)
 
-    opt_fn = torch.compile(dynamic=False)(torch.nn.functional.softmax)
-    y = opt_fn(x1, dim=dim)
+    class SoftmaxModule(torch.nn.Module):
+        def __init__(self, dim):
+            super().__init__()
+            self.dim = dim
+
+        def forward(self, x):
+            return torch.nn.functional.softmax(x, dim=self.dim)
+
+    softmax_module = SoftmaxModule(dim=dim).to(device)
+    opt_fn = torch.compile(dynamic=False)(softmax_module)
+    y = opt_fn(x1)
     cpu_y = torch.nn.functional.softmax(x2, dim=dim)
     test_result("Softmax", y, cpu_y)
 
 if __name__ == "__main__":
-    import os
-    import sys
     import argparse
-    sys.path.append(os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim'))
 
     parser = argparse.ArgumentParser(description="Run LayerNorm test with dynamic shape")
     parser.add_argument('--shape', type=str, help="Shape of the tensor in the format (batch_size, features)", default="(512,768)")
     args = parser.parse_args()
     shape = tuple(map(int, args.shape.strip('()').split(',')))
 
-    from Scheduler.scheduler import PyTorchSimRunner
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
     test_softmax(device, size=(64, 128))
     test_softmax(device, size=(64, 128), dim=0)
     test_softmax(device, size=(256, 128))

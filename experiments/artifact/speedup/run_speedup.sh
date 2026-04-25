@@ -1,11 +1,15 @@
 #!/bin/bash
+set -e
+
 LOG_DIR=$TORCHSIM_DIR/experiments/artifact/logs
 CONFIG_DIR="$TORCHSIM_DIR/configs"
-SIMULATOR_BIN="$TORCHSIM_DIR/TOGSim/build/bin/Simulator"
+# CI: e.g. SKIP_ILS=1, SPEEDUP_ITERS=1 (shorter, no ILS re-runs)
+: "${SKIP_ILS:=0}"
+: "${SPEEDUP_ITERS:=5}"
 
 configs=(
-    "systolic_ws_128x128_c2_simple_noc_tpuv3.json"
-    "systolic_ws_128x128_c2_booksim_tpuv3.json"
+    "systolic_ws_128x128_c2_simple_noc_tpuv3.yml"
+    "systolic_ws_128x128_c2_booksim_tpuv3.yml"
 )
 
 target_list=(
@@ -25,9 +29,11 @@ output_dir="$TORCHSIM_DIR/experiments/artifact/speedup/results"
 mkdir -p "$output_dir"
 
 echo "[*] Scanning log files in: $LOG_DIR"
+echo "[*] Extracting Simulator command and trace path from logs ([TOGSim] Run command|Command line, Trace log is stored to)"
 echo ""
 
 for log_file in "$LOG_DIR"/*.log; do
+  [[ -f "$log_file" ]] || continue
   filename=$(basename "$log_file")
   workload="${filename%.log}"
 
@@ -36,45 +42,45 @@ for log_file in "$LOG_DIR"/*.log; do
   fi
   echo "==> Workload: $workload"
 
-  declare -a ONNX_ATTR_PAIRS=()
+  # === Extract Simulator invocation from log (TOGSim renamed the log tag) ===
+  # Legacy logs: "[TOGSim] Run command: ..."  Current TOGSim/main.cc: "[TOGSim] Command line: ..."
+  base_cmd=$(grep -E "\[TOGSim\] (Run command|Command line):" "$log_file" 2>/dev/null | sed -E 's/.*\[TOGSim\] (Run command|Command line): //' | head -1)
+  if [[ -z "$base_cmd" ]]; then
+    echo "    Skipping: no [TOGSim] Run command / Command line found in $log_file"
+    continue
+  fi
 
-  # === Grep launch line ===
-  while IFS= read -r line; do
-    if [[ "$line" == launch* ]]; then
-      read -r _ onnx_path attr_path _ <<< "$line"
-      ONNX_ATTR_PAIRS+=("$onnx_path|$attr_path")
-    fi
-  done < "$log_file"
+  # === Trace file: PyTorchSim logs it as "[TOGSim] Trace log is stored to \"<path>.trace\"" (often on stderr, now merged in cycle logs) ===
+  trace_line=$(grep -F '[TOGSim] Trace log is stored to' "$log_file" 2>/dev/null | tail -n 1) || true
+  if [[ -z "$trace_line" ]]; then
+    echo "    Skipping: no [TOGSim] Trace log is stored to ... line in $log_file"
+    continue
+  fi
+  trace_file="${trace_line#*Trace log is stored to \"}"
+  trace_file="${trace_file%%\"*}"
+  if [[ -z "$trace_file" || ! -f "$trace_file" ]]; then
+    echo "    Skipping: trace path missing or not a file: ${trace_file:-<empty>} (from $log_file)"
+    continue
+  fi
 
   # Normal configs
   for config in "${configs[@]}"; do
-    output_file="$output_dir/${workload}_${config}.txt" 
-    echo "Running with config=$config"
-    echo "===== config=$config | model=$workload =====" >> "$output_file"
+    output_file="$output_dir/${workload}_${config}.txt"
+    echo "===== config=$config | model=$workload =====" > "$output_file"
     sum_all_iters=0.0
     iter_count=0
 
-     # === Run 5 iterations ===
-    for iter in {1..5}; do
+    for iter in $(seq 1 "${SPEEDUP_ITERS}"); do
       echo "[Iter $iter] Running simulation for workload=$workload config=$config"
-      cmd=""
-      for pair in "${ONNX_ATTR_PAIRS[@]}"; do
-        IFS="|" read -r onnx_path attr_path <<< "$pair"
-        cmd+=" $SIMULATOR_BIN --config $CONFIG_DIR/$config --models_list $onnx_path --attributes_list $attr_path;"
-      done
+      # Build command: replace --config and --models_list in base_cmd with our config and trace
+      cmd=$(echo "$base_cmd" | sed -E "s|--config [^ ]+|--config $CONFIG_DIR/$config|" | sed -E "s|--models_list [^ ]+|--models_list $trace_file|")
+      echo "$cmd"
+      output=$(bash -c "$cmd" 2>&1) || true
+      sim_time=$(echo "$output" | grep "Wall-clock time for simulation:" | sed -E 's/.*Wall-clock time for simulation: ([0-9]+\.[0-9]+) seconds.*/\1/')
 
-      output=$(bash -c "$cmd")
-      sim_times=$(echo "$output" | grep "Simulation time:" | sed -E 's/.*Simulation time: ([0-9]+\.[0-9]+).*/\1/')
-
-      if [[ -n "$sim_times" ]]; then
-        sum_per_iter=0.0
-        while IFS= read -r sim_time; do
-          echo "Iteration $iter: simulation_time = $sim_time" >> "$output_file"
-          sum_per_iter=$(awk -v a="$sum_per_iter" -v b="$sim_time" 'BEGIN {printf "%.6f", a + b}')
-        done <<< "$sim_times"
-
-        echo "Iteration $iter: total_simulation_time = $sum_per_iter" >> "$output_file"
-        sum_all_iters=$(awk -v a="$sum_all_iters" -v b="$sum_per_iter" 'BEGIN {printf "%.6f", a + b}')
+      if [[ -n "$sim_time" ]]; then
+        echo "Iteration $iter: simulation_time = $sim_time" >> "$output_file"
+        sum_all_iters=$(awk -v a="$sum_all_iters" -v b="$sim_time" 'BEGIN {printf "%.6f", a + b}')
         iter_count=$((iter_count + 1))
       else
         echo "Iteration $iter: No simulation time found." >> "$output_file"
@@ -93,10 +99,14 @@ for log_file in "$LOG_DIR"/*.log; do
   done
 done
 
-# ILS mode should be run separately
-$TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_matmul.sh
-$TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_conv.sh
-$TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_bert.sh
-$TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_resnet.sh
+# ILS: optional (skip in CI; slow and separate from simple-noc / booksim re-sims)
+if [[ "$SKIP_ILS" != "1" ]]; then
+  $TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_matmul.sh
+  $TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_conv.sh
+  $TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_bert.sh
+  $TORCHSIM_DIR/experiments/artifact/speedup/scripts/run_speed_ils_resnet.sh
+else
+  echo "[*] SKIP_ILS=1 — skipping ILS matmul/conv/bert/resnet."
+fi
 
 python3 $TORCHSIM_DIR/experiments/artifact/speedup/summary_speedup.py | tee "$TORCHSIM_DIR/experiments/artifact/speedup/summary_speedup.log"

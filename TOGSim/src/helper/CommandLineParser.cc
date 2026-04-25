@@ -12,9 +12,13 @@ void CommandLineParser::parse(int argc, char **argv) noexcept(false) {
     po::notify(variables_map);
 }
 
+void CommandLineParser::print_help_message() const noexcept {
+    std::cout << options_description << std::endl;
+}
+
 void CommandLineParser::print_help_message_if_required() const noexcept {
     if (variables_map.count("help") > 0) {
-        std::cout << options_description << std::endl;
+        print_help_message();
         exit(0);
     }
 }

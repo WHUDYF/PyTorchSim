@@ -48,19 +48,14 @@ def test_vector_tensor_add(device, size=(128, 128)):
     test_result("VectorTensorAdd", res, out)
 
 if __name__ == "__main__":
-    import os
-    import sys
     import argparse
-    sys.path.append(os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim'))
 
     parser = argparse.ArgumentParser(description="Run LayerNorm test with dynamic shape")
     parser.add_argument('--shape', type=str, default="(512,768)")
     args = parser.parse_args()
     shape = tuple(map(int, args.shape.strip('()').split(',')))
 
-    from Scheduler.scheduler import PyTorchSimRunner
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
     test_vectoradd(device, (1, 1))
     test_vectoradd(device, (47, 10))
     test_vectoradd(device, (128, 128))

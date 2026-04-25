@@ -1,6 +1,4 @@
 import torch
-import torch._dynamo
-import torch.utils.cpp_extension
 
 def test_result(name, out, cpu_out, rtol=1e-4, atol=1e-4):
     message = f"|{name} Test Passed|"
@@ -97,13 +95,7 @@ def test_conv_bn_relu(device, batch_size=1, in_channels=8, out_channels=16, inpu
     print("Max diff > ", torch.max(torch.abs(res.cpu() - out)))
 
 if __name__ == "__main__":
-    import os
-    import sys
-    sys.path.append(os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim'))
-
-    from Scheduler.scheduler import PyTorchSimRunner
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
 
     # Vanila test
     test_conv_residual(device, batch_size=3, in_channels=64, out_channels=64, input_size=28, kernel_size=3, stride=1, padding=1)

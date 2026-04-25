@@ -1,18 +1,5 @@
 #include "TileGraphParser.h"
 
-bool loadConfig(const std::string& config_path, json& config_json) {
-  std::ifstream config_file(config_path);
-  if (config_file.is_open()) {
-      config_file >> config_json;
-      config_file.close();
-      spdlog::info("[LoadConfig] Success to open \"{}\"", config_path);
-      return true;
-  } else {
-    spdlog::error("[LoadConfig] Failed to open \"{}\"", config_path);
-    return false;
-  }
-}
-
 void printIndexMap(std::string prefix, const std::map<std::string, int>& indexMap) {
     std::ostringstream oss;
     for (const auto& [key, value] : indexMap) {
@@ -87,26 +74,33 @@ bool find_output_idx(TileGraphParser* tog_parser, std::vector<uint32_t>& output_
   m = output_idx.at(0);
   n = output_idx.at(1);
   k = output_idx.at(2);
+  auto attr_file = tog_parser->get_attribute_file();
 
-  auto attr_json = tog_parser->get_attribute_file();
+  if (!attr_file["zero_skip"]) {
+      return false;
+  }
 
-  // Check arg0: m -> k
+  YAML::Node zero_skip = attr_file["zero_skip"];
   bool found_arg0 = false;
-  if (attr_json["zero_skip"].contains("arg0")) {
-    auto& arg0 = attr_json["zero_skip"]["arg0"];
-    if (arg0.contains(std::to_string(m)) && arg0[std::to_string(m)].contains(std::to_string(k))) {
+  if (zero_skip["arg0"]) {
+    YAML::Node arg0 = zero_skip["arg0"];
+    std::string m_str = std::to_string(m);
+    std::string k_str = std::to_string(k);
+    if (arg0[m_str] && arg0[m_str][k_str]) {
       found_arg0 = true;
     }
   }
 
-  // Check arg1: n -> k
   bool found_arg1 = false;
-  if (attr_json["zero_skip"].contains("arg1")) {
-    auto& arg1 = attr_json["zero_skip"]["arg1"];
-    if (arg1.contains(std::to_string(k)) && arg1[std::to_string(k)].contains(std::to_string(n))) {
+  if (zero_skip["arg1"]) {
+    YAML::Node arg1 = zero_skip["arg1"];
+    std::string k_str = std::to_string(k);
+    std::string n_str = std::to_string(n);
+    if (arg1[k_str] && arg1[k_str][n_str]) {
       found_arg1 = true;
     }
   }
+
   return found_arg0 || found_arg1;
 }
 
@@ -198,7 +192,7 @@ TileMemoryNode::TileMemoryNode(onnx::NodeProto& node) : TileNode(node) {
     if (attribute.name() == "torchsim_base_addr") {
       _base_addr_name = attribute.s();
     } else if (attribute.name() == "torchsim_element_size") {
-      _element_size = attribute.i();
+      _elem_bits = static_cast<size_t>(attribute.i());
     } else if (attribute.name() == "torchsim_tile_size") {
       for (int i = 0; i < attribute.ints_size(); i++)
         _tile_size.push_back(attribute.ints(i));
@@ -210,7 +204,7 @@ TileMemoryNode::TileMemoryNode(onnx::NodeProto& node) : TileNode(node) {
         _tag_idx_list.push_back(attribute.strings(i));
     } else if (attribute.name() == "torchsim_tag_stride_list") {
       for (int i = 0; i < attribute.ints_size(); i++)
-        _tag_stride_list.push_back(attribute.ints(i));
+        _tag_stride_list.push_back(static_cast<int64_t>(attribute.ints(i)));
     } else if (attribute.name() == "torchsim_loop_idx_list") {
       for (int i = 0; i < attribute.strings_size(); i++)
         _loop_idx_list.push_back(attribute.strings(i));
@@ -232,7 +226,7 @@ void TileMemoryNode::print_node() {
   TileNode::print_node();
   std::string spaces(get_depth(), '\t');
   spdlog::debug("{} base_addr_name: {}", spaces, _base_addr_name);
-  spdlog::debug("{} element_size: {}", spaces, _element_size);
+  spdlog::debug("{} elem_bits: {}", spaces, _elem_bits);
   spdlog::debug("{} loop_stride_list: {} ", spaces, _loop_stride_list);
   spdlog::debug("{} tile_size: {} ", spaces, _tile_size);
   spdlog::debug("{} tile_stride: {} ", spaces, _tile_stride);
@@ -249,10 +243,10 @@ TileMemoryWaitNode::TileMemoryWaitNode(onnx::NodeProto& node) : TileNode(node) {
         _tag_idx_list.push_back(attribute.strings(i));
     } else if (attribute.name() == "torchsim_tag_stride_list") {
       for (int i = 0; i < attribute.ints_size(); i++)
-        _tag_stride_list.push_back(attribute.ints(i));
+        _tag_stride_list.push_back(static_cast<int64_t>(attribute.ints(i)));
     } else if (attribute.name() == "torchsim_tag_divider_list") {
       for (int i = 0; i < attribute.ints_size(); i++)
-        _tag_divider_list.push_back(attribute.ints(i));
+        _tag_divider_list.push_back(static_cast<int64_t>(attribute.ints(i)));
     } else if (attribute.name() == "torchsim_base_addr") {
       _base_addr_name = attribute.s();
     }
@@ -358,12 +352,12 @@ std::vector<std::shared_ptr<Tile>> TileLoopNode::get_tiles_from_iter(TileGraphPa
 
       /* Base address setting */
       std::string base_addr_name = mem_node->get_base_addr_name();
-      int base_addr_id = tog_parser->register_addr_name(base_addr_name);
+      int64_t base_addr_id = tog_parser->register_addr_name(base_addr_name);
       addr_type base_addr = tog_parser->lookup(base_addr_name);
       addr_type offset = std::inner_product(iter_list.begin(), iter_list.end(), mem_node->get_loop_stride_list().begin(), 0);
 
-      std::vector<int> tag_list;
-      std::vector<int> accum_tag_list;
+      std::vector<int64_t> tag_list;
+      std::vector<int64_t> accum_tag_list;
       std::vector<uint32_t> outer_loop_idx;
       std::vector<uint32_t> outer_loop_size;
       /* Add accumulation loop info to accum_tag list */
@@ -412,8 +406,8 @@ std::vector<std::shared_ptr<Tile>> TileLoopNode::get_tiles_from_iter(TileGraphPa
       }
 
       /* Check need to make this memory node */
-      std::vector<int>& tag_stride_list = mem_node->get_tag_stride_list();
-      std::vector<int> key = tog_parser->calc_tag(accum_tag_list, tag_list, tag_stride_list);
+      std::vector<int64_t>& tag_stride_list = mem_node->get_tag_stride_list();
+      std::vector<int64_t> key = tog_parser->calc_tag(accum_tag_list, tag_list, tag_stride_list);
       if (tog_parser->check_memory_tag(base_addr_name, key))
         continue;
       tog_parser->register_memory_tag(base_addr_name, key);
@@ -428,7 +422,7 @@ std::vector<std::shared_ptr<Tile>> TileLoopNode::get_tiles_from_iter(TileGraphPa
       std::shared_ptr<Instruction> inst = std::make_shared<Instruction>(
         Opcode::MOVIN, 0,
         0, base_addr+offset,
-        mem_node->get_tile_size(), mem_node->get_tile_stride(), mem_node->get_precision(),
+        mem_node->get_tile_size(), mem_node->get_tile_stride(), mem_node->get_elem_bits(),
         tag_list, tag_stride_list, accum_tag_list
       );
       inst->set_addr_name(base_addr_name, base_addr_id);
@@ -471,7 +465,7 @@ std::vector<std::shared_ptr<Tile>> TileLoopNode::get_tiles_from_iter(TileGraphPa
 
       /* Lookup given name's address */
       std::string base_addr_name = mem_node->get_base_addr_name();
-      int base_addr_id = tog_parser->register_addr_name(base_addr_name);
+      int64_t base_addr_id = tog_parser->register_addr_name(base_addr_name);
       addr_type base_addr = tog_parser->lookup(base_addr_name);
       addr_type offset = std::inner_product(iter_list.begin(), iter_list.end(), mem_node->get_loop_stride_list().begin(), 0);
 
@@ -488,8 +482,8 @@ std::vector<std::shared_ptr<Tile>> TileLoopNode::get_tiles_from_iter(TileGraphPa
       std::shared_ptr<Instruction> inst = std::make_shared<Instruction>(
         Opcode::MOVOUT, 0,
         0, base_addr+offset,
-        mem_node->get_tile_size(), mem_node->get_tile_stride(), mem_node->get_precision(),
-        std::vector<int>(1), mem_node->get_tag_stride_list(), std::vector<int>()
+        mem_node->get_tile_size(), mem_node->get_tile_stride(), mem_node->get_elem_bits(),
+        std::vector<int64_t>(1, 0), mem_node->get_tag_stride_list(), std::vector<int64_t>()
       );
       inst->set_addr_name(base_addr_name, base_addr_id);
       inst->prepare_tag_key();
@@ -506,15 +500,15 @@ std::vector<std::shared_ptr<Tile>> TileLoopNode::get_tiles_from_iter(TileGraphPa
       printIndexMap("[TOGParser] DMA Wait Node ", iter);
       std::shared_ptr<TileMemoryWaitNode> wait_node = std::static_pointer_cast<TileMemoryWaitNode>(tile_node);
       auto base_addr_name = wait_node->get_base_addr_name();
-      int base_addr_id = tog_parser->register_addr_name(base_addr_name);
+      int64_t base_addr_id = tog_parser->register_addr_name(base_addr_name);
       addr_type base_addr = tog_parser->lookup(base_addr_name);
       /* Lookup given name's address */
       std::vector<int> iter_list;
-      std::vector<int> tag_list;
-      std::vector<int>& tag_stride_list = wait_node->get_tag_stride_list();
-      std::vector<int>& tag_divider_list = wait_node->get_tag_divider_list();
-      std::vector<int> new_tag_stride_list;
-      std::vector<int> accum_tag_list;
+      std::vector<int64_t> tag_list;
+      std::vector<int64_t>& tag_stride_list = wait_node->get_tag_stride_list();
+      std::vector<int64_t>& tag_divider_list = wait_node->get_tag_divider_list();
+      std::vector<int64_t> new_tag_stride_list;
+      std::vector<int64_t> accum_tag_list;
       auto& wait_tag_list = wait_node->get_tag_idx_list();
 
       for (int i=0; i<wait_tag_list.size();i++) {
@@ -561,9 +555,9 @@ std::vector<std::shared_ptr<Tile>> TileLoopNode::get_tiles_from_iter(TileGraphPa
     } else if (tile_node->get_type() == TileType::COMPUTE_NODE) {
       printIndexMap("[TOGParser] Compute Node ", iter);
       std::shared_ptr<TileComputeNode> compute_node = std::static_pointer_cast<TileComputeNode>(tile_node);
-      std::vector<int> tag_list = {0};
-      std::vector<int> tag_stride_list = {1};
-      std::vector<int> accum_tag_list;
+      std::vector<int64_t> tag_list = {0};
+      std::vector<int64_t> tag_stride_list = {1};
+      std::vector<int64_t> accum_tag_list;
       std::shared_ptr<Instruction> inst = std::make_shared<Instruction>(
         Opcode::COMP, compute_node->get_cycle(),
         0, 0,
@@ -593,9 +587,6 @@ std::vector<std::shared_ptr<Tile>> TileLoopNode::get_tiles_from_iter(TileGraphPa
             inst->add_child(child_inst);
           }
         }
-        /* Add instruction to tile */
-        if (inst->get_opcode() == Opcode::MOVIN)
-          tile_vec.back()->inc_required_sram_size(inst->get_tile_numel() * inst->get_precision());
       }
       link_map.clear();
       /* iterate nested loop */
@@ -674,9 +665,6 @@ std::vector<std::shared_ptr<Tile>> TileLoopNode::get_tiles_from_iter(TileGraphPa
         inst->add_child(child_inst);
       }
     }
-    /* Add instruction to tile */
-    if (inst->get_opcode() == Opcode::MOVIN)
-      tile_vec.back()->inc_required_sram_size(inst->get_tile_numel() * inst->get_precision());
   }
 
   return tile_vec;
@@ -691,50 +679,66 @@ void TileLoopNode::print_node() {
   spdlog::debug("{} stride: {} ", spaces, _stride);
 }
 
-TileGraphParser::TileGraphParser(std::string onnx_path, std::string attribute_path, std::string config_path) {
-  loadConfig(attribute_path, _attribute_json);
-  loadConfig(config_path, _config_json);
+TileGraphParser::TileGraphParser(std::string onnx_path, std::string attribute_path, const YAML::Node& config_yaml) {
+  loadConfig(attribute_path, _attribute_config);
+  _config_yaml = config_yaml;  // Use the pre-loaded config
   _attribute_path = attribute_path;
 
+  if (!std::filesystem::exists(onnx_path)) {
+    throw std::runtime_error("Error: TOG graph path not found: " + onnx_path);
+  }
   /* Note: this parsing algorithm assume that all node are sorted in topological-order */
   std::ifstream model_istream(onnx_path);
   google::protobuf::io::IstreamInputStream zero_copy_input(&model_istream);
   onnx::ModelProto model_proto;
-
+ 
   /* Attribute parsing */
-  if (_attribute_json.contains("address_info")) {
-    auto address_info = _attribute_json["address_info"];
-    for (auto it = address_info.begin(); it != address_info.end(); ++it) {
-      uint64_t value = it.value();
-      _arg_to_address[it.key()] = value;
-      spdlog::info("[TOGParser/Attribute] Address Attribute key: {} address: 0x{:x}", it.key(), value);
+  if (_attribute_config["address_info"]) {
+    const auto& address_info = _attribute_config["address_info"];
+    for (YAML::const_iterator it = address_info.begin(); it != address_info.end(); ++it) {
+      std::string key = it->first.as<std::string>();
+      uint64_t value = it->second.as<uint64_t>();
+
+      _arg_to_address[key] = value;
+      spdlog::trace("[TOGParser/Attribute] Address Attribute key: {} address: 0x{:x}", key, value);
     }
   }
-  if (_attribute_json.contains("address_numa_stride")) {
-    auto address_numa_stride = _attribute_json["address_numa_stride"];
-    for (auto it = address_numa_stride.begin(); it != address_numa_stride.end(); ++it) {
-      auto value_list = it.value();
-      for (auto value : value_list) {
-        _arg_numa_stride[it.key()].push_back(value);
+
+  if (_attribute_config["address_numa_stride"]) {
+    const auto& address_numa_stride = _attribute_config["address_numa_stride"];
+    for (YAML::const_iterator it = address_numa_stride.begin(); it != address_numa_stride.end(); ++it) {
+      std::string key = it->first.as<std::string>();
+      const auto& value_list = it->second; // YAML Sequence Node
+
+      for (const auto& val : value_list) {
+        _arg_numa_stride[key].push_back(val.as<uint32_t>());
       }
-      spdlog::info("[TOGParser/Attribute] Address numa info key: {} numa stride : {}", it.key(), fmt::join(_arg_numa_stride[it.key()], ", "));
+      spdlog::trace("[TOGParser/Attribute] Address numa info key: {} numa stride : {}", key, fmt::join(_arg_numa_stride[key], ", "));
     }
   }
-  if (_attribute_json.contains("sram_alloc") and _config_json.contains("l2d_type") and _config_json["l2d_type"] == "datacache") {
-    auto sram_alloc_list = _attribute_json["sram_alloc"];
+
+  if (_attribute_config["sram_alloc"] &&
+      _config_yaml["l2d_type"] &&
+      _config_yaml["l2d_type"].as<std::string>() == "datacache") {
+
+    auto sram_alloc_list = _attribute_config["sram_alloc"];
     spdlog::info("[TOGParser/Attribute] ================= SRAM Alloc Plan ================");
-    for (auto it = sram_alloc_list.begin(); it != sram_alloc_list.end(); ++it) {
-      auto value_list = it.value();
-      unsigned long long start = value_list.at(0);
-      unsigned long long end = value_list.at(1);
-      spdlog::info("[TOGParser/Attribute] {:16s}: 0x{:016x} ~ 0x{:016x}", it.key(), start, end);
+
+    for (YAML::const_iterator it = sram_alloc_list.begin(); it != sram_alloc_list.end(); ++it) {
+      std::string key = it->first.as<std::string>();
+      const auto& value_list = it->second; // List [start, end]
+
+      unsigned long long start = value_list[0].as<unsigned long long>();
+      unsigned long long end = value_list[1].as<unsigned long long>();
+
+      spdlog::info("[TOGParser/Attribute] {:16s}: 0x{:016x} ~ 0x{:016x}", key, start, end);
       Interval<unsigned long long, int> entry = {start, end, 0};
       _cache_plan.push_back(entry);
     }
   }
   load_sparse_meta_data();
 
-  /* ONNX file parsing */
+  /* TOG file parsing */
   _tog_path = onnx_path;
   model_proto.ParseFromZeroCopyStream(&zero_copy_input) && model_istream.eof();
 
@@ -744,7 +748,7 @@ TileGraphParser::TileGraphParser(std::string onnx_path, std::string attribute_pa
 
   /* Get meta data from graph */
   for (const auto& meta : model_proto.metadata_props()) {
-    spdlog::info("[TOGParser] Register Metadata \"{}\": \"{}\"", meta.key(), meta.value());
+    spdlog::trace("[TOGParser] Register Metadata \"{}\": \"{}\"", meta.key(), meta.value());
     _tog_meta[meta.key()] = meta.value();
   }
 
@@ -835,7 +839,7 @@ TileGraphParser::TileGraphParser(std::string onnx_path, std::string attribute_pa
   /* Iterate outer loop and initialize inner loop */
   for (auto iter=_tile_graph->begin(); iter!=_tile_graph->end(); ++iter) {
     std::shared_ptr<TileSubGraph> subgraph = std::make_shared<TileSubGraph>();
-    subgraph->set_core_id(getCoreIdFromJson(_attribute_json, subgraph->get_id()));
+    subgraph->set_core_id(getCoreIdFromConfig(_attribute_config, subgraph->get_id()));
     auto indices = iter.get_indices();
     for (auto loop : _loop_nodes.at(last_outer_idx)) {
       std::shared_ptr<TileLoopNode> outer_loop = std::static_pointer_cast<TileLoopNode>(loop);
@@ -894,10 +898,10 @@ void TileGraphParser::register_tile(std::shared_ptr<TileNode> tile_node) {
   }
 }
 
-std::vector<int> TileGraphParser::calc_tag(std::vector<int>& accum_tag, std::vector<int>& tag_idx, std::vector<int>& tag_stride) {
-  int key_offset = 0;
-  std::vector<int> tag_key;
-  for (int i=0; i<tag_idx.size(); i++)
+std::vector<int64_t> TileGraphParser::calc_tag(std::vector<int64_t>& accum_tag, std::vector<int64_t>& tag_idx, std::vector<int64_t>& tag_stride) {
+  int64_t key_offset = 0;
+  std::vector<int64_t> tag_key;
+  for (size_t i = 0; i < tag_idx.size(); i++)
     key_offset += tag_idx.at(i) * tag_stride.at(i);
   for (auto accum_dim : accum_tag)
     tag_key.push_back(accum_dim);
@@ -905,12 +909,12 @@ std::vector<int> TileGraphParser::calc_tag(std::vector<int>& accum_tag, std::vec
   return tag_key;
 }
 
-void TileGraphParser::register_memory_tag(std::string name, std::vector<int>& tag_key) {
+void TileGraphParser::register_memory_tag(std::string name, std::vector<int64_t>& tag_key) {
   assert(_tag_table.find(std::make_pair(name, tag_key))==_tag_table.end());
   _tag_table[std::make_pair(name, tag_key)] = true;
 }
 
-bool TileGraphParser::check_memory_tag(std::string name, std::vector<int>& tag_key) {
+bool TileGraphParser::check_memory_tag(std::string name, std::vector<int64_t>& tag_key) {
   return _tag_table.find(std::make_pair(name, tag_key))==_tag_table.end() ? false : true;
 }
 
@@ -938,11 +942,12 @@ const std::vector<uint32_t>& TileGraphParser::lookupNumaInfo(std::string key) {
   return _arg_numa_stride.at(key);
 }
 
-int TileGraphParser::getCoreIdFromJson(const json& attribute_json, int subgraph_id) {
-  if (attribute_json.contains("subgraph_map")) {
-    const auto& subgraph_map = attribute_json["subgraph_map"];
-    if (subgraph_map.contains(std::to_string(subgraph_id)) && subgraph_map[std::to_string(subgraph_id)].is_number_integer()) {
-        return subgraph_map[std::to_string(subgraph_id)];
+int TileGraphParser::getCoreIdFromConfig(const YAML::Node& attribute_config, int subgraph_id) {
+  std::string key = std::to_string(subgraph_id);
+  if (attribute_config["subgraph_map"]) {
+    const auto& subgraph_map = attribute_config["subgraph_map"];
+    if (subgraph_map[key]) {
+      return subgraph_map[key].as<int>();
     }
   }
   return -1;

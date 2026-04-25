@@ -1,8 +1,5 @@
-import math
 import copy
 import torch
-import torch._dynamo
-import torch.utils.cpp_extension
 
 def test_result(name, out, cpu_out, rtol=1e-4, atol=1e-4):
     if torch.allclose(out.cpu(), cpu_out, rtol=rtol, atol=atol):
@@ -71,13 +68,7 @@ def test_MHA(device, num_heads=12, embed_dim=768, input_seq=512):
     test_result("MHA Forward", res, cpu_res)
 
 if __name__ == "__main__":
-    import os
-    import sys
-    sys.path.append(os.environ.get('TORCHSIM_DIR', default='/workspace/PyTorchSim'))
-
-    from Scheduler.scheduler import PyTorchSimRunner
-    module = PyTorchSimRunner.setup_device()
-    device = module.custom_device()
+    device = torch.device("npu:0")
     test_MHA(device)
     # test_Attention(device, head=16, seq=512, d_k=64)
     # test_MHA(device, num_heads=12, embed_dim=768)

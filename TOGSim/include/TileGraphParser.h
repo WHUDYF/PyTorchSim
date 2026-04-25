@@ -2,18 +2,17 @@
 #include <fstream>
 #include <algorithm>
 #include <filesystem>
-#include <nlohmann/json.hpp>
+#include <yaml-cpp/yaml.h>
 #include <fmt/ranges.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include "TileGraph.h"
 #include "Instruction.h"
 #include "sstStonne.h"
 #include "IntervalTree.h"
+#include "Common.h"
 #include "onnx/defs/schema.h"
 #include "onnx/onnx-operators_pb.h"
 #include "onnx/onnx_pb.h"
-
-using json = nlohmann::json;
 
 enum class TileType{
   LOOP_INDEX_NODE,
@@ -34,8 +33,6 @@ enum class LoopType {
   ACCUMULATION_LOOP,
   INNER_LOOP
 };
-
-bool loadConfig(const std::string& config_path, json& config_json);
 
 class TileNode {
  public:
@@ -68,7 +65,7 @@ class TileNode {
 
 class TileGraphParser {
  public:
-  TileGraphParser(std::string onnx_path, std::string attribute_path, std::string config_path);
+  TileGraphParser(std::string onnx_path, std::string attribute_path, const YAML::Node& config_yaml);
   std::shared_ptr<TileNode> get_top_loop();
   std::unique_ptr<TileGraph>& get_tile_graph() { return _tile_graph; }
   addr_type lookup(std::string key);
@@ -80,12 +77,12 @@ class TileGraphParser {
   LoopType get_loop_type(std::string key) { return std::get<2>(_loop_size_map[key]); }
   const std::map<std::string, std::tuple<int, int, LoopType>> & get_loop_map() { return _loop_size_map; }
   const std::vector<uint32_t> &lookupNumaInfo(std::string key);
-  int getCoreIdFromJson(const json& attribute_json, int subgraph_id);
+  int getCoreIdFromConfig(const YAML::Node& attribute_config, int subgraph_id);
   std::string getMetaByName(std::string key) { return _tog_meta[key]; }
-  const json& get_attribute_file() { return _attribute_json; }
-  std::vector<int> calc_tag(std::vector<int>& accum_tag, std::vector<int>& tag_idx, std::vector<int>& tag_stride);
-  void register_memory_tag(std::string name, std::vector<int>& tag_key);
-  bool check_memory_tag(std::string name, std::vector<int>& tag_key);
+  const YAML::Node& get_attribute_file() { return _attribute_config; }
+  std::vector<int64_t> calc_tag(std::vector<int64_t>& accum_tag, std::vector<int64_t>& tag_idx, std::vector<int64_t>& tag_stride);
+  void register_memory_tag(std::string name, std::vector<int64_t>& tag_key);
+  bool check_memory_tag(std::string name, std::vector<int64_t>& tag_key);
   void clear_tag_table() { _tag_table.clear(); }
   std::string get_indirect_path() {
     namespace fs = std::filesystem;
@@ -121,12 +118,12 @@ class TileGraphParser {
   uint64_t get_dma_counter() { return dma_counter; }
   void inc_dma_counter() { dma_counter++; }
   bool is_sparse_tile(uint64_t idx) { return sparse_tile_set.find(idx) != sparse_tile_set.end(); }
-  int register_addr_name(const std::string& addr_name) {
+  int64_t register_addr_name(const std::string& addr_name) {
     if (_addr_name_map.find(addr_name) == _addr_name_map.end())
-      _addr_name_map[addr_name] = _addr_name_map.size();
+      _addr_name_map[addr_name] = static_cast<int64_t>(_addr_name_map.size());
     return _addr_name_map[addr_name];
   }
-  int get_addr_name_id(const std::string& addr_name) { return _addr_name_map[addr_name]; }
+  int64_t get_addr_name_id(const std::string& addr_name) { return _addr_name_map[addr_name]; }
 
  private:
   void register_tile(std::shared_ptr<TileNode> tile_node);
@@ -135,8 +132,8 @@ class TileGraphParser {
   void _tile_index_generate() {}
   int _loop_stack_pointer = 0;
 
-  json _attribute_json;
-  json _config_json;
+  YAML::Node _attribute_config; 
+  YAML::Node _config_yaml;
   std::string _tog_path;
   std::string _attribute_path;
   uint64_t indirect_counter = 0;
@@ -151,8 +148,8 @@ class TileGraphParser {
   std::vector<Interval<unsigned long long, int>> _cache_plan;
   std::map<std::string, std::tuple<int, int, LoopType>> _loop_size_map;
   std::map<std::string, std::string> _tog_meta;
-  std::map<std::pair<std::string, std::vector<int>>, uint32_t> _tag_table;
-  std::unordered_map<std::string, int> _addr_name_map;
+  std::map<std::pair<std::string, std::vector<int64_t>>, uint32_t> _tag_table;
+  std::unordered_map<std::string, int64_t> _addr_name_map;
 };
 
 class TileComputeNode : public TileNode {
@@ -174,11 +171,11 @@ class TileMemoryNode : public TileNode {
  public:
   TileMemoryNode(onnx::NodeProto& node);
   std::string get_base_addr_name() { return _base_addr_name; }
-  size_t get_precision() { return _element_size; }
+  size_t get_elem_bits() const { return _elem_bits; }
   std::vector<size_t> get_tile_size() { return _tile_size; }
   std::vector<int>& get_tile_stride() { return _tile_stride; }
   std::vector<std::string>& get_tag_idx_list() { return _tag_idx_list; }
-  std::vector<int>& get_tag_stride_list() { return _tag_stride_list; }
+  std::vector<int64_t>& get_tag_stride_list() { return _tag_stride_list; }
   std::vector<std::string>& get_loop_idx_list() { return _loop_idx_list; }
   std::vector<int>& get_loop_stride_list () { return _loop_stride_list; }
   bool is_async_node() { return _is_async; }
@@ -188,12 +185,12 @@ class TileMemoryNode : public TileNode {
  private:
   std::vector<size_t> _tile_size;
   std::vector<int> _tile_stride;
-  size_t _element_size;
+  size_t _elem_bits = 0;
   bool _is_async;
   bool _is_indirect;
   std::string _base_addr_name;
   std::vector<std::string> _tag_idx_list;
-  std::vector<int> _tag_stride_list;
+  std::vector<int64_t> _tag_stride_list;
   std::vector<std::string> _loop_idx_list;
   std::vector<int> _loop_stride_list;
 };
@@ -203,14 +200,14 @@ class TileMemoryWaitNode : public TileNode {
   TileMemoryWaitNode(onnx::NodeProto& node);
   std::string get_base_addr_name() { return _base_addr_name; }
   std::vector<std::string>& get_tag_idx_list() { return _tag_idx_list; }
-  std::vector<int>& get_tag_stride_list() { return _tag_stride_list; }
-  std::vector<int>& get_tag_divider_list() { return _tag_divider_list; }
+  std::vector<int64_t>& get_tag_stride_list() { return _tag_stride_list; }
+  std::vector<int64_t>& get_tag_divider_list() { return _tag_divider_list; }
   void print_node() override;
 
  private:
   std::vector<std::string> _tag_idx_list;
-  std::vector<int> _tag_stride_list;
-  std::vector<int> _tag_divider_list;
+  std::vector<int64_t> _tag_stride_list;
+  std::vector<int64_t> _tag_divider_list;
   std::string _base_addr_name;
 };
 

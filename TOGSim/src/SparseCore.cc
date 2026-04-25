@@ -1,4 +1,5 @@
 #include "SparseCore.h"
+#include "TraceLogTags.h"
 
 SparseCore::SparseCore(uint32_t id, SimulationConfig config) : Core(id, config) {
   /* Init stonne cores*/
@@ -239,7 +240,11 @@ void SparseCore::subCoreCycle(uint32_t subcore_id) {
         {
           auto acc_type = mem_access_type::GLOBAL_ACC_R;
           auto type = mf_type::READ_REQUEST;
-          spdlog::trace("[{}][StonneCore {}/{}][INST_ISSUED] {}", _core_cycle, _id, subcore_id,
+          spdlog::trace("[{}][StonneCore {}/{}][{}] {}",
+                        _core_cycle,
+                        _id,
+                        subcore_id,
+                        TraceLogTag::pad15(TraceLogTag::kInstructionIssued),
                         opcode_to_string(inst->get_opcode()));
           for (auto addr : inst->get_trace_address()) {
             addr = addr - (addr & _config.dram_req_size-1);
@@ -260,7 +265,11 @@ void SparseCore::subCoreCycle(uint32_t subcore_id) {
         {
           auto acc_type = mem_access_type::GLOBAL_ACC_W;
           auto type = mf_type::WRITE_REQUEST;
-          spdlog::trace("[{}][StonneCore {}/{}][INST_ISSUED] {}", _core_cycle, _id, subcore_id,
+          spdlog::trace("[{}][StonneCore {}/{}][{}] {}",
+                        _core_cycle,
+                        _id,
+                        subcore_id,
+                        TraceLogTag::pad15(TraceLogTag::kInstructionIssued),
                         opcode_to_string(inst->get_opcode()));
           for (auto addr : inst->get_trace_address()) {
             addr = addr - (addr & _config.dram_req_size-1);
@@ -285,8 +294,13 @@ void SparseCore::subCoreCycle(uint32_t subcore_id) {
             inst->finish_cycle = _core_cycle + inst->get_compute_cycle();
           else
             inst->finish_cycle = target_pipeline.back()->finish_cycle + inst->get_compute_cycle();
-          spdlog::trace("[{}][StonneCore {}/{}][INST_ISSUED] {}, finsh at {}", _core_cycle, _id, subcore_id,
-                          opcode_to_string(inst->get_opcode()), inst->finish_cycle);
+          spdlog::trace("[{}][StonneCore {}/{}][{}] {}, finish_at={}",
+                          _core_cycle,
+                          _id,
+                          subcore_id,
+                          TraceLogTag::pad15(TraceLogTag::kInstructionIssued),
+                          opcode_to_string(inst->get_opcode()),
+                          inst->finish_cycle);
           target_pipeline.push(inst);
           issued = true;
         }
@@ -397,7 +411,22 @@ std::shared_ptr<Tile> SparseCore::pop_finished_tile() {
   return result;
 }
 
-void SparseCore::finish_instruction(std::shared_ptr<Instruction>& inst) {
+void SparseCore::finish_instruction(std::shared_ptr<Instruction>& inst, InstFinishTraceTag tag) {
+  if (tag == InstFinishTraceTag::DmaRespComplete) {
+    if (!inst->finished) {
+      spdlog::error("[{}][StonneCore {}][Error] ALL_DRAM_RESPONSES_RECEIVED trace but inst not finished",
+                    _core_cycle,
+                    _id);
+      exit(EXIT_FAILURE);
+    }
+    spdlog::trace("[{}][StonneCore {}][{}][INST_ID={}] {}",
+                    _core_cycle,
+                    _id,
+                    TraceLogTag::pad15(TraceLogTag::kAllDramResponsesReceived),
+                    inst->get_global_inst_id(),
+                    opcode_to_string(inst->get_opcode()));
+    return;
+  }
   if (inst->finished) {
     spdlog::error("[{}][StonneCore {}][Error] {} inst already finished!!", _core_cycle, _id,
                   opcode_to_string(inst->get_opcode()));
@@ -405,12 +434,16 @@ void SparseCore::finish_instruction(std::shared_ptr<Instruction>& inst) {
   }
   inst->finish_instruction();
   static_cast<Tile*>(inst->get_owner())->inc_finished_inst();
+  const char* trace_tag = (tag == InstFinishTraceTag::DmaIssueComplete)
+                              ? TraceLogTag::kAsyncDmaAllRequestsIssued
+                              : TraceLogTag::kInstructionFinished;
+  const std::string tag15 = TraceLogTag::pad15(trace_tag);
   if (inst->get_opcode() == Opcode::COMP) {
-    spdlog::info("[{}][StonneCore {}][INST_FINISHED] {}",
-      _core_cycle, _id, opcode_to_string(inst->get_opcode()));
+    spdlog::info("[{}][StonneCore {}][{}] {}", _core_cycle, _id, tag15,
+                 opcode_to_string(inst->get_opcode()));
   } else if (inst->get_opcode() == Opcode::MOVIN || inst->get_opcode() == Opcode::MOVOUT) {
-    spdlog::info("[{}][StonneCore {}][INST_FINISHED] {}", _core_cycle, _id,
-      opcode_to_string(inst->get_opcode()));
+    spdlog::info("[{}][StonneCore {}][{}] {}", _core_cycle, _id, tag15,
+                 opcode_to_string(inst->get_opcode()));
   }
 }
 
