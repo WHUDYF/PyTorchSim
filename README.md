@@ -463,7 +463,7 @@ One-line meaning for each group (details in the YAML block above).
 - **`pytorchsim_timing_mode`**: **`1`** keeps the cycle-aware tile-graph path that feeds **TOGSim**; **`0`** turns that timing path off (functional-style runs; often paired with `pytorchsim_functional_mode` in tutorial configs).
 
 ## Tutorial
-Check out our [KSC 2025 tutorial](https://www.youtube.com/watch?v=6vcwKCPdoTw&list=PLYIb5dkr4isISXGhVf6gdePqBVb42j-mb&pp=gAQB) to learn:
+Check out our [ISPASS 2026 tutorial](https://www.youtube.com/playlist?list=PLYIb5dkr4isJ1ERKTKFoWdCKMUOaay2Nn) to learn:
 - PyTorchSim architecture, motivation, and design goals
 - The end-to-end PyTorch compilation pipeline (PyTorch code → FX → MLIR → LLVM → ISA)
 - TPU-style NPU architecture and memory hierarchy
@@ -471,8 +471,7 @@ Check out our [KSC 2025 tutorial](https://www.youtube.com/watch?v=6vcwKCPdoTw&li
 - Scheduling, mapping, optimization, and performance analysis tools
 - Extending PyTorchSim with custom NPU ISA instructions
 
-KSC 2025 tutorial recordings are only available in Korean. The tutorial materials are in English.
-
+For tutorial setup, please refer to the [JupyterHub setup guide](https://github.com/PSAL-POSTECH/PyTorchSim/blob/ispass2026/tutorial/jupyterhub/README.md).
 
 ## Future Works
 We plan to broaden **model coverage** (more workloads), support **dynamic-shape**, and extend **eager-mode** integration so a wider range of PyTorch programs can be simulated.
