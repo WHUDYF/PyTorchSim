@@ -272,9 +272,13 @@ def analyze_codesign(
     cycles_by_hw: dict[str, dict[str, int | float]],
     permutation_trials: int = 0,
     permutation_seed: int = 0,
+    gate1_dominance_threshold: float = 0.03,
 ) -> dict[str, Any]:
     return {
-        "champion_migration": compute_champion_migration(cycles_by_hw),
+        "champion_migration": compute_champion_migration(
+            cycles_by_hw,
+            dominance_threshold=gate1_dominance_threshold,
+        ),
         "oracle_gaps": compute_oracle_gaps(cycles_by_hw),
         "cost_matched_pair": compute_cost_matched_pair_upper_bound(cycles_by_hw),
         "interaction_analysis": compute_interaction_analysis(
@@ -291,6 +295,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--permutation-trials", type=int, default=0)
     parser.add_argument("--permutation-seed", type=int, default=0)
+    parser.add_argument("--gate1-dominance-threshold", type=float, default=0.03)
     return parser.parse_args(argv)
 
 
@@ -301,6 +306,7 @@ def main(argv: list[str] | None = None) -> int:
         cycles,
         permutation_trials=args.permutation_trials,
         permutation_seed=args.permutation_seed,
+        gate1_dominance_threshold=args.gate1_dominance_threshold,
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "champion_migration.json").write_text(

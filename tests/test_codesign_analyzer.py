@@ -43,6 +43,42 @@ def test_champion_migration_rejects_noise_level_swap():
     assert result["migrating_pair_count"] == 0
 
 
+def test_champion_migration_uses_custom_ten_percent_threshold():
+    mod = load_module()
+    five_percent = {
+        "HW-A": {"000": 100, "001": 105, "002": 130},
+        "HW-B": {"000": 105, "001": 100, "002": 130},
+    }
+    twelve_percent = {
+        "HW-B": {"000": 130, "001": 100, "002": 112},
+        "HW-C": {"000": 130, "001": 112, "002": 100},
+    }
+
+    below = mod.compute_champion_migration(five_percent, dominance_threshold=0.10)
+    above = mod.compute_champion_migration(twelve_percent, dominance_threshold=0.10)
+
+    assert below["dominance_threshold"] == pytest.approx(0.10)
+    assert below["pairs"][0]["swap_dominance"] == pytest.approx(0.05)
+    assert below["pairs"][0]["passed"] is False
+    assert below["gate1_passed"] is False
+    assert above["pairs"][0]["swap_dominance"] == pytest.approx(0.12)
+    assert above["pairs"][0]["passed"] is True
+    assert above["gate1_passed"] is True
+
+
+def test_analyze_codesign_forwards_custom_gate1_threshold():
+    mod = load_module()
+    cycles = {
+        "HW-A": {"000": 100, "001": 105},
+        "HW-B": {"000": 105, "001": 100},
+    }
+
+    result = mod.analyze_codesign(cycles, gate1_dominance_threshold=0.10)
+
+    assert result["champion_migration"]["dominance_threshold"] == pytest.approx(0.10)
+    assert result["champion_migration"]["gate1_passed"] is False
+
+
 def test_oracle_gap_uses_fit_all_hw_set_for_gate2a():
     mod = load_module()
     cycles = {
