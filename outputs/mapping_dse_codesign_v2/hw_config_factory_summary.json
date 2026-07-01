@@ -1,0 +1,20 @@
+{
+  "baseline_yaml": "configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml",
+  "baseline_yaml_sha256": "b6b5d309f356abb0d2e07483c765d0f4d73642cb86ca4f97e16bb6f33f573bcb",
+  "frozen_fields_verified": true,
+  "hw_config_set": "codesign_v2_2x2",
+  "hw_plausibility_rules": "outputs/mapping_dse_codesign_v2/hw_configs/hw_plausibility_rules.json",
+  "hw_yaml_content_sha256": {
+    "HW-A": "ce6b6d21c9891bccf2b8d532e380500e228c01fb6f553fc702f96d4ec0ab0eb2",
+    "HW-B": "6397e01f5070d349952308d27659645d42858ac5e6bacf6990d36d72762c9b8c",
+    "HW-C": "5fd9ef1baf1172fd7faee3f080b7c37790418672911998ca07172a1ab2f6229b",
+    "HW-D": "10cb177ab6f8607da5c7cbc796b40f14ae86d999ad3d6a953361c3f2f0c58d2b"
+  },
+  "hw_yaml_paths": {
+    "HW-A": "outputs/mapping_dse_codesign_v2/hw_configs/hw_A.yml",
+    "HW-B": "outputs/mapping_dse_codesign_v2/hw_configs/hw_B.yml",
+    "HW-C": "outputs/mapping_dse_codesign_v2/hw_configs/hw_C.yml",
+    "HW-D": "outputs/mapping_dse_codesign_v2/hw_configs/hw_D.yml"
+  },
+  "plausibility_rules_verified": true
+}

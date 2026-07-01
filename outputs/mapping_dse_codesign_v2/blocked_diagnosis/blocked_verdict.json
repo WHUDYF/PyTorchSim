@@ -1,0 +1,103 @@
+{
+  "artifact_paths": {
+    "canary_summary": "outputs/mapping_dse_codesign_v2/determinism_real_canary_retry/summary.json",
+    "eight_lane_probe_summary": "outputs/mapping_dse_codesign_v2/eight_lane_probe/summary.json",
+    "progress_spec": "docs/superpowers/specs/2026-07-01-npu-mapping-dse-codesign-v2-progress.md",
+    "retry_whitelist_probe_summary": "outputs/mapping_dse_codesign_v2/eight_lane_retry_probe/summary.json",
+    "synthetic_smoke_summary": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/full_run_summary.json"
+  },
+  "claim_bearing": false,
+  "data_label": "measured_diagnostic",
+  "determinism_smoke_test": {
+    "canaries": {
+      "HW-A_006": {
+        "cycle_delta": 0.08296699851608273,
+        "cycles": [
+          396118,
+          430617,
+          431845
+        ],
+        "deterministic_class": "non_deterministic",
+        "median_cycles": 430617.0
+      },
+      "HW-C_008": {
+        "cycle_delta": null,
+        "cycles": [],
+        "deterministic_class": "failed",
+        "error": "could not parse total_cycles from subprocess output",
+        "median_cycles": null
+      }
+    },
+    "deterministic_class": "blocked",
+    "failed_canaries": [
+      "HW-C_008"
+    ],
+    "max_cycle_delta": 0.08296699851608273
+  },
+  "eight_lane_probe": {
+    "HW-C/000": {
+      "child_result_path": "outputs/mapping_dse_codesign_v2/eight_lane_probe/HW-C_000_run/mappings/000/child_result.json",
+      "counters_rows": [],
+      "harness": {
+        "measured_count": 0,
+        "ok": false,
+        "reason": "no mapping produced measured TOG/counters"
+      },
+      "mapping_status": {
+        "message": "GPT-2 block child exited 2: ",
+        "status": "failed"
+      }
+    },
+    "HW-C/006": {
+      "child_result_path": "outputs/mapping_dse_codesign_v2/eight_lane_probe/HW-C_006_run/mappings/006/child_result.json",
+      "counters_rows": [],
+      "harness": {
+        "measured_count": 0,
+        "ok": false,
+        "reason": "no mapping produced measured TOG/counters"
+      },
+      "mapping_status": {
+        "message": "GPT-2 block child exited 2: ",
+        "status": "failed"
+      }
+    },
+    "HW-D/000": {
+      "child_result_path": "outputs/mapping_dse_codesign_v2/eight_lane_probe/HW-D_000_run/mappings/000/child_result.json",
+      "counters_rows": [],
+      "harness": {
+        "measured_count": 0,
+        "ok": false,
+        "reason": "no mapping produced measured TOG/counters"
+      },
+      "mapping_status": {
+        "message": "GPT-2 block child exited 2: ",
+        "status": "failed"
+      }
+    }
+  },
+  "end_state": "BLOCKED",
+  "reason": "v2 8-lane HW config cannot produce measured counters in GPT-2 block lowering path",
+  "retry_whitelist_probe": {
+    "HW-C/000_timeout1800": {
+      "counters_rows": [],
+      "harness": {
+        "measured_count": 0,
+        "ok": false,
+        "reason": "no mapping produced measured TOG/counters"
+      },
+      "mapping_status": {
+        "message": "GPT-2 block child exited 2: ",
+        "status": "failed"
+      }
+    }
+  },
+  "scope_limitations": [
+    "v2 Python harness, metadata, report, synthetic 4x10 path are implemented and tested.",
+    "真实 v2 canary 中 HW-C/008 failed，没有产生 total_cycles。",
+    "额外 HW-C/000 与 HW-C/006 探针同样 failed，说明 8-lane HW 轴整体不可测。",
+    "手动复现 mlir-opt 显示 Mismatched subtile K between A and B: A(128) != B(8)。",
+    "当前 plan 禁止修改 PyTorchSim / TOGSim / gem5 / ramulator2 源码，因此不能在本轮修 lowering pass。",
+    "白名单内 timeout=1800 重试 HW-C/000 仍 failed，没有 counters。",
+    "额外 HW-D/000 探针同样 failed，说明 8-lane 低带宽 corner 也不可测。"
+  ]
+}

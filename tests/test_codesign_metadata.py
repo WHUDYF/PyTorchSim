@@ -18,6 +18,8 @@ def load_module():
 
 def valid_metadata():
     return {
+        "spec_version": "v2",
+        "spec_path": "docs/superpowers/specs/2026-07-01-npu-mapping-dse-codesign-v2-design.md",
         "timestamp": "2026-07-01T00:00:00+00:00",
         "git_commit": "abc",
         "git_status": "clean",

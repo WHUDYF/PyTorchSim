@@ -78,6 +78,56 @@ def test_generate_codesign_hw_configs_writes_four_yaml_and_rules(tmp_path):
         assert hw_a[field] == hw_b[field] == hw_c[field] == hw_d[field]
 
 
+def test_generate_v2_codesign_hw_configs_changes_lanes_and_freezes_spad(tmp_path):
+    mod = load_module()
+    baseline = tmp_path / "baseline.yml"
+    output_dir = tmp_path / "hw_configs_v2"
+    write_baseline(baseline)
+
+    result = mod.generate_codesign_hw_configs(baseline, output_dir, hw_config_set="codesign_v2_2x2")
+
+    rules = yaml.safe_load((output_dir / "hw_plausibility_rules.json").read_text(encoding="utf-8"))
+    assert result["hw_config_set"] == "codesign_v2_2x2"
+    assert "vpu_spad_size_kb_per_lane" in rules["frozen_fields"]
+    assert "vpu_num_lanes" not in rules["frozen_fields"]
+
+    hw_a = yaml.safe_load((output_dir / "hw_A.yml").read_text(encoding="utf-8"))
+    hw_b = yaml.safe_load((output_dir / "hw_B.yml").read_text(encoding="utf-8"))
+    hw_c = yaml.safe_load((output_dir / "hw_C.yml").read_text(encoding="utf-8"))
+    hw_d = yaml.safe_load((output_dir / "hw_D.yml").read_text(encoding="utf-8"))
+
+    assert hw_a["vpu_num_lanes"] == 128
+    assert hw_b["vpu_num_lanes"] == 128
+    assert hw_c["vpu_num_lanes"] == 8
+    assert hw_d["vpu_num_lanes"] == 8
+    assert hw_a["vpu_spad_size_kb_per_lane"] == hw_b["vpu_spad_size_kb_per_lane"] == 128
+    assert hw_c["vpu_spad_size_kb_per_lane"] == hw_d["vpu_spad_size_kb_per_lane"] == 128
+
+
+def test_v2_patch_rejects_spad_change_and_internal_lane_value(tmp_path):
+    mod = load_module()
+    baseline = tmp_path / "baseline.yml"
+    write_baseline(baseline)
+    data = yaml.safe_load(baseline.read_text(encoding="utf-8"))
+    v2 = mod.get_hw_config_set("codesign_v2_2x2")
+
+    with pytest.raises(mod.FrozenFieldViolation):
+        mod.patch_hw_yaml(data, {"vpu_spad_size_kb_per_lane": 32}, config_set=v2)
+
+    with pytest.raises(mod.PlausibilityRuleViolation) as exc:
+        mod.patch_hw_yaml(
+            data,
+            {
+                "vpu_num_lanes": 16,
+                "dram_channels": 32,
+                "icnt_injection_ports_per_core": 16,
+            },
+            config_set=v2,
+        )
+
+    assert "vpu_num_lanes" in str(exc.value)
+
+
 def test_patch_hw_yaml_rejects_frozen_field_change(tmp_path):
     mod = load_module()
     baseline = tmp_path / "baseline.yml"

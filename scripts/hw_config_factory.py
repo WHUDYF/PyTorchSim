@@ -12,13 +12,19 @@ import yaml
 
 
 BASELINE_YAML = Path("configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml")
-PATCH_MATRIX: dict[str, dict[str, int]] = {
+V1_PATCH_MATRIX: dict[str, dict[str, int]] = {
     "HW-A": {"vpu_spad_size_kb_per_lane": 128, "dram_channels": 32, "icnt_injection_ports_per_core": 16},
     "HW-B": {"vpu_spad_size_kb_per_lane": 128, "dram_channels": 8, "icnt_injection_ports_per_core": 4},
     "HW-C": {"vpu_spad_size_kb_per_lane": 32, "dram_channels": 32, "icnt_injection_ports_per_core": 16},
     "HW-D": {"vpu_spad_size_kb_per_lane": 32, "dram_channels": 8, "icnt_injection_ports_per_core": 4},
 }
-FROZEN_FIELDS = [
+V2_PATCH_MATRIX: dict[str, dict[str, int]] = {
+    "HW-A": {"vpu_num_lanes": 128, "dram_channels": 32, "icnt_injection_ports_per_core": 16},
+    "HW-B": {"vpu_num_lanes": 128, "dram_channels": 8, "icnt_injection_ports_per_core": 4},
+    "HW-C": {"vpu_num_lanes": 8, "dram_channels": 32, "icnt_injection_ports_per_core": 16},
+    "HW-D": {"vpu_num_lanes": 8, "dram_channels": 8, "icnt_injection_ports_per_core": 4},
+}
+V1_FROZEN_FIELDS = [
     "core_freq_mhz",
     "dram_freq_mhz",
     "icnt_freq_mhz",
@@ -29,7 +35,45 @@ FROZEN_FIELDS = [
     "dram_type",
     "ramulator_config_path",
 ]
-PATCHABLE_FIELDS = {"vpu_spad_size_kb_per_lane", "dram_channels", "icnt_injection_ports_per_core"}
+V2_FROZEN_FIELDS = [
+    "core_freq_mhz",
+    "dram_freq_mhz",
+    "icnt_freq_mhz",
+    "num_cores",
+    "num_systolic_array_per_core",
+    "vpu_spad_size_kb_per_lane",
+    "vpu_vector_length_bits",
+    "dram_type",
+    "ramulator_config_path",
+]
+V1_PATCHABLE_FIELDS = {"vpu_spad_size_kb_per_lane", "dram_channels", "icnt_injection_ports_per_core"}
+V2_PATCHABLE_FIELDS = {"vpu_num_lanes", "dram_channels", "icnt_injection_ports_per_core"}
+PATCH_MATRIX = V1_PATCH_MATRIX
+FROZEN_FIELDS = V1_FROZEN_FIELDS
+
+
+@dataclass(frozen=True)
+class HWConfigSet:
+    name: str
+    patch_matrix: dict[str, dict[str, int]]
+    frozen_fields: list[str]
+    patchable_fields: set[str]
+
+
+CONFIG_SETS = {
+    "codesign_v1_2x2": HWConfigSet(
+        "codesign_v1_2x2",
+        V1_PATCH_MATRIX,
+        V1_FROZEN_FIELDS,
+        V1_PATCHABLE_FIELDS,
+    ),
+    "codesign_v2_2x2": HWConfigSet(
+        "codesign_v2_2x2",
+        V2_PATCH_MATRIX,
+        V2_FROZEN_FIELDS,
+        V2_PATCHABLE_FIELDS,
+    ),
+}
 
 
 class FrozenFieldViolation(ValueError):
@@ -47,6 +91,13 @@ class GeneratedConfig:
     sha256: str
 
 
+def get_hw_config_set(name: str) -> HWConfigSet:
+    try:
+        return CONFIG_SETS[name]
+    except KeyError as exc:
+        raise PlausibilityRuleViolation(f"unknown hw config set: {name}") from exc
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -62,16 +113,24 @@ def expected_injection_ports(dram_channels: int) -> int:
     return value
 
 
-def patch_hw_yaml(baseline: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
-    frozen_touched = sorted(field for field in patch if field in FROZEN_FIELDS)
+def patch_hw_yaml(
+    baseline: dict[str, Any],
+    patch: dict[str, Any],
+    *,
+    config_set: HWConfigSet | None = None,
+) -> dict[str, Any]:
+    active = config_set or get_hw_config_set("codesign_v1_2x2")
+    frozen_touched = sorted(field for field in patch if field in active.frozen_fields)
     if frozen_touched:
         raise FrozenFieldViolation("Patch touches frozen fields: " + ", ".join(frozen_touched))
-    unknown = sorted(field for field in patch if field not in PATCHABLE_FIELDS)
+    unknown = sorted(field for field in patch if field not in active.patchable_fields)
     if unknown:
         raise PlausibilityRuleViolation("Patch contains unsupported fields: " + ", ".join(unknown))
 
     result = dict(baseline)
     result.update(patch)
+    if "vpu_num_lanes" in patch and int(result["vpu_num_lanes"]) not in {8, 128}:
+        raise PlausibilityRuleViolation("vpu_num_lanes must be one of {8, 128}")
     dram_channels = int(result["dram_channels"])
     expected_ports = expected_injection_ports(dram_channels)
     actual_ports = int(result["icnt_injection_ports_per_core"])
@@ -99,18 +158,25 @@ def build_rules_payload(
     baseline_yaml: Path,
     generated: list[GeneratedConfig],
     baseline_sha256: str,
+    config_set: HWConfigSet | None = None,
 ) -> dict[str, Any]:
+    active = config_set or get_hw_config_set("codesign_v1_2x2")
     return {
         "baseline_yaml": str(baseline_yaml),
         "baseline_yaml_sha256": baseline_sha256,
-        "patch_matrix": PATCH_MATRIX,
+        "hw_config_set": active.name,
+        "patch_matrix": active.patch_matrix,
         "plausibility_rules": [
             "icnt_injection_ports_per_core = clip(dram_channels / 2, 4, 32) rounded to nearest even",
-            "vpu_spad_size_kb_per_lane independent of fixed 128x128 systolic array size",
+            (
+                "vpu_spad_size_kb_per_lane independent of fixed 128x128 systolic array size"
+                if active.name == "codesign_v1_2x2"
+                else "vpu_num_lanes in {8, 128}; vpu_spad_size_kb_per_lane fixed at baseline value"
+            ),
             "num_cores fixed at baseline value",
             "dram_type and ramulator_config_path fixed at baseline value",
         ],
-        "frozen_fields": FROZEN_FIELDS,
+        "frozen_fields": active.frozen_fields,
         "frozen_fields_reason": (
             "These fields are held identical across HW-A/B/C/D so cycle differences are not "
             "explained by clock frequency or unrelated timing-model changes."
@@ -126,16 +192,19 @@ def build_rules_payload(
 def generate_codesign_hw_configs(
     baseline_yaml: Path | str = BASELINE_YAML,
     output_dir: Path | str = Path("outputs/mapping_dse_codesign/hw_configs"),
+    *,
+    hw_config_set: str = "codesign_v1_2x2",
 ) -> dict[str, Any]:
+    active = get_hw_config_set(hw_config_set)
     baseline_path = Path(baseline_yaml)
     out_dir = Path(output_dir)
     baseline = load_yaml_mapping(baseline_path)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     generated: list[GeneratedConfig] = []
-    for hw_id, patch in PATCH_MATRIX.items():
-        patched = patch_hw_yaml(baseline, patch)
-        for field in FROZEN_FIELDS:
+    for hw_id, patch in active.patch_matrix.items():
+        patched = patch_hw_yaml(baseline, patch, config_set=active)
+        for field in active.frozen_fields:
             if patched.get(field) != baseline.get(field):
                 raise FrozenFieldViolation(f"Generated {hw_id} changed frozen field {field}")
         path = out_dir / hw_filename(hw_id)
@@ -143,13 +212,14 @@ def generate_codesign_hw_configs(
         generated.append(GeneratedConfig(hw_id, path, sha256_file(path)))
 
     baseline_sha256 = sha256_file(baseline_path)
-    rules = build_rules_payload(baseline_path, generated, baseline_sha256)
+    rules = build_rules_payload(baseline_path, generated, baseline_sha256, active)
     rules_path = out_dir / "hw_plausibility_rules.json"
     rules_path.write_text(json.dumps(rules, indent=2, sort_keys=True), encoding="utf-8")
 
     return {
         "baseline_yaml": str(baseline_path),
         "baseline_yaml_sha256": baseline_sha256,
+        "hw_config_set": active.name,
         "hw_yaml_paths": {item.hw_id: str(item.path) for item in generated},
         "hw_yaml_content_sha256": {item.hw_id: item.sha256 for item in generated},
         "hw_plausibility_rules": str(rules_path),
@@ -163,12 +233,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--baseline-yaml", type=Path, default=BASELINE_YAML)
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/mapping_dse_codesign/hw_configs"))
     parser.add_argument("--summary-json", type=Path)
+    parser.add_argument("--hw-config-set", choices=sorted(CONFIG_SETS), default="codesign_v2_2x2")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    result = generate_codesign_hw_configs(args.baseline_yaml, args.output_dir)
+    result = generate_codesign_hw_configs(args.baseline_yaml, args.output_dir, hw_config_set=args.hw_config_set)
     if args.summary_json:
         args.summary_json.parent.mkdir(parents=True, exist_ok=True)
         args.summary_json.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")

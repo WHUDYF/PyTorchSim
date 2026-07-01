@@ -16,6 +16,7 @@ from typing import Any, Callable
 TERMINAL_STATES = {"measured", "unavailable", "retry_exhausted"}
 INTERMEDIATE_STATES = {"needs_togsim", "runtime_failed"}
 ALLOWED_RETRY_DIFF_KEYS = {"timeout_sec", "env"}
+HW_CONFIG_SETS = ("codesign_v1_2x2", "codesign_v2_2x2")
 
 
 class TerminalStateViolation(ValueError):
@@ -159,7 +160,8 @@ def default_runner(output_root: Path, base_timeout_sec: int, external_mappings_d
         stdout_path.write_text(stdout, encoding="utf-8")
         stderr_path.write_text(stderr, encoding="utf-8")
         cmdline_path.write_text(json.dumps(command, indent=2), encoding="utf-8")
-        status = "measured" if proc.returncode == 0 else "runtime_failed"
+        total_cycles = extract_total_cycles(cell_output, cell["mapping_id"], stdout + "\n" + stderr)
+        status = "measured" if proc.returncode == 0 and total_cycles is not None else "runtime_failed"
         return RunAttempt(
             status,
             int(proc.returncode or 0),
@@ -172,7 +174,7 @@ def default_runner(output_root: Path, base_timeout_sec: int, external_mappings_d
             proc.pid,
             start_time,
             end_time,
-            extract_total_cycles(cell_output, cell["mapping_id"], stdout + "\n" + stderr),
+            total_cycles,
         )
 
     return run
@@ -304,6 +306,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--fit-availability-precheck", type=Path)
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/mapping_dse_codesign/gpt2_block_prefill_s128_run1"))
     parser.add_argument("--timeout-sec", type=int, default=900)
+    parser.add_argument("--hw-config-set", choices=HW_CONFIG_SETS, default="codesign_v2_2x2")
     return parser.parse_args(argv)
 
 

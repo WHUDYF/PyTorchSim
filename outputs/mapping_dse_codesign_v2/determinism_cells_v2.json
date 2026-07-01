@@ -1,0 +1,22 @@
+[
+  {
+    "hw_id": "HW-A",
+    "mapping_id": "006",
+    "hw_config": "outputs/mapping_dse_codesign_v2/hw_configs/hw_A.yml",
+    "tile": {
+      "TILE_M": 128,
+      "TILE_N": 64,
+      "TILE_K": 64
+    }
+  },
+  {
+    "hw_id": "HW-C",
+    "mapping_id": "008",
+    "hw_config": "outputs/mapping_dse_codesign_v2/hw_configs/hw_C.yml",
+    "tile": {
+      "TILE_M": 16,
+      "TILE_N": 16,
+      "TILE_K": 16
+    }
+  }
+]

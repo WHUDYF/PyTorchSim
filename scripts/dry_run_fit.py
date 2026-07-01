@@ -11,6 +11,14 @@ import yaml
 
 DTYPE_BYTES_DEFAULT = 4
 SAFETY_FACTOR_DEFAULT = 0.9
+V2_MAPPING_TILES = {
+    "006": {"TILE_M": 128, "TILE_N": 64, "TILE_K": 64},
+    "009": {"TILE_M": 256, "TILE_N": 256, "TILE_K": 128},
+}
+V2_HW_CONFIGS = {
+    "HW-A": {"vpu_spad_size_kb_per_lane": 128, "vpu_num_lanes": 128},
+    "HW-C": {"vpu_spad_size_kb_per_lane": 128, "vpu_num_lanes": 8},
+}
 
 
 def working_set_bytes(tile: dict[str, Any], dtype_bytes: int = DTYPE_BYTES_DEFAULT) -> int:
@@ -44,6 +52,25 @@ def fit_classifier(
         "safety_factor": safety_factor,
         "dtype_bytes": dtype_bytes,
     }
+
+
+def default_calibration_cases_v2() -> list[dict[str, Any]]:
+    cases = []
+    for hw_id, mapping_id in [("HW-A", "006"), ("HW-C", "009")]:
+        fit = fit_classifier(V2_MAPPING_TILES[mapping_id], V2_HW_CONFIGS[hw_id])
+        cases.append(
+            {
+                "case_id": f"{hw_id}/{mapping_id}",
+                "hw_id": hw_id,
+                "mapping_id": mapping_id,
+                "tile": V2_MAPPING_TILES[mapping_id],
+                "predicted_fit": fit["predicted_fit"],
+                "working_set_bytes": fit["working_set_bytes"],
+                "spad_budget_bytes": fit["spad_budget_bytes"],
+                "budget_over_bytes": fit["budget_over_bytes"],
+            }
+        )
+    return cases
 
 
 def evaluate_calibration(cases: list[dict[str, Any]]) -> dict[str, Any]:

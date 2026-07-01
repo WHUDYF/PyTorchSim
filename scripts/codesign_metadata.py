@@ -12,6 +12,8 @@ from typing import Any
 
 
 REQUIRED_METADATA_FIELDS = [
+    "spec_version",
+    "spec_path",
     "timestamp",
     "git_commit",
     "git_status",
@@ -128,6 +130,7 @@ def build_metadata_manifest(
     env: dict[str, str] | None = None,
     versions: dict[str, str] | None = None,
     timestamp: str | None = None,
+    extra_fields: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     per_cell = [dict(row) for row in sweep_summary.get("fit_availability", {}).get("cells", [])]
     baseline_yaml = Path(hw_summary.get("baseline_yaml", ""))
@@ -135,6 +138,8 @@ def build_metadata_manifest(
     if not baseline_sha and baseline_yaml.exists():
         baseline_sha = sha256_file(baseline_yaml)
     manifest = {
+        "spec_version": str(cli_args.get("spec_version", "v1")),
+        "spec_path": str(cli_args.get("spec_path", "")),
         "timestamp": timestamp or datetime.now(timezone.utc).isoformat(),
         "git_commit": git_commit(repo_root),
         "git_status": git_status(repo_root),
@@ -153,6 +158,8 @@ def build_metadata_manifest(
         "determinism_smoke_test": determinism_smoke_test,
         "artifact_paths": artifact_paths,
     }
+    if extra_fields:
+        manifest.update(extra_fields)
     lint_metadata(manifest)
     return manifest
 

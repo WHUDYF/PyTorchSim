@@ -59,9 +59,9 @@ def _cycles_from_rows(rows: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
 
 
 def _assert_full_cross_product(hw_summary: dict[str, Any], mappings: list[dict[str, Any]], cells: list[dict[str, Any]]) -> None:
-    if len(hw_summary.get("hw_yaml_paths", {})) != 4 or len(mappings) != 8 or len(cells) != 32:
+    if len(hw_summary.get("hw_yaml_paths", {})) != 4 or len(mappings) not in {8, 10} or len(cells) != 4 * len(mappings):
         raise FullRunContractError(
-            f"expected 32 cells from 4 HW configs x 8 mappings, got {len(cells)}"
+            f"expected cells from 4 HW configs x 8 or 10 mappings, got {len(cells)}"
         )
 
 
@@ -148,6 +148,66 @@ def _merge_repeat_summaries(repeat_summaries: list[dict[str, Any]]) -> tuple[dic
     return heatmap, stats
 
 
+def _median_from_stats(stats: dict[str, Any]) -> float:
+    if "median_cycles" in stats:
+        return float(stats["median_cycles"])
+    cycles = stats.get("cycles", [])
+    if cycles:
+        return _median([int(value) for value in cycles])
+    raise FullRunContractError("cycle stats row missing median_cycles and cycles")
+
+
+def compare_shared_cells_with_baseline_run(
+    baseline_cycle_stats: dict[str, dict[str, Any]],
+    current_cycle_stats: dict[str, dict[str, Any]],
+    *,
+    max_cycle_delta: float,
+) -> dict[str, Any]:
+    shared: dict[str, dict[str, Any]] = {}
+    warning_cells: list[str] = []
+    critical_cells: list[str] = []
+    for hw_id in ["HW-A", "HW-B"]:
+        for idx in range(8):
+            mapping_id = f"{idx:03d}"
+            if hw_id not in baseline_cycle_stats or mapping_id not in baseline_cycle_stats[hw_id]:
+                continue
+            if hw_id not in current_cycle_stats or mapping_id not in current_cycle_stats[hw_id]:
+                continue
+            v1_median = _median_from_stats(baseline_cycle_stats[hw_id][mapping_id])
+            v2_median = _median_from_stats(current_cycle_stats[hw_id][mapping_id])
+            denom = min(v1_median, v2_median)
+            cycle_delta = 0.0 if denom == 0 else abs(v2_median - v1_median) / denom
+            cell_id = f"{hw_id}/{mapping_id}"
+            shared[cell_id] = {
+                "v1_median_cycles": v1_median,
+                "v2_median_cycles": v2_median,
+                "cycle_delta": cycle_delta,
+                "passed": cycle_delta <= max_cycle_delta,
+            }
+            if cycle_delta > max_cycle_delta:
+                warning_cells.append(cell_id)
+            if cycle_delta > 0.20:
+                critical_cells.append(cell_id)
+    status = "PASS" if shared and not warning_cells else "FAIL" if shared else "v1_baseline_missing"
+    return {
+        "cross_check_status": status,
+        "max_allowed_delta": max_cycle_delta,
+        "v1_v2_cycle_delta_per_shared_cell": shared,
+        "warning_cells": warning_cells,
+        "critical_cells": critical_cells,
+        "force_partial": bool(critical_cells),
+    }
+
+
+def load_baseline_cycle_stats(baseline_run_dir: Path | None) -> dict[str, dict[str, Any]] | None:
+    if not baseline_run_dir:
+        return None
+    path = baseline_run_dir / "heatmap_cycle_stats.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def run_full_codesign(
     *,
     output_dir: Path,
@@ -161,6 +221,9 @@ def run_full_codesign(
     permutation_trials: int = 1000,
     permutation_seed: int = 0,
     resume: bool = True,
+    spec_version: str = "v1",
+    spec_path: str = "",
+    baseline_run_dir: Path | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     cells = sweep.build_sweep_cells(hw_summary["hw_yaml_paths"], mappings)
@@ -219,6 +282,25 @@ def run_full_codesign(
         permutation_seed=permutation_seed,
     )
     analysis["state_counts"] = sweep_summary["state_counts"]
+    cross_check = None
+    if spec_version == "v2":
+        baseline_stats = load_baseline_cycle_stats(baseline_run_dir)
+        if baseline_stats is None:
+            cross_check = {
+                "cross_check_status": "v1_baseline_missing",
+                "max_allowed_delta": determinism_smoke_test.get("max_cycle_delta"),
+                "v1_v2_cycle_delta_per_shared_cell": {},
+                "warning_cells": [],
+                "critical_cells": [],
+                "force_partial": False,
+            }
+        else:
+            cross_check = compare_shared_cells_with_baseline_run(
+                baseline_stats,
+                cycle_stats,
+                max_cycle_delta=float(determinism_smoke_test.get("max_cycle_delta", 0.0) or 0.0),
+            )
+        analysis["v1_v2_cross_check"] = cross_check
     analysis_dir = output_dir / "analysis"
     _write_analysis(analysis_dir, analysis)
 
@@ -233,7 +315,7 @@ def run_full_codesign(
 
     manifest = metadata_mod.build_metadata_manifest(
         repo_root=repo_root,
-        cli_args={"full_codesign_run": True},
+        cli_args={"full_codesign_run": True, "spec_version": spec_version, "spec_path": spec_path},
         hw_summary=hw_summary,
         sweep_summary=sweep_summary,
         determinism_smoke_test=determinism_smoke_test,
@@ -247,6 +329,20 @@ def run_full_codesign(
             "report": str(report_path),
         },
         binary_paths=binary_paths,
+        extra_fields=(
+            {
+                "v1_run_tag_for_cross_check": "gpt2_block_prefill_s128_run1",
+                "hw_axis_axis1": "vpu_num_lanes",
+                "hw_axis_axis2": "mem_subsystem_scale",
+                "v1_v2_shared_cells": [f"{hw}/{idx:03d}" for hw in ["HW-A", "HW-B"] for idx in range(8)],
+                "v1_v2_cross_check": cross_check,
+                "v1_v2_cycle_delta_per_shared_cell": (cross_check or {}).get(
+                    "v1_v2_cycle_delta_per_shared_cell", {}
+                ),
+            }
+            if spec_version == "v2"
+            else None
+        ),
     )
     metadata_path = output_dir / "00_metadata.json"
     _write_json(metadata_path, manifest)
@@ -282,6 +378,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--togsim-binary", type=Path, default=Path("TOGSim/build/togsim"))
     parser.add_argument("--permutation-trials", type=int, default=1000)
     parser.add_argument("--permutation-seed", type=int, default=0)
+    parser.add_argument("--spec-version", choices=["v1", "v2"], default="v1")
+    parser.add_argument("--spec-path", default="")
+    parser.add_argument("--baseline-run-dir", type=Path, default=Path("outputs/mapping_dse_codesign/gpt2_block_prefill_s128_run1"))
     return parser.parse_args(argv)
 
 
@@ -305,6 +404,9 @@ def main(argv: list[str] | None = None) -> int:
         repo_root=args.repo_root,
         permutation_trials=args.permutation_trials,
         permutation_seed=args.permutation_seed,
+        spec_version=args.spec_version,
+        spec_path=args.spec_path,
+        baseline_run_dir=args.baseline_run_dir,
     )
     return 0
 

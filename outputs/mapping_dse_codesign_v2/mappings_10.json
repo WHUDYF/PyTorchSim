@@ -1,0 +1,62 @@
+[
+  {
+    "mapping_id": "000",
+    "TILE_M": 32,
+    "TILE_N": 64,
+    "TILE_K": 32
+  },
+  {
+    "mapping_id": "001",
+    "TILE_M": 64,
+    "TILE_N": 64,
+    "TILE_K": 32
+  },
+  {
+    "mapping_id": "002",
+    "TILE_M": 64,
+    "TILE_N": 128,
+    "TILE_K": 32
+  },
+  {
+    "mapping_id": "003",
+    "TILE_M": 128,
+    "TILE_N": 64,
+    "TILE_K": 32
+  },
+  {
+    "mapping_id": "004",
+    "TILE_M": 128,
+    "TILE_N": 128,
+    "TILE_K": 32
+  },
+  {
+    "mapping_id": "005",
+    "TILE_M": 64,
+    "TILE_N": 64,
+    "TILE_K": 64
+  },
+  {
+    "mapping_id": "006",
+    "TILE_M": 128,
+    "TILE_N": 64,
+    "TILE_K": 64
+  },
+  {
+    "mapping_id": "007",
+    "TILE_M": 64,
+    "TILE_N": 128,
+    "TILE_K": 64
+  },
+  {
+    "mapping_id": "008",
+    "TILE_M": 16,
+    "TILE_N": 16,
+    "TILE_K": 16
+  },
+  {
+    "mapping_id": "009",
+    "TILE_M": 256,
+    "TILE_N": 256,
+    "TILE_K": 128
+  }
+]

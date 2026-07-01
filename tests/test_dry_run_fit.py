@@ -30,6 +30,28 @@ def test_fit_classifier_uses_total_spad_with_safety_factor():
     assert mod.fit_classifier({"TILE_M": 16, "TILE_N": 16, "TILE_K": 16}, hw)["predicted_fit"] is False
 
 
+def test_v2_large_tile_is_boundary_fit_on_eight_lane_hw():
+    mod = load_module()
+    tile = {"TILE_M": 256, "TILE_N": 256, "TILE_K": 128}
+    hw = {"vpu_spad_size_kb_per_lane": 128, "vpu_num_lanes": 8}
+
+    result = mod.fit_classifier(tile, hw)
+
+    assert result["working_set_bytes"] == 524288
+    assert result["spad_budget_bytes"] == 943718
+    assert result["predicted_fit"] is True
+    assert result["budget_over_bytes"] == 0
+
+
+def test_default_v2_calibration_cases_use_hw_a_006_and_hw_c_009():
+    mod = load_module()
+
+    cases = mod.default_calibration_cases_v2()
+
+    assert [case["case_id"] for case in cases] == ["HW-A/006", "HW-C/009"]
+    assert [case["predicted_fit"] for case in cases] == [True, True]
+
+
 def test_calibration_passes_when_predicted_xor_actual_is_zero():
     mod = load_module()
     cases = [

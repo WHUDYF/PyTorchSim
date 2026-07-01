@@ -1,0 +1,26 @@
+{
+  "canaries": {
+    "HW-A_006": {
+      "cycle_delta": 0.08296699851608273,
+      "cycles": [
+        396118,
+        430617,
+        431845
+      ],
+      "deterministic_class": "non_deterministic",
+      "median_cycles": 430617.0
+    },
+    "HW-C_008": {
+      "cycle_delta": null,
+      "cycles": [],
+      "deterministic_class": "failed",
+      "error": "could not parse total_cycles from subprocess output",
+      "median_cycles": null
+    }
+  },
+  "deterministic_class": "blocked",
+  "failed_canaries": [
+    "HW-C_008"
+  ],
+  "max_cycle_delta": 0.08296699851608273
+}

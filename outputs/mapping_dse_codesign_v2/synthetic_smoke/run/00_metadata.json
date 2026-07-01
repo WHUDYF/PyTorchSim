@@ -1,0 +1,1074 @@
+{
+  "artifact_paths": {
+    "fit_availability": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/fit_availability.json",
+    "heatmap_cycle_stats": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/heatmap_cycle_stats.json",
+    "heatmap_cycles": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/heatmap_cycles.json",
+    "report": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/report/report.md",
+    "retry_ledger": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/retry_ledger.json",
+    "sweep_summary": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/sweep_summary.json",
+    "verdict": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/report/verdict.json"
+  },
+  "baseline_yaml_sha256": "b6b5d309f356abb0d2e07483c765d0f4d73642cb86ca4f97e16bb6f33f573bcb",
+  "cli_args": {
+    "full_codesign_run": true,
+    "spec_path": "docs/superpowers/specs/2026-07-01-npu-mapping-dse-codesign-v2-design.md",
+    "spec_version": "v2"
+  },
+  "determinism_smoke_test": {
+    "deterministic_class": "deterministic",
+    "max_cycle_delta": 0.02
+  },
+  "env_vars_snapshot": {
+    "LD_LIBRARY_PATH": "/home/dyf/opt/lib:/home/dyf/opt/protobuf-3.21.12/lib64:/home/dyf/opt/protobuf-3.21.12/lib:/usr/local/cuda-12.8/lib64",
+    "PATH": "/home/dyf/.nvm/versions/node/v18.20.8/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/dyf/.codex/tmp/arg0/codex-arg0Z4qanf:/home/dyf/.nvm/versions/node/v18.20.8/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/codex-path:/home/dyf/.venv/bin:/home/dyf/.venv/bin:/home/dyf/.vscode-server/data/User/globalStorage/github.copilot-chat/debugCommand:/home/dyf/.vscode-server/data/User/globalStorage/github.copilot-chat/copilotCli:/home/dyf/.vscode-server/cli/servers/Stable-6928394f91b684055b873eecb8bc281365131f1c/server/bin/remote-cli:/home/dyf/opt/protobuf-3.21.12/bin:/usr/local/cuda-12.8/bin:/home/dyf/.nvm/versions/node/v18.20.8/bin:/home/dyf/.local/bin:/home/dyf/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin",
+    "PYTHONPATH": ""
+  },
+  "gem5_binary_sha256": "17790c8e59934810b492a35e940423821e6dc1d4428b5180b6bfaf6ba64415ed",
+  "git_commit": "92623de985b175817be1162e6528768aaaf15ecf",
+  "git_status": " M PyTorchSimDevice/csrc/runtime/OpenRegHooks.h\n M PyTorchSimDevice/csrc/runtime/OpenRegHostAllocator.cpp\n M PyTorchSimDevice/csrc/runtime/OpenRegHostAllocator.h\n M PyTorchSimDevice/setup.py\n M PyTorchSimFrontend/mlir/mlir_caller_codegen.py\n M PyTorchSimFrontend/mlir/mlir_codegen_backend.py\n M PyTorchSimFrontend/mlir/mlir_common.py\n M PyTorchSimFrontend/mlir/mlir_scheduling.py\n M PyTorchSimFrontend/mlir/mlir_template.py\n M scripts/codesign_full_run.py\n M scripts/codesign_metadata.py\n M scripts/codesign_report.py\n M scripts/dry_run_fit.py\n M scripts/hw_config_factory.py\n M scripts/mapping_dse_codesign_sweep.py\n M tests/test_codesign_full_run.py\n M tests/test_codesign_metadata.py\n M tests/test_codesign_sweep_integration.py\n M tests/test_dry_run_fit.py\n M tests/test_hw_config_factory.py\n?? .understand-anything/\n?? 61b39e5e2528ca1b4737029e79b5133.png\n?? PyTorchSimDevice/build/\n?? PyTorchSimDevice/readme_cn.md\n?? PyTorchSimDevice/third_party/openreg/readme_cn.md\n?? PyTorchSimDevice/torch_openreg.egg-info/\n?? PyTorchSimDevice/torch_openreg/_C.cpython-311-x86_64-linux-gnu.so\n?? PyTorchSimDevice/torch_openreg/lib/\n?? docs/aten-fx-inductor-pytorchsim-spec.md\n?? docs/aten-operator-taxonomy-spec.md\n?? docs/inference-aten-boundary-spec.md\n?? docs/knowledge/\n?? docs/lowered-llvm-mlir-stage5-spec.md\n?? docs/mlir-lower-to-raw-tog-spec.md\n?? docs/onnx-tog-mlir-correspondence-spec.md\n?? docs/papers/readme_cn.md\n?? docs/pipeline-probe-experiment-spec.md\n?? docs/pipeline-probe-stage-spec.md\n?? docs/pytorchsim-code-reading-spec.md\n?? docs/pytorchsim-device-explanation-spec.md\n?? docs/pytorchsim-frontend-explanation-spec.md\n?? docs/pytorchsim-operator-fusion-spec.md\n?? docs/raw-tog-to-mlir-mapping-spec.md\n?? docs/superpowers/plans/2026-06-24-pipeline-probe.md\n?? docs/superpowers/plans/2026-07-01-npu-mapping-dse-codesign-v2-plan.md\n?? docs/superpowers/specs/2026-06-24-pipeline-probe-design.md\n?? docs/superpowers/specs/2026-06-30-npu-mapping-dse-minimal-loop-design.md\n?? docs/superpowers/specs/2026-07-01-npu-mapping-dse-codesign-v2-design.md\n?? docs/superpowers/specs/2026-07-01-npu-mapping-dse-minimal-loop-result.md\n?? docs/togsim-code-reading-spec.md\n?? docs/togsim-dma-module-spec.md\n?? docs/togsim-start-from-mlir-onnx-spec.md\n?? findings.md\n?? image.png\n?? progress.md\n?? readme_cn.md\n?? scripts/determinism_smoke.py\n?? scripts/mapping_dse_minimal.py\n?? scripts/pipeline_probe.py\n?? task_plan.md\n?? tests/test_determinism_smoke.py\n?? tests/test_mapping_dse_minimal.py\n?? tests/test_mlir_template_symbol_mapping.py\n?? tests/test_pipeline_probe.py\n?? torch_compile_debug/\n?? validation/gemm_candidates/\n",
+  "hw_axis_axis1": "vpu_num_lanes",
+  "hw_axis_axis2": "mem_subsystem_scale",
+  "hw_yaml_content_sha256": {
+    "HW-A": "ce6b6d21c9891bccf2b8d532e380500e228c01fb6f553fc702f96d4ec0ab0eb2",
+    "HW-B": "6397e01f5070d349952308d27659645d42858ac5e6bacf6990d36d72762c9b8c",
+    "HW-C": "5fd9ef1baf1172fd7faee3f080b7c37790418672911998ca07172a1ab2f6229b",
+    "HW-D": "10cb177ab6f8607da5c7cbc796b40f14ae86d999ad3d6a953361c3f2f0c58d2b"
+  },
+  "hw_yaml_diff_from_baseline": {},
+  "patch_matrix": {},
+  "per_cell": [
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-A",
+      "mapping_id": "000",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/000",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/000/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/000/stdout.txt",
+      "subprocess_pid": 2000,
+      "total_cycles": 1000
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-A",
+      "mapping_id": "001",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/001",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/001/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/001/stdout.txt",
+      "subprocess_pid": 2001,
+      "total_cycles": 1010
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-A",
+      "mapping_id": "002",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/002",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/002/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/002/stdout.txt",
+      "subprocess_pid": 2002,
+      "total_cycles": 1020
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-A",
+      "mapping_id": "003",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/003",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/003/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/003/stdout.txt",
+      "subprocess_pid": 2003,
+      "total_cycles": 1030
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-A",
+      "mapping_id": "004",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/004",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/004/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/004/stdout.txt",
+      "subprocess_pid": 2004,
+      "total_cycles": 1040
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-A",
+      "mapping_id": "005",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/005",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/005/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/005/stdout.txt",
+      "subprocess_pid": 2005,
+      "total_cycles": 1050
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-A",
+      "mapping_id": "006",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/006",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/006/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/006/stdout.txt",
+      "subprocess_pid": 2006,
+      "total_cycles": 1060
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-A",
+      "mapping_id": "007",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/007",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/007/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/007/stdout.txt",
+      "subprocess_pid": 2007,
+      "total_cycles": 1070
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-A",
+      "mapping_id": "008",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/008",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/008/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/008/stdout.txt",
+      "subprocess_pid": 2008,
+      "total_cycles": 1080
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-A",
+      "mapping_id": "009",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/009",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/009/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-A/009/stdout.txt",
+      "subprocess_pid": 2009,
+      "total_cycles": 1090
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-B",
+      "mapping_id": "000",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/000",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/000/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/000/stdout.txt",
+      "subprocess_pid": 2100,
+      "total_cycles": 1100
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-B",
+      "mapping_id": "001",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/001",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/001/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/001/stdout.txt",
+      "subprocess_pid": 2101,
+      "total_cycles": 1110
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-B",
+      "mapping_id": "002",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/002",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/002/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/002/stdout.txt",
+      "subprocess_pid": 2102,
+      "total_cycles": 1120
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-B",
+      "mapping_id": "003",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/003",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/003/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/003/stdout.txt",
+      "subprocess_pid": 2103,
+      "total_cycles": 1130
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-B",
+      "mapping_id": "004",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/004",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/004/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/004/stdout.txt",
+      "subprocess_pid": 2104,
+      "total_cycles": 1140
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-B",
+      "mapping_id": "005",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/005",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/005/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/005/stdout.txt",
+      "subprocess_pid": 2105,
+      "total_cycles": 1150
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-B",
+      "mapping_id": "006",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/006",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/006/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/006/stdout.txt",
+      "subprocess_pid": 2106,
+      "total_cycles": 1160
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-B",
+      "mapping_id": "007",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/007",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/007/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/007/stdout.txt",
+      "subprocess_pid": 2107,
+      "total_cycles": 1170
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-B",
+      "mapping_id": "008",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/008",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/008/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/008/stdout.txt",
+      "subprocess_pid": 2108,
+      "total_cycles": 1180
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-B",
+      "mapping_id": "009",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/009",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/009/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-B/009/stdout.txt",
+      "subprocess_pid": 2109,
+      "total_cycles": 1190
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-C",
+      "mapping_id": "000",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/000",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/000/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/000/stdout.txt",
+      "subprocess_pid": 2200,
+      "total_cycles": 1200
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-C",
+      "mapping_id": "001",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/001",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/001/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/001/stdout.txt",
+      "subprocess_pid": 2201,
+      "total_cycles": 1210
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-C",
+      "mapping_id": "002",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/002",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/002/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/002/stdout.txt",
+      "subprocess_pid": 2202,
+      "total_cycles": 1220
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-C",
+      "mapping_id": "003",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/003",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/003/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/003/stdout.txt",
+      "subprocess_pid": 2203,
+      "total_cycles": 1230
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-C",
+      "mapping_id": "004",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/004",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/004/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/004/stdout.txt",
+      "subprocess_pid": 2204,
+      "total_cycles": 1240
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-C",
+      "mapping_id": "005",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/005",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/005/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/005/stdout.txt",
+      "subprocess_pid": 2205,
+      "total_cycles": 1250
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-C",
+      "mapping_id": "006",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/006",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/006/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/006/stdout.txt",
+      "subprocess_pid": 2206,
+      "total_cycles": 1260
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-C",
+      "mapping_id": "007",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/007",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/007/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/007/stdout.txt",
+      "subprocess_pid": 2207,
+      "total_cycles": 1270
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-C",
+      "mapping_id": "008",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/008",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/008/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/008/stdout.txt",
+      "subprocess_pid": 2208,
+      "total_cycles": 1280
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-C",
+      "mapping_id": "009",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/009",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/009/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-C/009/stdout.txt",
+      "subprocess_pid": 2209,
+      "total_cycles": 1290
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-D",
+      "mapping_id": "000",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/000",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/000/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/000/stdout.txt",
+      "subprocess_pid": 2300,
+      "total_cycles": 1300
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-D",
+      "mapping_id": "001",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/001",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/001/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/001/stdout.txt",
+      "subprocess_pid": 2301,
+      "total_cycles": 1310
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-D",
+      "mapping_id": "002",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/002",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/002/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/002/stdout.txt",
+      "subprocess_pid": 2302,
+      "total_cycles": 1320
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-D",
+      "mapping_id": "003",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/003",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/003/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/003/stdout.txt",
+      "subprocess_pid": 2303,
+      "total_cycles": 1330
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-D",
+      "mapping_id": "004",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/004",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/004/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/004/stdout.txt",
+      "subprocess_pid": 2304,
+      "total_cycles": 1340
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-D",
+      "mapping_id": "005",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/005",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/005/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/005/stdout.txt",
+      "subprocess_pid": 2305,
+      "total_cycles": 1350
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-D",
+      "mapping_id": "006",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/006",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/006/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/006/stdout.txt",
+      "subprocess_pid": 2306,
+      "total_cycles": 1360
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-D",
+      "mapping_id": "007",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/007",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/007/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/007/stdout.txt",
+      "subprocess_pid": 2307,
+      "total_cycles": 1370
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-D",
+      "mapping_id": "008",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/008",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/008/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/008/stdout.txt",
+      "subprocess_pid": 2308,
+      "total_cycles": 1380
+    },
+    {
+      "availability_precheck": "",
+      "budget_over_bytes": 0,
+      "end_time": "2026-07-01T00:00:01+00:00",
+      "hw_id": "HW-D",
+      "mapping_id": "009",
+      "output_dir": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/009",
+      "retry_count": 0,
+      "returncode": 0,
+      "simulator_cmdline": [
+        "python",
+        "scripts/mapping_dse_minimal.py"
+      ],
+      "start_time": "2026-07-01T00:00:00+00:00",
+      "status": "measured",
+      "stderr_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/009/stderr.txt",
+      "stdout_path": "outputs/mapping_dse_codesign_v2/synthetic_smoke/run/synthetic_runs/HW-D/009/stdout.txt",
+      "subprocess_pid": 2309,
+      "total_cycles": 1390
+    }
+  ],
+  "pytorchsim_git_commit": "92623de985b175817be1162e6528768aaaf15ecf",
+  "ramulator2_config_sha256": "7c26de9af50e054c92b8b80df7f462157fa7b4a8cab4e77f6820d651a9f712f9",
+  "spec_path": "docs/superpowers/specs/2026-07-01-npu-mapping-dse-codesign-v2-design.md",
+  "spec_version": "v2",
+  "timestamp": "2026-07-01T12:18:47.239380+00:00",
+  "togsim_binary_sha256": "969b983fecd90a25687fa0e8e4b3c915a68304c87d51e96f0d577d245bb1f8ed",
+  "v1_run_tag_for_cross_check": "gpt2_block_prefill_s128_run1",
+  "v1_v2_cross_check": {
+    "critical_cells": [],
+    "cross_check_status": "PASS",
+    "force_partial": false,
+    "max_allowed_delta": 0.02,
+    "v1_v2_cycle_delta_per_shared_cell": {
+      "HW-A/000": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1000.0,
+        "v2_median_cycles": 1000.0
+      },
+      "HW-A/001": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1010.0,
+        "v2_median_cycles": 1010.0
+      },
+      "HW-A/002": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1020.0,
+        "v2_median_cycles": 1020.0
+      },
+      "HW-A/003": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1030.0,
+        "v2_median_cycles": 1030.0
+      },
+      "HW-A/004": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1040.0,
+        "v2_median_cycles": 1040.0
+      },
+      "HW-A/005": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1050.0,
+        "v2_median_cycles": 1050.0
+      },
+      "HW-A/006": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1060.0,
+        "v2_median_cycles": 1060.0
+      },
+      "HW-A/007": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1070.0,
+        "v2_median_cycles": 1070.0
+      },
+      "HW-B/000": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1100.0,
+        "v2_median_cycles": 1100.0
+      },
+      "HW-B/001": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1110.0,
+        "v2_median_cycles": 1110.0
+      },
+      "HW-B/002": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1120.0,
+        "v2_median_cycles": 1120.0
+      },
+      "HW-B/003": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1130.0,
+        "v2_median_cycles": 1130.0
+      },
+      "HW-B/004": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1140.0,
+        "v2_median_cycles": 1140.0
+      },
+      "HW-B/005": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1150.0,
+        "v2_median_cycles": 1150.0
+      },
+      "HW-B/006": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1160.0,
+        "v2_median_cycles": 1160.0
+      },
+      "HW-B/007": {
+        "cycle_delta": 0.0,
+        "passed": true,
+        "v1_median_cycles": 1170.0,
+        "v2_median_cycles": 1170.0
+      }
+    },
+    "warning_cells": []
+  },
+  "v1_v2_cycle_delta_per_shared_cell": {
+    "HW-A/000": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1000.0,
+      "v2_median_cycles": 1000.0
+    },
+    "HW-A/001": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1010.0,
+      "v2_median_cycles": 1010.0
+    },
+    "HW-A/002": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1020.0,
+      "v2_median_cycles": 1020.0
+    },
+    "HW-A/003": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1030.0,
+      "v2_median_cycles": 1030.0
+    },
+    "HW-A/004": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1040.0,
+      "v2_median_cycles": 1040.0
+    },
+    "HW-A/005": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1050.0,
+      "v2_median_cycles": 1050.0
+    },
+    "HW-A/006": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1060.0,
+      "v2_median_cycles": 1060.0
+    },
+    "HW-A/007": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1070.0,
+      "v2_median_cycles": 1070.0
+    },
+    "HW-B/000": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1100.0,
+      "v2_median_cycles": 1100.0
+    },
+    "HW-B/001": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1110.0,
+      "v2_median_cycles": 1110.0
+    },
+    "HW-B/002": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1120.0,
+      "v2_median_cycles": 1120.0
+    },
+    "HW-B/003": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1130.0,
+      "v2_median_cycles": 1130.0
+    },
+    "HW-B/004": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1140.0,
+      "v2_median_cycles": 1140.0
+    },
+    "HW-B/005": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1150.0,
+      "v2_median_cycles": 1150.0
+    },
+    "HW-B/006": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1160.0,
+      "v2_median_cycles": 1160.0
+    },
+    "HW-B/007": {
+      "cycle_delta": 0.0,
+      "passed": true,
+      "v1_median_cycles": 1170.0,
+      "v2_median_cycles": 1170.0
+    }
+  },
+  "v1_v2_shared_cells": [
+    "HW-A/000",
+    "HW-A/001",
+    "HW-A/002",
+    "HW-A/003",
+    "HW-A/004",
+    "HW-A/005",
+    "HW-A/006",
+    "HW-A/007",
+    "HW-B/000",
+    "HW-B/001",
+    "HW-B/002",
+    "HW-B/003",
+    "HW-B/004",
+    "HW-B/005",
+    "HW-B/006",
+    "HW-B/007"
+  ],
+  "versions": {
+    "python": "3.11.13",
+    "torch": "2.6.0+cu124",
+    "transformers": "4.43.4"
+  }
+}

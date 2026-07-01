@@ -35,6 +35,34 @@ def test_build_cells_requires_full_cross_product():
     ]
 
 
+def test_parse_args_defaults_to_v2_hw_config_set(tmp_path):
+    mod = load_module()
+    mappings = tmp_path / "mappings.json"
+
+    args = mod.parse_args(["--mappings-json", str(mappings)])
+
+    assert args.hw_config_set == "codesign_v2_2x2"
+
+
+def test_parse_args_accepts_v1_hw_config_set(tmp_path):
+    mod = load_module()
+    mappings = tmp_path / "mappings.json"
+
+    args = mod.parse_args(["--mappings-json", str(mappings), "--hw-config-set", "codesign_v1_2x2"])
+
+    assert args.hw_config_set == "codesign_v1_2x2"
+
+
+def test_parse_args_rejects_unknown_hw_config_set(tmp_path):
+    mod = load_module()
+    mappings = tmp_path / "mappings.json"
+
+    with pytest.raises(SystemExit) as exc:
+        mod.parse_args(["--mappings-json", str(mappings), "--hw-config-set", "bad"])
+
+    assert exc.value.code == 2
+
+
 def test_run_sweep_marks_unavailable_without_retry(tmp_path):
     mod = load_module()
     cells = [
@@ -129,6 +157,32 @@ def test_extract_total_cycles_prefers_mapping_harness_counters_table(tmp_path):
     )
 
     assert mod.extract_total_cycles(output_dir, "000", "Total execution cycles: 1\n") == 4242
+
+
+def test_default_runner_treats_successful_process_without_cycles_as_runtime_failed(tmp_path, monkeypatch):
+    mod = load_module()
+
+    class FakeProc:
+        returncode = 0
+        pid = 123
+
+        def communicate(self):
+            return "Wrote artifacts\n", ""
+
+    monkeypatch.setattr(mod.subprocess, "Popen", lambda *args, **kwargs: FakeProc())
+    runner = mod.default_runner(tmp_path, 1, tmp_path / "external")
+    result = runner(
+        {
+            "hw_id": "HW-A",
+            "mapping_id": "000",
+            "hw_config": "hw_A.yml",
+            "tile": {"TILE_M": 32, "TILE_N": 64, "TILE_K": 32},
+        },
+        0,
+    )
+
+    assert result.status == "runtime_failed"
+    assert result.total_cycles is None
 
 
 def test_run_sweep_resume_reuses_existing_measured_cell(tmp_path):

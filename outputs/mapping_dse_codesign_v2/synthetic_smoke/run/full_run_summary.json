@@ -1,0 +1,184 @@
+{
+  "metadata_lint": {
+    "checked_fields": [
+      "spec_version",
+      "spec_path",
+      "timestamp",
+      "git_commit",
+      "git_status",
+      "cli_args",
+      "baseline_yaml_sha256",
+      "patch_matrix",
+      "hw_yaml_content_sha256",
+      "hw_yaml_diff_from_baseline",
+      "per_cell",
+      "ramulator2_config_sha256",
+      "gem5_binary_sha256",
+      "togsim_binary_sha256",
+      "pytorchsim_git_commit",
+      "env_vars_snapshot",
+      "versions",
+      "determinism_smoke_test",
+      "artifact_paths"
+    ],
+    "ok": true
+  },
+  "repeat_count": 1,
+  "report_lint": {
+    "checked_sections": [
+      "cycles 表",
+      "状态表",
+      "migrating_pair_count/6 摘要",
+      "per-HW ratio 表",
+      "unconstrained vs constrained oracle 对比",
+      "Gate-3 与 Gate-1 联合解读",
+      "cost-matched pair 分析",
+      "反 baseline (HW-D) 参考值",
+      "实验边界"
+    ],
+    "ok": true
+  },
+  "state_counts": {
+    "measured": 40,
+    "retry_exhausted": 0,
+    "unavailable": 0
+  },
+  "verdict": {
+    "claim_bearing": false,
+    "data_label": "measured",
+    "end_state": "NEGATIVE",
+    "gate1": {
+      "passed": false,
+      "status": "failed"
+    },
+    "gate2a": {
+      "passed": false,
+      "status": "numeric"
+    },
+    "gate2b": {
+      "passed": false,
+      "status": "numeric"
+    },
+    "gate3": {
+      "passed": false,
+      "status": "failed"
+    },
+    "scope_limitations": [
+      "当前结论限定在单一 GPT-2 block prefill seq=128 类工作负载。",
+      "搜索空间只覆盖 tile/mapping 选择，不覆盖 fusion、dataflow、SPAD partition 或 DMA schedule。",
+      "硬件空间只覆盖 2x2 corner 组合，不能证明内部参数空间单调或最优。",
+      "DRAM channel 与 ICNT port 在本实验中绑定变化，不能拆分解释二者的独立贡献。",
+      "当前指标是 cycle-only，不包含面积、功耗、能耗、带宽成本或可布线性。"
+    ],
+    "state_counts": {
+      "measured": 40,
+      "retry_exhausted": 0,
+      "unavailable": 0
+    },
+    "v1_v2_cross_check": {
+      "critical_cells": [],
+      "cross_check_status": "PASS",
+      "force_partial": false,
+      "max_allowed_delta": 0.02,
+      "v1_v2_cycle_delta_per_shared_cell": {
+        "HW-A/000": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1000.0,
+          "v2_median_cycles": 1000.0
+        },
+        "HW-A/001": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1010.0,
+          "v2_median_cycles": 1010.0
+        },
+        "HW-A/002": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1020.0,
+          "v2_median_cycles": 1020.0
+        },
+        "HW-A/003": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1030.0,
+          "v2_median_cycles": 1030.0
+        },
+        "HW-A/004": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1040.0,
+          "v2_median_cycles": 1040.0
+        },
+        "HW-A/005": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1050.0,
+          "v2_median_cycles": 1050.0
+        },
+        "HW-A/006": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1060.0,
+          "v2_median_cycles": 1060.0
+        },
+        "HW-A/007": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1070.0,
+          "v2_median_cycles": 1070.0
+        },
+        "HW-B/000": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1100.0,
+          "v2_median_cycles": 1100.0
+        },
+        "HW-B/001": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1110.0,
+          "v2_median_cycles": 1110.0
+        },
+        "HW-B/002": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1120.0,
+          "v2_median_cycles": 1120.0
+        },
+        "HW-B/003": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1130.0,
+          "v2_median_cycles": 1130.0
+        },
+        "HW-B/004": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1140.0,
+          "v2_median_cycles": 1140.0
+        },
+        "HW-B/005": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1150.0,
+          "v2_median_cycles": 1150.0
+        },
+        "HW-B/006": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1160.0,
+          "v2_median_cycles": 1160.0
+        },
+        "HW-B/007": {
+          "cycle_delta": 0.0,
+          "passed": true,
+          "v1_median_cycles": 1170.0,
+          "v2_median_cycles": 1170.0
+        }
+      },
+      "warning_cells": []
+    }
+  }
+}

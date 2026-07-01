@@ -1,0 +1,14 @@
+{
+  "HW-C/000_timeout1800": {
+    "mapping_status": {
+      "message": "GPT-2 block child exited 2: ",
+      "status": "failed"
+    },
+    "harness": {
+      "measured_count": 0,
+      "ok": false,
+      "reason": "no mapping produced measured TOG/counters"
+    },
+    "counters_rows": []
+  }
+}

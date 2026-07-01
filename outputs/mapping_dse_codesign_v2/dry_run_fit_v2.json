@@ -1,0 +1,606 @@
+{
+  "calibration_status": "calibrated",
+  "data_label": "analytical_precheck",
+  "rows": [
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-A",
+      "mapping_id": "000",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 32,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 20480
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-A",
+      "mapping_id": "001",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 64,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 32768
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-A",
+      "mapping_id": "002",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 64,
+        "TILE_N": 128
+      },
+      "working_set_bytes": 57344
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-A",
+      "mapping_id": "003",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 128,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 57344
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-A",
+      "mapping_id": "004",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 128,
+        "TILE_N": 128
+      },
+      "working_set_bytes": 98304
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-A",
+      "mapping_id": "005",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_M": 64,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 49152
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-A",
+      "mapping_id": "006",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_M": 128,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 81920
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-A",
+      "mapping_id": "007",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_M": 64,
+        "TILE_N": 128
+      },
+      "working_set_bytes": 81920
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-A",
+      "mapping_id": "008",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 16,
+        "TILE_M": 16,
+        "TILE_N": 16
+      },
+      "working_set_bytes": 3072
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-A",
+      "mapping_id": "009",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 128,
+        "TILE_M": 256,
+        "TILE_N": 256
+      },
+      "working_set_bytes": 524288
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-B",
+      "mapping_id": "000",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 32,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 20480
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-B",
+      "mapping_id": "001",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 64,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 32768
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-B",
+      "mapping_id": "002",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 64,
+        "TILE_N": 128
+      },
+      "working_set_bytes": 57344
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-B",
+      "mapping_id": "003",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 128,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 57344
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-B",
+      "mapping_id": "004",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 128,
+        "TILE_N": 128
+      },
+      "working_set_bytes": 98304
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-B",
+      "mapping_id": "005",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_M": 64,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 49152
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-B",
+      "mapping_id": "006",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_M": 128,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 81920
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-B",
+      "mapping_id": "007",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_M": 64,
+        "TILE_N": 128
+      },
+      "working_set_bytes": 81920
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-B",
+      "mapping_id": "008",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 16,
+        "TILE_M": 16,
+        "TILE_N": 16
+      },
+      "working_set_bytes": 3072
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-B",
+      "mapping_id": "009",
+      "predicted_fit": true,
+      "spad_budget_bytes": 15099494,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 128,
+        "TILE_M": 256,
+        "TILE_N": 256
+      },
+      "working_set_bytes": 524288
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-C",
+      "mapping_id": "000",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 32,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 20480
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-C",
+      "mapping_id": "001",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 64,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 32768
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-C",
+      "mapping_id": "002",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 64,
+        "TILE_N": 128
+      },
+      "working_set_bytes": 57344
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-C",
+      "mapping_id": "003",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 128,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 57344
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-C",
+      "mapping_id": "004",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 128,
+        "TILE_N": 128
+      },
+      "working_set_bytes": 98304
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-C",
+      "mapping_id": "005",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_M": 64,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 49152
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-C",
+      "mapping_id": "006",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_M": 128,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 81920
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-C",
+      "mapping_id": "007",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_M": 64,
+        "TILE_N": 128
+      },
+      "working_set_bytes": 81920
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-C",
+      "mapping_id": "008",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 16,
+        "TILE_M": 16,
+        "TILE_N": 16
+      },
+      "working_set_bytes": 3072
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-C",
+      "mapping_id": "009",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 128,
+        "TILE_M": 256,
+        "TILE_N": 256
+      },
+      "working_set_bytes": 524288
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-D",
+      "mapping_id": "000",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 32,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 20480
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-D",
+      "mapping_id": "001",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 64,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 32768
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-D",
+      "mapping_id": "002",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 64,
+        "TILE_N": 128
+      },
+      "working_set_bytes": 57344
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-D",
+      "mapping_id": "003",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 128,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 57344
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-D",
+      "mapping_id": "004",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 32,
+        "TILE_M": 128,
+        "TILE_N": 128
+      },
+      "working_set_bytes": 98304
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-D",
+      "mapping_id": "005",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_M": 64,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 49152
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-D",
+      "mapping_id": "006",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_M": 128,
+        "TILE_N": 64
+      },
+      "working_set_bytes": 81920
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-D",
+      "mapping_id": "007",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_M": 64,
+        "TILE_N": 128
+      },
+      "working_set_bytes": 81920
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-D",
+      "mapping_id": "008",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 16,
+        "TILE_M": 16,
+        "TILE_N": 16
+      },
+      "working_set_bytes": 3072
+    },
+    {
+      "availability_precheck": "analytical",
+      "budget_over_bytes": 0,
+      "hw_id": "HW-D",
+      "mapping_id": "009",
+      "predicted_fit": true,
+      "spad_budget_bytes": 943718,
+      "status": "needs_togsim",
+      "tile": {
+        "TILE_K": 128,
+        "TILE_M": 256,
+        "TILE_N": 256
+      },
+      "working_set_bytes": 524288
+    }
+  ]
+}

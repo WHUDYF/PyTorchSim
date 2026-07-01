@@ -10,8 +10,8 @@ from typing import Any
 
 
 REQUIRED_REPORT_SECTIONS = [
-    "4x8 cycles 表",
-    "4x8 状态表",
+    "cycles 表",
+    "状态表",
     "migrating_pair_count/6 摘要",
     "per-HW ratio 表",
     "unconstrained vs constrained oracle 对比",
@@ -101,6 +101,17 @@ def build_verdict(analysis: dict[str, Any]) -> dict[str, Any]:
             "当前指标是 cycle-only，不包含面积、功耗、能耗、带宽成本或可布线性。",
         ],
     }
+    cross_check = analysis.get("v1_v2_cross_check")
+    if isinstance(cross_check, dict):
+        verdict["v1_v2_cross_check"] = cross_check
+        warning_cells = cross_check.get("warning_cells", [])
+        if warning_cells:
+            verdict["scope_limitations"].append(
+                "v1-v2 cross check failed on cells: " + ", ".join(str(cell) for cell in warning_cells)
+            )
+        if cross_check.get("force_partial") and verdict["end_state"] == "POSITIVE":
+            verdict["end_state"] = "PARTIAL"
+            verdict["claim_bearing"] = False
     metadata.lint_claim_bearing(verdict)
     return verdict
 
@@ -191,6 +202,7 @@ def render_report(
     oracle = analysis.get("oracle_gaps", {})
     cost_pair = analysis.get("cost_matched_pair", {})
     interaction = analysis.get("interaction_analysis", {})
+    cross_check = analysis.get("v1_v2_cross_check")
     hw_d = {}
     if cycles_by_hw:
         hw_d = cycles_by_hw.get("HW-D", {})
@@ -201,10 +213,10 @@ def render_report(
         f"结论状态: `{verdict['end_state']}`",
         f"数据标签: `{verdict['data_label']}`",
         "",
-        "## 4x8 cycles 表",
+        "## cycles 表",
         _cycles_table(cycles_by_hw),
         "",
-        "## 4x8 状态表",
+        "## 状态表",
         _state_table(analysis),
         "",
         "## migrating_pair_count/6 摘要",
@@ -227,6 +239,9 @@ def render_report(
         f"pair = {cost_pair.get('cost_matched_pair', [])}；ratio = {_fmt_number(cost_pair.get('gate2b_ratio'))}；Gate-2b passed = {verdict['gate2b']['passed']}。",
         f"framing = {cost_pair.get('framing', 'N/A')}。",
         "",
+        "## v1-v2 cross check",
+        _cross_check_section(cross_check),
+        "",
         "## 反 baseline (HW-D) 参考值",
         _markdown_table(["mapping", "cycles"], [[mapping_id, cycles] for mapping_id, cycles in sorted(hw_d.items())])
         if hw_d
@@ -238,6 +253,19 @@ def render_report(
     report = "\n".join(lines) + "\n"
     lint_report_sections(report)
     return report
+
+
+def _cross_check_section(cross_check: dict[str, Any] | None) -> str:
+    if not cross_check:
+        return "_未提供 v1-v2 cross check 数据。_"
+    rows = []
+    for cell_id, row in sorted(cross_check.get("v1_v2_cycle_delta_per_shared_cell", {}).items()):
+        rows.append([cell_id, row.get("v1_median_cycles"), row.get("v2_median_cycles"), row.get("cycle_delta")])
+    prefix = (
+        f"cross_check_status = {cross_check.get('cross_check_status', 'N/A')}；"
+        f"max_allowed_delta = {_fmt_number(cross_check.get('max_allowed_delta'))}。"
+    )
+    return prefix + "\n" + _markdown_table(["cell", "v1 median", "v2 median", "cycle_delta"], rows)
 
 
 def lint_report_sections(report: str) -> dict[str, Any]:
