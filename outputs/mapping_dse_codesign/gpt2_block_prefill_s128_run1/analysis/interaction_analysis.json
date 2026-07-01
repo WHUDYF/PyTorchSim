@@ -1,0 +1,65 @@
+{
+  "gate3_passed": false,
+  "mean_spearman": 0.9841269841269842,
+  "mean_spearman_null": 0.013555555555555562,
+  "numeric_pair_count": 6,
+  "pairs": [
+    {
+      "hw_pair": [
+        "HW-A",
+        "HW-B"
+      ],
+      "n_intersect": 8,
+      "spearman": 0.9761904761904762,
+      "status": "numeric"
+    },
+    {
+      "hw_pair": [
+        "HW-A",
+        "HW-C"
+      ],
+      "n_intersect": 8,
+      "spearman": 1.0,
+      "status": "numeric"
+    },
+    {
+      "hw_pair": [
+        "HW-A",
+        "HW-D"
+      ],
+      "n_intersect": 8,
+      "spearman": 0.9761904761904762,
+      "status": "numeric"
+    },
+    {
+      "hw_pair": [
+        "HW-B",
+        "HW-C"
+      ],
+      "n_intersect": 8,
+      "spearman": 0.9761904761904762,
+      "status": "numeric"
+    },
+    {
+      "hw_pair": [
+        "HW-B",
+        "HW-D"
+      ],
+      "n_intersect": 8,
+      "spearman": 1.0,
+      "status": "numeric"
+    },
+    {
+      "hw_pair": [
+        "HW-C",
+        "HW-D"
+      ],
+      "n_intersect": 8,
+      "spearman": 0.9761904761904762,
+      "status": "numeric"
+    }
+  ],
+  "permutation_null_probability_reference_only": 1.0,
+  "permutation_seed": 0,
+  "permutation_trials": 1000
+}

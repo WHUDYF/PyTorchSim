@@ -1,0 +1,18 @@
+{
+  "best_cycles": {
+    "HW-B": 967906,
+    "HW-C": 404330
+  },
+  "best_mapping": {
+    "HW-B": "006",
+    "HW-C": "006"
+  },
+  "cost_matched_pair": [
+    "HW-B",
+    "HW-C"
+  ],
+  "framing": "ex-post cost-tier allocation sensitivity upper bound",
+  "gate2b_passed": true,
+  "gate2b_ratio": 0.41773684634664937,
+  "gate2b_status": "numeric"
+}

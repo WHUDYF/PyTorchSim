@@ -1,0 +1,77 @@
+{
+  "metadata_lint": {
+    "checked_fields": [
+      "timestamp",
+      "git_commit",
+      "git_status",
+      "cli_args",
+      "baseline_yaml_sha256",
+      "patch_matrix",
+      "hw_yaml_content_sha256",
+      "hw_yaml_diff_from_baseline",
+      "per_cell",
+      "ramulator2_config_sha256",
+      "gem5_binary_sha256",
+      "togsim_binary_sha256",
+      "pytorchsim_git_commit",
+      "env_vars_snapshot",
+      "versions",
+      "determinism_smoke_test",
+      "artifact_paths"
+    ],
+    "ok": true
+  },
+  "repeat_count": 3,
+  "report_lint": {
+    "checked_sections": [
+      "4x8 cycles 表",
+      "4x8 状态表",
+      "migrating_pair_count/6 摘要",
+      "per-HW ratio 表",
+      "unconstrained vs constrained oracle 对比",
+      "Gate-3 与 Gate-1 联合解读",
+      "cost-matched pair 分析",
+      "反 baseline (HW-D) 参考值",
+      "实验边界"
+    ],
+    "ok": true
+  },
+  "state_counts": {
+    "measured": 32,
+    "retry_exhausted": 0,
+    "unavailable": 0
+  },
+  "verdict": {
+    "claim_bearing": false,
+    "data_label": "measured",
+    "end_state": "NEGATIVE",
+    "gate1": {
+      "passed": false,
+      "status": "failed"
+    },
+    "gate2a": {
+      "passed": false,
+      "status": "numeric"
+    },
+    "gate2b": {
+      "passed": true,
+      "status": "numeric"
+    },
+    "gate3": {
+      "passed": false,
+      "status": "failed"
+    },
+    "scope_limitations": [
+      "当前结论限定在单一 GPT-2 block prefill seq=128 类工作负载。",
+      "搜索空间只覆盖 tile/mapping 选择，不覆盖 fusion、dataflow、SPAD partition 或 DMA schedule。",
+      "硬件空间只覆盖 2x2 corner 组合，不能证明内部参数空间单调或最优。",
+      "DRAM channel 与 ICNT port 在本实验中绑定变化，不能拆分解释二者的独立贡献。",
+      "当前指标是 cycle-only，不包含面积、功耗、能耗、带宽成本或可布线性。"
+    ],
+    "state_counts": {
+      "measured": 32,
+      "retry_exhausted": 0,
+      "unavailable": 0
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "dominance_threshold": 0.03,
+  "gate1_passed": false,
+  "migrating_pair_count": 0,
+  "pairs": [
+    {
+      "champions": {
+        "HW-A": "006",
+        "HW-B": "006"
+      },
+      "hw_pair": [
+        "HW-A",
+        "HW-B"
+      ],
+      "status": "same_champion",
+      "swap_dominance": 0.0
+    },
+    {
+      "champions": {
+        "HW-A": "006",
+        "HW-C": "006"
+      },
+      "hw_pair": [
+        "HW-A",
+        "HW-C"
+      ],
+      "status": "same_champion",
+      "swap_dominance": 0.0
+    },
+    {
+      "champions": {
+        "HW-A": "006",
+        "HW-D": "006"
+      },
+      "hw_pair": [
+        "HW-A",
+        "HW-D"
+      ],
+      "status": "same_champion",
+      "swap_dominance": 0.0
+    },
+    {
+      "champions": {
+        "HW-B": "006",
+        "HW-C": "006"
+      },
+      "hw_pair": [
+        "HW-B",
+        "HW-C"
+      ],
+      "status": "same_champion",
+      "swap_dominance": 0.0
+    },
+    {
+      "champions": {
+        "HW-B": "006",
+        "HW-D": "006"
+      },
+      "hw_pair": [
+        "HW-B",
+        "HW-D"
+      ],
+      "status": "same_champion",
+      "swap_dominance": 0.0
+    },
+    {
+      "champions": {
+        "HW-C": "006",
+        "HW-D": "006"
+      },
+      "hw_pair": [
+        "HW-C",
+        "HW-D"
+      ],
+      "status": "same_champion",
+      "swap_dominance": 0.0
+    }
+  ]
+}
