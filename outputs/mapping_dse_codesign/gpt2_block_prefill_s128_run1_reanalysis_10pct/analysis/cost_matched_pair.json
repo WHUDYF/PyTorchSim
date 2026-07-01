@@ -1,0 +1,25 @@
+{
+  "best_cycles": {
+    "HW-B": 967906,
+    "HW-C": 404330
+  },
+  "best_mapping": {
+    "HW-B": "006",
+    "HW-C": "006"
+  },
+  "claim_bearing": true,
+  "cost_matched_pair": [
+    "HW-B",
+    "HW-C"
+  ],
+  "data_label": "measured",
+  "framing": "ex-post cost-tier allocation sensitivity upper bound",
+  "gate2b_passed": true,
+  "gate2b_ratio": 0.41773684634664937,
+  "gate2b_status": "numeric",
+  "scope_limitations": [
+    "Gate-1 dominance threshold raised from 0.03 to 0.10 to sit above the canary noise floor observed in the 5-repeat determinism experiment documented in commit 8c5af69.",
+    "This is a re-analysis of the already-measured v1 4x8 cycle matrix; no TOGSim sweep was re-run.",
+    "Measured cycle values in heatmap_cycles.json and heatmap_cycle_stats.json are reused unchanged."
+  ]
+}

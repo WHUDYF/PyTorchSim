@@ -1,0 +1,86 @@
+{
+  "claim_bearing": true,
+  "data_label": "measured",
+  "dominance_threshold": 0.1,
+  "gate1_passed": false,
+  "migrating_pair_count": 0,
+  "pairs": [
+    {
+      "champions": {
+        "HW-A": "006",
+        "HW-B": "006"
+      },
+      "hw_pair": [
+        "HW-A",
+        "HW-B"
+      ],
+      "status": "same_champion",
+      "swap_dominance": 0.0
+    },
+    {
+      "champions": {
+        "HW-A": "006",
+        "HW-C": "006"
+      },
+      "hw_pair": [
+        "HW-A",
+        "HW-C"
+      ],
+      "status": "same_champion",
+      "swap_dominance": 0.0
+    },
+    {
+      "champions": {
+        "HW-A": "006",
+        "HW-D": "006"
+      },
+      "hw_pair": [
+        "HW-A",
+        "HW-D"
+      ],
+      "status": "same_champion",
+      "swap_dominance": 0.0
+    },
+    {
+      "champions": {
+        "HW-B": "006",
+        "HW-C": "006"
+      },
+      "hw_pair": [
+        "HW-B",
+        "HW-C"
+      ],
+      "status": "same_champion",
+      "swap_dominance": 0.0
+    },
+    {
+      "champions": {
+        "HW-B": "006",
+        "HW-D": "006"
+      },
+      "hw_pair": [
+        "HW-B",
+        "HW-D"
+      ],
+      "status": "same_champion",
+      "swap_dominance": 0.0
+    },
+    {
+      "champions": {
+        "HW-C": "006",
+        "HW-D": "006"
+      },
+      "hw_pair": [
+        "HW-C",
+        "HW-D"
+      ],
+      "status": "same_champion",
+      "swap_dominance": 0.0
+    }
+  ],
+  "scope_limitations": [
+    "Gate-1 dominance threshold raised from 0.03 to 0.10 to sit above the canary noise floor observed in the 5-repeat determinism experiment documented in commit 8c5af69.",
+    "This is a re-analysis of the already-measured v1 4x8 cycle matrix; no TOGSim sweep was re-run.",
+    "Measured cycle values in heatmap_cycles.json and heatmap_cycle_stats.json are reused unchanged."
+  ]
+}

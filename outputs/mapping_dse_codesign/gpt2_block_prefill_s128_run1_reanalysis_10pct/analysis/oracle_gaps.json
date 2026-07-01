@@ -1,0 +1,67 @@
+{
+  "claim_bearing": true,
+  "data_label": "measured",
+  "fit_all_hw_set": [
+    "000",
+    "001",
+    "002",
+    "003",
+    "004",
+    "005",
+    "006",
+    "007"
+  ],
+  "gate2a_passed": false,
+  "gate2a_ratio_mean": 1.0,
+  "gate2a_status": "numeric",
+  "num_hw_meeting_threshold": 0,
+  "per_hw_oracle": {
+    "HW-A": {
+      "cycles": 408102,
+      "mapping_id": "006"
+    },
+    "HW-B": {
+      "cycles": 967906,
+      "mapping_id": "006"
+    },
+    "HW-C": {
+      "cycles": 404330,
+      "mapping_id": "006"
+    },
+    "HW-D": {
+      "cycles": 973626,
+      "mapping_id": "006"
+    }
+  },
+  "per_hw_ratio": {
+    "HW-A": 1.0,
+    "HW-B": 1.0,
+    "HW-C": 1.0,
+    "HW-D": 1.0
+  },
+  "scope_limitations": [
+    "Gate-1 dominance threshold raised from 0.03 to 0.10 to sit above the canary noise floor observed in the 5-repeat determinism experiment documented in commit 8c5af69.",
+    "This is a re-analysis of the already-measured v1 4x8 cycle matrix; no TOGSim sweep was re-run.",
+    "Measured cycle values in heatmap_cycles.json and heatmap_cycle_stats.json are reused unchanged."
+  ],
+  "single_best_avg_cycles": 688491.0,
+  "single_best_avg_mapping": "006",
+  "unconstrained_per_hw_oracle": {
+    "HW-A": {
+      "cycles": 408102,
+      "mapping_id": "006"
+    },
+    "HW-B": {
+      "cycles": 967906,
+      "mapping_id": "006"
+    },
+    "HW-C": {
+      "cycles": 404330,
+      "mapping_id": "006"
+    },
+    "HW-D": {
+      "cycles": 973626,
+      "mapping_id": "006"
+    }
+  }
+}

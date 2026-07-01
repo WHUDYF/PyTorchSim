@@ -1,0 +1,41 @@
+{
+  "claim_bearing": true,
+  "data_label": "measured",
+  "end_state": "NEGATIVE",
+  "gate1": {
+    "passed": false,
+    "status": "failed"
+  },
+  "gate2a": {
+    "passed": false,
+    "status": "numeric"
+  },
+  "gate2b": {
+    "passed": true,
+    "status": "numeric"
+  },
+  "gate3": {
+    "passed": false,
+    "status": "failed"
+  },
+  "reanalysis": {
+    "determinism_diagnosis_commit": "8c5af69",
+    "original_gate1_dominance_threshold": 0.03,
+    "reanalysis_gate1_dominance_threshold": 0.1,
+    "source_heatmap_cycles": "/home/dyf/PyTorchSim/outputs/mapping_dse_codesign/gpt2_block_prefill_s128_run1/heatmap_cycles.json",
+    "source_run_dir": "/home/dyf/PyTorchSim/outputs/mapping_dse_codesign/gpt2_block_prefill_s128_run1"
+  },
+  "scope_limitations": [
+    "Gate-1 dominance threshold raised from 0.03 to 0.10 to sit above the canary noise floor observed in the 5-repeat determinism experiment documented in commit 8c5af69.",
+    "当前结论限定在单一 GPT-2 block prefill seq=128 类工作负载。",
+    "搜索空间只覆盖 tile/mapping 选择，不覆盖 fusion、dataflow、SPAD partition 或 DMA schedule。",
+    "硬件空间只覆盖 2x2 corner 组合，不能证明内部参数空间单调或最优。",
+    "DRAM channel 与 ICNT port 在本实验中绑定变化，不能拆分解释二者的独立贡献。",
+    "当前指标是 cycle-only，不包含面积、功耗、能耗、带宽成本或可布线性。"
+  ],
+  "state_counts": {
+    "measured": 32,
+    "retry_exhausted": 0,
+    "unavailable": 0
+  }
+}
