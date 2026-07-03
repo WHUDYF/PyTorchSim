@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>PyTorchSim 编译器修改维度全景</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; max-width: 1120px; margin: 32px auto; padding: 0 24px; color: #222; }
+    h1 { border-bottom: 3px solid #333; padding-bottom: 8px; }
+    h2 { margin-top: 30px; border-left: 4px solid #333; padding-left: 10px; }
+    table { border-collapse: collapse; width: 100%; margin: 14px 0; }
+    th, td { border: 1px solid #d6d6d6; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #333; color: #fff; }
+    code, pre { background: #f5f5f5; border-radius: 4px; }
+    code { padding: 1px 4px; }
+    pre { padding: 12px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+<h1>PyTorchSim 编译器修改维度全景</h1>
+<h2>1. 背景与范围</h2>
+<p>Route 4 的目标是从 tiling-only search space 扩展到更接近真实编译器控制面的修改维度，判断 PyTorchSim 上是否存在 measured HW/SW co-design POSITIVE 证据。</p>
+<p>证据链从 v1 NEGATIVE 开始：<code>92623de</code> 在 GPT-2 single block prefill seq=128 的 tiling-only 2x2 SPAD/BW 空间上得到 NEGATIVE，<code>09b9ac3</code> 在 10% Gate-1 threshold 下重算后仍保持 NEGATIVE。随后 <code>42e57b6</code> 做 Route 4 discovery，确认 fusion 是无需源码修改即可切换的编译器轴，而 dense systolic dataflow 不是 YAML 暴露轴。最终 <code>79e6259</code> 在 Conv 3x3 workload 上得到 <code>FUSION_CONV_CODESIGN_POSITIVE</code>：fusion speedup across HW 的 relative range 为 <code>42.7%</code>，<code>gate2b_ratio_fusion=0.523</code>。</p>
+<p>本文只总结当前可实现的编译器修改维度，不新增 TOGSim sweep，不修改 PyTorchSim / TOGSim / gem5 / ramulator2 / spike 源码。</p>
+<h2>2. 四个编译器修改维度的当前状态</h2>
+<table>
+<tr><th>维度</th><th>当前 status</th><th>修改成本</th><th>是否已实测</th><th>POSITIVE 证据</th></tr>
+<tr><td>fusion</td><td><code>codegen_compiler_optimization</code> YAML field，可设 <code>none</code> / <code>all</code> / subset；已证明会改变 MLIR/TOG 结构</td><td>0，无源码修改</td><td>YES</td><td>Conv 4-HW sweep：<code>fusion_speedup_range.relative_range=0.427</code>，<code>gate2b_ratio_fusion=0.523</code>，commit <code>79e6259</code></td></tr>
+<tr><td>dataflow</td><td>Dense systolic 主路径是 weight-stationary / <code>WS_MESH</code>，未暴露 OS/IS YAML 字段</td><td>HIGH，需要 codegen template、TOG/cycle assumptions 和 config plumbing overhaul</td><td>NO</td><td>none</td></tr>
+<tr><td>SPAD partition</td><td><code>SPAD_PARTITION_HARDCODED</code>：只发现容量字段 <code>vpu_spad_size_kb_per_lane</code>，没有 partition strategy 字段；模板内固定 <code>input_buffer</code> / <code>weight_buffer</code> / <code>output_buffer</code></td><td>HIGH，需要改 template tile descriptors / scratchpad allocation policy</td><td>NO</td><td>none</td></tr>
+<tr><td>DMA schedule</td><td><code>DMA_SCHEDULE_HARDCODED</code>：未发现 <code>prefetch</code> / <code>double_buffer</code> / <code>dma_schedule</code> / <code>dma_pipeline</code> 配置字段；DMA 插入由 codegen buffer 顺序和模板逻辑决定</td><td>MEDIUM-HIGH，需要改 MLIR DMA emission、wait/dependency insertion 和 possibly TOG generation</td><td>NO</td><td>none</td></tr>
+</table>
+<h2>3. Fusion 维度深入</h2>
+<p>Fusion 是当前唯一已经跑通并产生 POSITIVE 的 compiler axis。<code>42e57b6</code> 的 discovery 确认 fusion 控制面来自 <code>codegen_compiler_optimization</code>，配置可设为 <code>all</code>、<code>none</code> 或部分 fusion family。限制是：它不是任意 pattern-level 开关，template-template fusion 被禁止，Conv 主要支持 epilogue fusion。</p>
+<ul>
+  <li><code>59f44ba</code> recovery 后，addmm+relu 128 在 mode=0 timing 下出现强信号：<code>fusion=none</code> median <code>2183</code> cycles，<code>fusion=all</code> median <code>1118</code> cycles，约 <code>2x</code>。</li>
+  <li><code>3489f94</code> 在 GPT-2 block seq=128 上做 fusion x HW mini check：<code>fusion=none</code> median <code>430717</code>，<code>fusion=all</code> median <code>422711</code>，差异只有 <code>1.9%</code>。</li>
+  <li><code>ce5f0e3</code> 做 root-cause investigation：GPT-2 structural diff 显示 <code>fusion=all</code> 的 MLIR op count 比 <code>fusion=none</code> 少约 <code>7.8%</code>，但该变化不在 GPT-2 主导 critical path 上。Conv 3x3 single-cell probe 显示约 <code>6.84x</code>。</li>
+  <li><code>79e6259</code> 的 Conv 4-HW x 2-fusion sweep 得到 <code>FUSION_CONV_CODESIGN_POSITIVE</code>。四个 HW 的 fusion speedup 为：<code>HW-A=6.895x</code>，<code>HW-B=4.830x</code>，<code>HW-C=6.262x</code>，<code>HW-D=5.253x</code>。</li>
+</ul>
+<p>结论：fusion 轴是实测有效的，但其价值高度 workload-dependent。GPT-2 block 上弱，Conv-heavy workload 上强，并且在 Conv 上与 HW 配置存在 measured interaction。</p>
+<h2>4. Dataflow 维度死锁</h2>
+<p><code>42e57b6</code> 的 discovery 已确认 dense systolic main path 实际上是 weight-stationary。搜索未发现 <code>output_stationary</code> / <code>input_stationary</code> / dense systolic dataflow YAML selection。STONNE sparse path 中存在 dataflow enum，但它属于 vendored STONNE path，不是 PyTorchSim dense <code>WS_MESH</code> systolic path 的无源码配置轴。</p>
+<p>因此 dataflow 当前是 <code>BLOCKED without source modification</code>。若未来要纳入 Route 4，需要新增 YAML field、extension config plumbing、GEMM/BMM/SDPA loop order 和 tile descriptor generation，还要检查 TOG generation / gem5 cycle sampling 是否含 weight-stationary assumption。</p>
+<h2>5. SPAD partition 维度</h2>
+<p>Task 1 discovery 只做只读 grep，没有运行 TOGSim sweep。configs 中存在 <code>vpu_spad_size_kb_per_lane</code>，这是容量轴，不是 partition policy。Conv templates 明确创建 <code>input_buffer</code>、<code>weight_buffer</code>、<code>output_buffer</code>；BMM/GEMM 类 template 也采用固定的 SRAM buffer 命名，例如 <code>X_buffer</code>、<code>W_buffer</code>、<code>Y_buffer</code>。</p>
+<p>判定：<code>SPAD_PARTITION_HARDCODED</code>。当前可以 sweep SPAD 容量，但不能无源码地表达 input/weight/output/intermediate 的分区策略。</p>
+<h2>6. DMA schedule 维度</h2>
+<p>Task 1 discovery 未发现 <code>prefetch</code>、<code>double_buffer</code>、<code>async_wait</code>、<code>dma_schedule</code>、<code>dma_pipeline</code> 等 YAML/CLI 控制字段。<code>format_dma_op_attributes()</code> 支持 <code>memref.dma_start</code> 的 <code>async</code> attribute，但具体插入顺序由 <code>dma_loads</code> / <code>dma_stores</code> buffers 和模板 splice 逻辑决定。</p>
+<p>判定：<code>DMA_SCHEDULE_HARDCODED</code>。若未来要把它变成 Route 4 轴，需要暴露 prefetch/double-buffer/wait policy，改 DMA insertion order，并验证 raw TOG / ONNX TOG 的 wait dependency。</p>
+<h2>7. 未来 Route 4 扩展建议</h2>
+<ol>
+  <li>Fusion x HW at multiple mappings：在 Conv-heavy workload 上加入多个 mapping，观察 champion migration 和 ranking correlation。</li>
+  <li>Fusion x HW on additional Conv-heavy workloads：用 ResNet-50 stage、MobileNet depthwise/pointwise block 或 Conv-BN-ReLU stack 验证泛化。</li>
+  <li>SPAD partition axis or DMA schedule axis：当前 discovery 判定二者都不是 YAML controlled。若接受源码修改，优先选择改动范围更清楚的 DMA schedule。</li>
+  <li>Dataflow axis：只有在接受较高源码修改成本后再做。</li>
+</ol>
+<p>最终建议：短期 Route 4 应继续围绕 fusion axis 做 workload 和 mapping 扩展；不要把 Conv POSITIVE 直接泛化到 GPT-2 或所有 NPU workload。</p>
+</body>
+</html>

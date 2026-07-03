@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Route 4 HW/SW co-design POSITIVE 声明</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; max-width: 1080px; margin: 32px auto; padding: 0 24px; color: #222; }
+    h1 { border-bottom: 3px solid #333; padding-bottom: 8px; }
+    h2 { margin-top: 30px; border-left: 4px solid #333; padding-left: 10px; }
+    table { border-collapse: collapse; width: 100%; margin: 14px 0; }
+    th, td { border: 1px solid #d6d6d6; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #333; color: #fff; }
+    code, blockquote { background: #f5f5f5; border-radius: 4px; }
+    code { padding: 1px 4px; }
+    blockquote { margin: 16px 0; padding: 12px 16px; border-left: 4px solid #777; }
+  </style>
+</head>
+<body>
+<h1>Route 4 HW/SW co-design POSITIVE 声明</h1>
+<h2>1. 结论</h2>
+<p>在 Conv 3x3 workload 上，fusion 轴与 HW 配置存在 measured interaction：<code>fusion_speedup_range.relative_range=42.7%</code>，构成本项目首次 measured HW/SW co-design POSITIVE 证据。该结论来自 commit <code>79e6259</code> 的 Conv 4-HW x 2-fusion sweep，verdict 为 <code>FUSION_CONV_CODESIGN_POSITIVE</code>。</p>
+<h2>2. 证据链</h2>
+<ol>
+  <li><code>92623de</code>：v1 baseline 在 GPT-2 single block prefill seq=128、tiling-only 2x2 SPAD/BW 空间上得到 NEGATIVE。</li>
+  <li><code>09b9ac3</code>：在 10% Gate-1 threshold 下重算 v1，NEGATIVE 保持。</li>
+  <li><code>42e57b6</code>：Route 4 discovery 证明 fusion 是当前 PyTorchSim 中可无源码切换的 compiler axis；dataflow 不是无源码配置轴。</li>
+  <li><code>59f44ba</code>：fusion pilot recovery 后，addmm+relu 128 出现约 <code>2x</code> timing 差异。</li>
+  <li><code>3489f94</code>：GPT-2 block seq=128 上 <code>fusion=all</code> vs <code>fusion=none</code> 只有 <code>1.9%</code> 差异，判定为 <code>FUSION_NOT_GENERALIZABLE_ON_GPT2</code>。</li>
+  <li><code>ce5f0e3</code>：root-cause investigation 显示 GPT-2 中 fusion 结构上生效但不在 critical path；Conv 3x3 single-cell probe 约 <code>6.84x</code>。</li>
+  <li><code>79e6259</code>：Conv 4-HW x 2-fusion sweep 显示 fusion speedup 随 HW 显著变化，<code>relative_range=42.7%</code>，<code>gate2b_ratio_fusion=0.523</code>，得到 <code>FUSION_CONV_CODESIGN_POSITIVE</code>。</li>
+</ol>
+<h2>3. Measured 数据摘要</h2>
+<p>Conv workload 为 <code>conv3x3_probe</code>：Conv 3x3 <code>[1, 64, 56, 56] -&gt; [1, 64, 56, 56]</code>，<code>pytorchsim_functional_mode=0</code>，每个 <code>(HW, fusion)</code> cell 5 repeats，<code>seed=0</code>，mapping 为 harness default。</p>
+<table>
+<tr><th>HW</th><th>fusion=none median cycles</th><th>fusion=all median cycles</th><th>fusion_speedup</th></tr>
+<tr><td>HW-A</td><td>189837</td><td>27533</td><td>6.895</td></tr>
+<tr><td>HW-B</td><td>240914</td><td>49877</td><td>4.830</td></tr>
+<tr><td>HW-C</td><td>163275</td><td>26074</td><td>6.262</td></tr>
+<tr><td>HW-D</td><td>294609</td><td>56080</td><td>5.253</td></tr>
+</table>
+<table>
+<tr><th>HW</th><th>fusion_speedup</th></tr>
+<tr><td>HW-A</td><td>6.894889768641267</td></tr>
+<tr><td>HW-B</td><td>4.830162199009563</td></tr>
+<tr><td>HW-C</td><td>6.261985119275907</td></tr>
+<tr><td>HW-D</td><td>5.253370185449358</td></tr>
+</table>
+<ul>
+  <li><code>fusion_speedup_range.relative_range = 0.427465473117048</code></li>
+  <li><code>hw_x_fusion_interaction_significant = true</code></li>
+  <li><code>gate2b_ratio_fusion = 0.522766004370752</code></li>
+  <li><code>gate2b_passed = true</code></li>
+  <li><code>champion_fusion_per_hw = all</code> for <code>HW-A/B/C/D</code></li>
+</ul>
+<h2>4. Scope limitations</h2>
+<ul>
+  <li>Single workload：目前 POSITIVE 只在 Conv 3x3 kernel-level workload 上成立，不代表完整 ResNet、MobileNet、GPT-2 或所有 DNN。</li>
+  <li>Single mapping：本次 Conv 4-HW sweep 使用 harness default mapping，没有做 multi-mapping ranking，因此不能声称正式 Gate-3 ranking interaction。</li>
+  <li>Mode=0 timing：结果是 <code>pytorchsim_functional_mode=0</code> timing evidence；mode=1 correctness 因 Spike <code>--varch</code> source blocker 仍 deferred。</li>
+  <li>Four HW configs only：HW 空间只有 <code>codesign_v1_2x2</code> 的 <code>HW-A/B/C/D</code> 四个 corner，没有覆盖内部连续空间。</li>
+  <li>Fusion axis only：POSITIVE 只证明 fusion axis 与 HW 配置存在 interaction；dataflow / SPAD partition / DMA schedule 尚未 demonstrated POSITIVE。</li>
+</ul>
+<h2>5. 与 v1 NEGATIVE 的关系</h2>
+<p>v1 NEGATIVE 仍然有效。它的范围是 GPT-2 single block prefill seq=128、tiling-only search space、2x2 SPAD/BW HW corners。该 NEGATIVE 说明：在这个 workload 和 tiling axis 上，per-HW mapping tuning 没有形成 claim-bearing co-design value。</p>
+<p>本 POSITIVE 是另一个 axis 和另一个 workload：fusion axis + Conv 3x3。二者不冲突。它们共同说明：HW/SW co-design 价值不是 universal property，而是 workload-dependent 和 axis-dependent。</p>
+<h2>6. 引用政策</h2>
+<p>任何外部引用本 POSITIVE 时，必须同时包含第 4 节的范围限制。推荐引用格式：</p>
+<blockquote>在 PyTorchSim 的 Conv 3x3 kernel-level workload 上，Route 4 fusion axis 显示 measured HW/SW co-design POSITIVE：四个 HW corner 的 fusion speedup relative range 为 42.7%，<code>gate2b_ratio_fusion=0.523</code>。该结论限于 single Conv workload、single mapping、mode=0 timing、four HW corners 和 fusion axis。</blockquote>
+</body>
+</html>
