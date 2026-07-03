@@ -83,17 +83,27 @@ def generate_hw_configs(output_root: Path) -> dict[str, Any]:
     return manifest
 
 
-def make_run_config(hw_config: Path, run_dir: Path, *, functional_mode: int) -> Path:
+def make_run_config(
+    hw_config: Path,
+    run_dir: Path,
+    *,
+    functional_mode: int,
+    use_external_mapping: bool = True,
+) -> Path:
     data = yaml.safe_load(hw_config.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"HW YAML must be a mapping: {hw_config}")
     data = normalize_config_paths(data)
     data["pytorchsim_functional_mode"] = int(functional_mode)
     data["pytorchsim_timing_mode"] = 1
-    data["codegen_mapping_strategy"] = "external-then-heuristic"
-    external_mapping = run_dir / "external_mapping.json"
-    write_external_mapping_file(external_mapping, MAPPING_CONFIG, seq=128)
-    data["codegen_external_mapping_file"] = str(external_mapping.resolve())
+    if use_external_mapping:
+        data["codegen_mapping_strategy"] = "external-then-heuristic"
+        external_mapping = run_dir / "external_mapping.json"
+        write_external_mapping_file(external_mapping, MAPPING_CONFIG, seq=128)
+        data["codegen_external_mapping_file"] = str(external_mapping.resolve())
+    else:
+        data["codegen_mapping_strategy"] = "heuristic"
+        data["codegen_external_mapping_file"] = ""
     run_config = run_dir / "togsim_config.yml"
     run_config.parent.mkdir(parents=True, exist_ok=True)
     run_config.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
@@ -1239,13 +1249,19 @@ def run_timing_cell(
     variant: str,
     repeats: int,
     timeout_sec: int,
+    use_external_mapping: bool = True,
 ) -> dict[str, Any]:
     cycles: list[int] = []
     run_summaries: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
     for idx in range(repeats):
         run_dir = cell_dir / f"run_{idx:02d}"
-        config_path = make_run_config(hw_config, run_dir, functional_mode=0)
+        config_path = make_run_config(
+            hw_config,
+            run_dir,
+            functional_mode=0,
+            use_external_mapping=use_external_mapping,
+        )
         code, result, stdout = run_child(
             run_dir=run_dir,
             config_path=config_path,
@@ -1836,6 +1852,300 @@ def run_fusion_root_cause_investigation(args: argparse.Namespace) -> int:
     return 0 if verdict != "FUSION_ROUTE_BLOCKED_ON_MEASUREMENT" else 2
 
 
+def analyze_conv_codesign_matrix(matrix: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    champion_fusion_per_hw: dict[str, str] = {}
+    fusion_speedup_per_hw: dict[str, float] = {}
+    all_medians: dict[str, dict[str, float]] = {}
+    blocked_cells: list[str] = []
+    for hw_id, hw_data in matrix.items():
+        all_medians[hw_id] = {}
+        for variant in ("none", "all"):
+            cell = hw_data.get(variant, {})
+            if cell.get("class") != "measured" or float(cell.get("median", 0) or 0) <= 0:
+                blocked_cells.append(f"{hw_id}/{variant}")
+            all_medians[hw_id][variant] = float(cell.get("median", 0) or 0)
+        none_median = all_medians[hw_id]["none"]
+        all_median = all_medians[hw_id]["all"]
+        champion_fusion_per_hw[hw_id] = "all" if all_median <= none_median else "none"
+        fusion_speedup_per_hw[hw_id] = none_median / all_median if all_median > 0 else 0.0
+
+    mean_by_fusion = {
+        variant: statistics.mean(all_medians[hw_id][variant] for hw_id in matrix)
+        for variant in ("none", "all")
+    }
+    global_champion_fusion = min(mean_by_fusion, key=mean_by_fusion.get)
+    per_hw_ratios: dict[str, float] = {}
+    per_hw_oracle_cycles: dict[str, float] = {}
+    global_champion_cycles: dict[str, float] = {}
+    for hw_id, medians in all_medians.items():
+        best = min(medians.values())
+        global_cycles = medians[global_champion_fusion]
+        per_hw_oracle_cycles[hw_id] = best
+        global_champion_cycles[hw_id] = global_cycles
+        per_hw_ratios[hw_id] = best / global_cycles if global_cycles > 0 else 0.0
+
+    mean_per_hw = statistics.mean(per_hw_oracle_cycles.values()) if per_hw_oracle_cycles else 0.0
+    mean_single_fusion = statistics.mean(global_champion_cycles.values()) if global_champion_cycles else 0.0
+    gate2a_ratio_mean = mean_per_hw / mean_single_fusion if mean_single_fusion > 0 else 0.0
+    best_b = per_hw_oracle_cycles.get("HW-B", 0.0)
+    best_c = per_hw_oracle_cycles.get("HW-C", 0.0)
+    gate2b_ratio = min(best_b, best_c) / max(best_b, best_c) if best_b > 0 and best_c > 0 else 0.0
+    speedups = list(fusion_speedup_per_hw.values())
+    speedup_max = max(speedups) if speedups else 0.0
+    speedup_min = min(speedups) if speedups else 0.0
+    speedup_relative_range = (speedup_max - speedup_min) / speedup_min if speedup_min > 0 else 0.0
+    same_champion = len(set(champion_fusion_per_hw.values())) == 1
+    return {
+        "champion_fusion_per_hw": champion_fusion_per_hw,
+        "same_champion_across_all_hw": same_champion,
+        "fusion_speedup_per_hw": fusion_speedup_per_hw,
+        "fusion_speedup_range": {
+            "max": speedup_max,
+            "min": speedup_min,
+            "relative_range": speedup_relative_range,
+        },
+        "hw_x_fusion_interaction_significant": speedup_relative_range >= 0.15,
+        "gate1_analog_champion_migrates": not same_champion,
+        "global_champion_fusion": global_champion_fusion,
+        "mean_cycles_by_fusion": mean_by_fusion,
+        "per_hw_ratio": per_hw_ratios,
+        "mean_per_hw": mean_per_hw,
+        "mean_single_fusion": mean_single_fusion,
+        "gate2a_ratio_mean": gate2a_ratio_mean,
+        "gate2a_num_hw_meeting_threshold": sum(1 for value in per_hw_ratios.values() if value <= 0.85),
+        "gate2a_passed": gate2a_ratio_mean <= 0.85,
+        "gate2b_ratio_fusion": gate2b_ratio,
+        "gate2b_passed": gate2b_ratio <= 0.85 if gate2b_ratio > 0 else False,
+        "blocked_cells": blocked_cells,
+    }
+
+
+def conv_codesign_verdict(analysis: dict[str, Any]) -> str:
+    if analysis.get("blocked_cells"):
+        return "FUSION_CONV_CODESIGN_BLOCKED"
+    if (
+        analysis.get("hw_x_fusion_interaction_significant")
+        or analysis.get("gate2b_passed")
+        or analysis.get("gate1_analog_champion_migrates")
+    ):
+        return "FUSION_CONV_CODESIGN_POSITIVE"
+    return "FUSION_CONV_CODESIGN_NEGATIVE"
+
+
+def compiler_modification_landscape() -> dict[str, str]:
+    return {
+        "fusion": (
+            "proven strong on Conv (6.84x per Conv probe); proven weak on GPT-2 "
+            "(1.9% - critical-path limited)"
+        ),
+        "dataflow": "BLOCKED without source modification (per discovery)",
+        "SPAD partition": "NOT INVESTIGATED",
+        "DMA schedule": "NOT INVESTIGATED",
+    }
+
+
+def append_conv_sweep_report_sections(
+    matrix_payload: dict[str, Any],
+    analysis: dict[str, Any],
+    verdict: str,
+) -> None:
+    docs_dir = repo_root() / "docs" / "superpowers" / "specs"
+    md_path = docs_dir / "2026-07-01-npu-mapping-dse-route4-fusion-pilot-report.md"
+    html_path = docs_dir / "2026-07-01-npu-mapping-dse-route4-fusion-pilot-report.html"
+    matrix = matrix_payload.get("matrix", {})
+    rows = []
+    for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D"):
+        hw = matrix.get(hw_id, {})
+        rows.append(
+            f"| {hw_id} | `{hw.get('none', {}).get('cycles_in_order', [])}` | "
+            f"`{hw.get('none', {}).get('median', 0)}` | "
+            f"`{hw.get('all', {}).get('cycles_in_order', [])}` | "
+            f"`{hw.get('all', {}).get('median', 0)}` | "
+            f"`{hw.get('fusion_speedup', 0)}` |"
+        )
+    matrix_table = "\n".join(rows)
+    analysis_rows = []
+    for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D"):
+        analysis_rows.append(
+            f"| {hw_id} | `{analysis.get('champion_fusion_per_hw', {}).get(hw_id)}` | "
+            f"`{analysis.get('fusion_speedup_per_hw', {}).get(hw_id)}` | "
+            f"`{analysis.get('per_hw_ratio', {}).get(hw_id)}` |"
+        )
+    analysis_table = "\n".join(analysis_rows)
+    implication = {
+        "FUSION_CONV_CODESIGN_POSITIVE": (
+            "Conv workload 上 fusion axis 不只是固定的软件优化；其收益会随 HW 配置变化，"
+            "因此可以作为 Route 4 后续 HW/SW co-design sweep 的正向证据。"
+        ),
+        "FUSION_CONV_CODESIGN_NEGATIVE": (
+            "Conv workload 上 fusion axis 很强，但在四个 HW corner 中收益近似一致；"
+            "这说明当前 fusion CLI 更像 workload-level compiler knob，而不是 HW-dependent knob。"
+        ),
+        "FUSION_CONV_CODESIGN_BLOCKED": (
+            "至少一个 Conv (HW, fusion) timing cell 没有产生有效 cycles；"
+            "下一步应先修复测量路径，不扩展 sweep。"
+        ),
+    }[verdict]
+    matrix_json = json.dumps(matrix_payload, indent=2, ensure_ascii=False)
+    analysis_json = json.dumps(analysis, indent=2, ensure_ascii=False)
+    landscape_json = json.dumps(compiler_modification_landscape(), indent=2, ensure_ascii=False)
+    md_append = f"""
+
+## 16. Conv sweep 4x2 matrix table
+
+本节使用 `conv3x3_probe`，即 Conv 3x3 `[1, 64, 56, 56] -> [1, 64, 56, 56]`，在 `codesign_v1_2x2` 的 `HW-A/B/C/D` 上分别比较 `codegen_compiler_optimization=none` 与 `all`。所有 run 均为 `pytorchsim_functional_mode=0`，每个 `(HW, fusion)` cell 使用 5 次 independent subprocess，`seed=0`，并保留原始 `cycles_in_order`。
+
+| HW | none cycles | none median | all cycles | all median | fusion_speedup |
+| --- | --- | --- | --- | --- | --- |
+{matrix_table}
+
+完整 matrix JSON：
+
+```json
+{matrix_json}
+```
+
+## 17. Co-design gate analytics
+
+| HW | champion_fusion | fusion_speedup | per_hw_ratio |
+| --- | --- | --- | --- |
+{analysis_table}
+
+关键 gate 结果：
+
+- `hw_x_fusion_interaction_significant`: `{analysis.get('hw_x_fusion_interaction_significant')}`
+- `fusion_speedup_range.relative_range`: `{analysis.get('fusion_speedup_range', {}).get('relative_range')}`
+- `gate1_analog_champion_migrates`: `{analysis.get('gate1_analog_champion_migrates')}`
+- `gate2a_ratio_mean`: `{analysis.get('gate2a_ratio_mean')}`
+- `gate2b_ratio_fusion`: `{analysis.get('gate2b_ratio_fusion')}`
+- `gate2b_passed`: `{analysis.get('gate2b_passed')}`
+
+完整 analysis JSON：
+
+```json
+{analysis_json}
+```
+
+## 18. Final co-design verdict + implication for next step
+
+`{verdict}`
+
+{implication}
+
+当前可编译 compiler-modification directions landscape：
+
+```json
+{landscape_json}
+```
+"""
+    md_text = md_path.read_text(encoding="utf-8")
+    md_text = re.split(r"\n## 16\. Conv sweep 4x2 matrix table\n", md_text)[0].rstrip()
+    md_text = re.sub(r"(## 6\. Verdict\n\n)`[^`]+`", rf"\1`{verdict}`", md_text)
+    md_path.write_text(md_text + md_append, encoding="utf-8")
+
+    html_rows = "\n".join(
+        f"<tr><td>{hw_id}</td><td>{matrix.get(hw_id, {}).get('none', {}).get('cycles_in_order', [])}</td>"
+        f"<td>{matrix.get(hw_id, {}).get('none', {}).get('median', 0)}</td>"
+        f"<td>{matrix.get(hw_id, {}).get('all', {}).get('cycles_in_order', [])}</td>"
+        f"<td>{matrix.get(hw_id, {}).get('all', {}).get('median', 0)}</td>"
+        f"<td>{matrix.get(hw_id, {}).get('fusion_speedup', 0)}</td></tr>"
+        for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D")
+    )
+    html_analysis_rows = "\n".join(
+        f"<tr><td>{hw_id}</td><td>{analysis.get('champion_fusion_per_hw', {}).get(hw_id)}</td>"
+        f"<td>{analysis.get('fusion_speedup_per_hw', {}).get(hw_id)}</td>"
+        f"<td>{analysis.get('per_hw_ratio', {}).get(hw_id)}</td></tr>"
+        for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D")
+    )
+    html_append = f"""
+<h2>16. Conv sweep 4x2 matrix table</h2>
+<p>本节使用 <code>conv3x3_probe</code>，即 Conv 3x3 <code>[1, 64, 56, 56] -&gt; [1, 64, 56, 56]</code>，在 <code>codesign_v1_2x2</code> 的 <code>HW-A/B/C/D</code> 上分别比较 <code>codegen_compiler_optimization=none</code> 与 <code>all</code>。所有 run 均为 <code>pytorchsim_functional_mode=0</code>，每个 <code>(HW, fusion)</code> cell 使用 5 次 independent subprocess，<code>seed=0</code>。</p>
+<table><tr><th>HW</th><th>none cycles</th><th>none median</th><th>all cycles</th><th>all median</th><th>fusion_speedup</th></tr>
+{html_rows}
+</table>
+<p>完整 matrix JSON:</p>
+<pre>{matrix_json}</pre>
+<h2>17. Co-design gate analytics</h2>
+<table><tr><th>HW</th><th>champion_fusion</th><th>fusion_speedup</th><th>per_hw_ratio</th></tr>
+{html_analysis_rows}
+</table>
+<ul>
+  <li><code>hw_x_fusion_interaction_significant</code>: <code>{analysis.get('hw_x_fusion_interaction_significant')}</code></li>
+  <li><code>fusion_speedup_range.relative_range</code>: <code>{analysis.get('fusion_speedup_range', {}).get('relative_range')}</code></li>
+  <li><code>gate1_analog_champion_migrates</code>: <code>{analysis.get('gate1_analog_champion_migrates')}</code></li>
+  <li><code>gate2a_ratio_mean</code>: <code>{analysis.get('gate2a_ratio_mean')}</code></li>
+  <li><code>gate2b_ratio_fusion</code>: <code>{analysis.get('gate2b_ratio_fusion')}</code></li>
+  <li><code>gate2b_passed</code>: <code>{analysis.get('gate2b_passed')}</code></li>
+</ul>
+<p>完整 analysis JSON:</p>
+<pre>{analysis_json}</pre>
+<h2>18. Final co-design verdict + implication for next step</h2>
+<p><code>{verdict}</code></p>
+<p>{implication}</p>
+<p>当前可编译 compiler-modification directions landscape:</p>
+<pre>{landscape_json}</pre>
+"""
+    html_text = html_path.read_text(encoding="utf-8")
+    html_text = re.split(r"\n<h2>16\. Conv sweep 4x2 matrix table</h2>\n", html_text)[0]
+    html_text = re.sub(r"(<h2>6\. Verdict</h2>\n<p><code>)[^<]+(</code></p>)", rf"\1{verdict}\2", html_text)
+    if "</body>" in html_text:
+        html_text = html_text.replace("</body>\n</html>\n", html_append + "</body>\n</html>\n")
+    else:
+        html_text += html_append
+    html_path.write_text(html_text, encoding="utf-8")
+
+
+def run_conv_4hw_fusion_sweep(args: argparse.Namespace) -> int:
+    output_root = Path(args.output_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    manifest = generate_v1_hw_fusion_configs(output_root)
+    matrix: dict[str, dict[str, Any]] = {}
+    for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D"):
+        matrix[hw_id] = {}
+        for variant in ("none", "all"):
+            config_path = repo_root() / manifest["generated"][hw_id][variant]["path"]
+            cell = run_timing_cell(
+                cell_dir=output_root / "conv_4hw_fusion_runs" / hw_id / variant,
+                hw_config=config_path,
+                workload="conv3x3_probe",
+                variant=variant,
+                repeats=5,
+                timeout_sec=args.timing_timeout_sec,
+                use_external_mapping=False,
+            )
+            matrix[hw_id][variant] = strip_runs_for_report(cell)
+        none_median = float(matrix[hw_id]["none"].get("median", 0) or 0)
+        all_median = float(matrix[hw_id]["all"].get("median", 0) or 0)
+        matrix[hw_id]["fusion_speedup"] = none_median / all_median if all_median > 0 else 0.0
+
+    matrix_payload = {
+        "workload": "conv3x3_probe",
+        "hw_config_set": "codesign_v1_2x2",
+        "mapping": "harness_default",
+        "pytorchsim_functional_mode": 0,
+        "repeats_per_cell": 5,
+        "seed": 0,
+        "matrix": matrix,
+    }
+    write_json(output_root / "conv_hw_fusion_matrix.json", matrix_payload)
+    analysis = analyze_conv_codesign_matrix(matrix)
+    write_json(output_root / "conv_codesign_analysis.json", analysis)
+    verdict = conv_codesign_verdict(analysis)
+    existing_summary = read_json_if_exists(output_root / "pilot_summary.json", {})
+    existing_summary.update(
+        {
+            "workload": "conv3x3_probe",
+            "conv_hw_fusion_matrix": matrix_payload,
+            "conv_codesign_analysis": analysis,
+            "compiler_modification_landscape": compiler_modification_landscape(),
+            "verdict": verdict,
+        }
+    )
+    write_json(output_root / "pilot_summary.json", existing_summary)
+    append_conv_sweep_report_sections(matrix_payload, analysis, verdict)
+    return 0 if verdict != "FUSION_CONV_CODESIGN_BLOCKED" else 2
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Route 4 fusion-only pilot.")
     parser.add_argument("--output-root", default=str(OUTPUT_ROOT))
@@ -1845,6 +2155,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--recovery-mode0", action="store_true")
     parser.add_argument("--codesign-mini-sweep", action="store_true")
     parser.add_argument("--fusion-root-cause-investigation", action="store_true")
+    parser.add_argument("--conv-4hw-fusion-sweep", action="store_true")
     parser.add_argument("--_child", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--child-kind", choices=["correctness", "timing"], help=argparse.SUPPRESS)
     parser.add_argument("--child-result", type=Path, help=argparse.SUPPRESS)
@@ -1852,7 +2163,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--variant", choices=["none", "all"], help=argparse.SUPPRESS)
     parser.add_argument("--seed", type=int, default=0, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
-    if not args.fusion_root_cause_investigation and args.repeats != 5:
+    if not args.fusion_root_cause_investigation and not args.conv_4hw_fusion_sweep and args.repeats != 5:
         parser.error("--repeats must remain 5 for this pilot")
     return args
 
@@ -1861,6 +2172,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args._child:
         return child_main(args)
+    if args.conv_4hw_fusion_sweep:
+        return run_conv_4hw_fusion_sweep(args)
     if args.fusion_root_cause_investigation:
         return run_fusion_root_cause_investigation(args)
     if args.codesign_mini_sweep:

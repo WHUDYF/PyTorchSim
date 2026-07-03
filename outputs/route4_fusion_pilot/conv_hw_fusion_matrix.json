@@ -1,0 +1,126 @@
+{
+  "hw_config_set": "codesign_v1_2x2",
+  "mapping": "harness_default",
+  "matrix": {
+    "HW-A": {
+      "all": {
+        "class": "measured",
+        "cycle_delta": 0.02734899938255911,
+        "cycles_in_order": [
+          27934,
+          27315,
+          27181,
+          27533,
+          27708
+        ],
+        "failures": [],
+        "median": 27533.0
+      },
+      "fusion_speedup": 6.894889768641267,
+      "none": {
+        "class": "measured",
+        "cycle_delta": 0.003186944589305562,
+        "cycles_in_order": [
+          189837,
+          189861,
+          189927,
+          189322,
+          189816
+        ],
+        "failures": [],
+        "median": 189837.0
+      }
+    },
+    "HW-B": {
+      "all": {
+        "class": "measured",
+        "cycle_delta": 0.011347915873047697,
+        "cycles_in_order": [
+          49575,
+          50066,
+          49760,
+          49877,
+          50141
+        ],
+        "failures": [],
+        "median": 49877.0
+      },
+      "fusion_speedup": 4.830162199009563,
+      "none": {
+        "class": "measured",
+        "cycle_delta": 0.002378442099670422,
+        "cycles_in_order": [
+          240564,
+          240914,
+          240692,
+          241137,
+          240923
+        ],
+        "failures": [],
+        "median": 240914.0
+      }
+    },
+    "HW-C": {
+      "all": {
+        "class": "measured",
+        "cycle_delta": 0.04406688655365498,
+        "cycles_in_order": [
+          25310,
+          26083,
+          26459,
+          26074,
+          25620
+        ],
+        "failures": [],
+        "median": 26074.0
+      },
+      "fusion_speedup": 6.261985119275907,
+      "none": {
+        "class": "measured",
+        "cycle_delta": 0.019219108865411116,
+        "cycles_in_order": [
+          163105,
+          162017,
+          164981,
+          165155,
+          163275
+        ],
+        "failures": [],
+        "median": 163275.0
+      }
+    },
+    "HW-D": {
+      "all": {
+        "class": "measured",
+        "cycle_delta": 0.0022467902995720397,
+        "cycles_in_order": [
+          56020,
+          55971,
+          56088,
+          56080,
+          56097
+        ],
+        "failures": [],
+        "median": 56080.0
+      },
+      "fusion_speedup": 5.253370185449358,
+      "none": {
+        "class": "measured",
+        "cycle_delta": 0.026879694781897362,
+        "cycles_in_order": [
+          298246,
+          292531,
+          291110,
+          294609,
+          299029
+        ],
+        "failures": [],
+        "median": 294609.0
+      }
+    }
+  },
+  "pytorchsim_functional_mode": 0,
+  "repeats_per_cell": 5,
+  "seed": 0,
+  "workload": "conv3x3_probe"
+}

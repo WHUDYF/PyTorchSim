@@ -1,0 +1,41 @@
+{
+  "blocked_cells": [],
+  "champion_fusion_per_hw": {
+    "HW-A": "all",
+    "HW-B": "all",
+    "HW-C": "all",
+    "HW-D": "all"
+  },
+  "fusion_speedup_per_hw": {
+    "HW-A": 6.894889768641267,
+    "HW-B": 4.830162199009563,
+    "HW-C": 6.261985119275907,
+    "HW-D": 5.253370185449358
+  },
+  "fusion_speedup_range": {
+    "max": 6.894889768641267,
+    "min": 4.830162199009563,
+    "relative_range": 0.427465473117048
+  },
+  "gate1_analog_champion_migrates": false,
+  "gate2a_num_hw_meeting_threshold": 0,
+  "gate2a_passed": false,
+  "gate2a_ratio_mean": 1.0,
+  "gate2b_passed": true,
+  "gate2b_ratio_fusion": 0.522766004370752,
+  "global_champion_fusion": "all",
+  "hw_x_fusion_interaction_significant": true,
+  "mean_cycles_by_fusion": {
+    "all": 39891.0,
+    "none": 222158.75
+  },
+  "mean_per_hw": 39891.0,
+  "mean_single_fusion": 39891.0,
+  "per_hw_ratio": {
+    "HW-A": 1.0,
+    "HW-B": 1.0,
+    "HW-C": 1.0,
+    "HW-D": 1.0
+  },
+  "same_champion_across_all_hw": true
+}

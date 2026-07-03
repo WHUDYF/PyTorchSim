@@ -67,7 +67,7 @@
   "observation": "本次 structural diff 只做浅层计数，不做语义等价证明。若 fusion=all 的 MLIR/TOG 出现 epilogue 或 relu/maximumf 等关键字，而 fusion=none 没有对应变化，则说明 fusion axis 已经影响编译产物；否则该 workload 下 fusion 结构差异不明显。"
 }</pre>
 <h2>6. Verdict</h2>
-<p><code>FUSION_ROUTE_CRITICAL_PATH_LIMITED</code></p>
+<p><code>FUSION_CONV_CODESIGN_POSITIVE</code></p>
 <h2>7. Next step recommendation</h2>
 <p>下一步应先修复 Spike `--varch` toolchain，再复跑 mode=1 correctness；若通过，再把 fusion axis 扩展到小型 4-HW sweep。</p>
 <h2>8. Recovery attempt (Phase A + Phase B result)</h2>
@@ -216,3 +216,206 @@
 <p><code>FUSION_ROUTE_CRITICAL_PATH_LIMITED</code></p>
 <p>root cause classification: <code>structural_active</code></p>
 <p>fusion axis 是真实存在的，但主要影响 Conv/epilogue 类结构；下一步应把 Route 4 workload 换成 ResNet、MobileNet 或 GEMM-stack，再设计后续 sweep。</p>
+
+<h2>16. Conv sweep 4x2 matrix table</h2>
+<p>本节使用 <code>conv3x3_probe</code>，即 Conv 3x3 <code>[1, 64, 56, 56] -&gt; [1, 64, 56, 56]</code>，在 <code>codesign_v1_2x2</code> 的 <code>HW-A/B/C/D</code> 上分别比较 <code>codegen_compiler_optimization=none</code> 与 <code>all</code>。所有 run 均为 <code>pytorchsim_functional_mode=0</code>，每个 <code>(HW, fusion)</code> cell 使用 5 次 independent subprocess，<code>seed=0</code>。</p>
+<table><tr><th>HW</th><th>none cycles</th><th>none median</th><th>all cycles</th><th>all median</th><th>fusion_speedup</th></tr>
+<tr><td>HW-A</td><td>[189837, 189861, 189927, 189322, 189816]</td><td>189837.0</td><td>[27934, 27315, 27181, 27533, 27708]</td><td>27533.0</td><td>6.894889768641267</td></tr>
+<tr><td>HW-B</td><td>[240564, 240914, 240692, 241137, 240923]</td><td>240914.0</td><td>[49575, 50066, 49760, 49877, 50141]</td><td>49877.0</td><td>4.830162199009563</td></tr>
+<tr><td>HW-C</td><td>[163105, 162017, 164981, 165155, 163275]</td><td>163275.0</td><td>[25310, 26083, 26459, 26074, 25620]</td><td>26074.0</td><td>6.261985119275907</td></tr>
+<tr><td>HW-D</td><td>[298246, 292531, 291110, 294609, 299029]</td><td>294609.0</td><td>[56020, 55971, 56088, 56080, 56097]</td><td>56080.0</td><td>5.253370185449358</td></tr>
+</table>
+<p>完整 matrix JSON:</p>
+<pre>{
+  "workload": "conv3x3_probe",
+  "hw_config_set": "codesign_v1_2x2",
+  "mapping": "harness_default",
+  "pytorchsim_functional_mode": 0,
+  "repeats_per_cell": 5,
+  "seed": 0,
+  "matrix": {
+    "HW-A": {
+      "none": {
+        "cycles_in_order": [
+          189837,
+          189861,
+          189927,
+          189322,
+          189816
+        ],
+        "median": 189837.0,
+        "cycle_delta": 0.003186944589305562,
+        "class": "measured",
+        "failures": []
+      },
+      "all": {
+        "cycles_in_order": [
+          27934,
+          27315,
+          27181,
+          27533,
+          27708
+        ],
+        "median": 27533.0,
+        "cycle_delta": 0.02734899938255911,
+        "class": "measured",
+        "failures": []
+      },
+      "fusion_speedup": 6.894889768641267
+    },
+    "HW-B": {
+      "none": {
+        "cycles_in_order": [
+          240564,
+          240914,
+          240692,
+          241137,
+          240923
+        ],
+        "median": 240914.0,
+        "cycle_delta": 0.002378442099670422,
+        "class": "measured",
+        "failures": []
+      },
+      "all": {
+        "cycles_in_order": [
+          49575,
+          50066,
+          49760,
+          49877,
+          50141
+        ],
+        "median": 49877.0,
+        "cycle_delta": 0.011347915873047697,
+        "class": "measured",
+        "failures": []
+      },
+      "fusion_speedup": 4.830162199009563
+    },
+    "HW-C": {
+      "none": {
+        "cycles_in_order": [
+          163105,
+          162017,
+          164981,
+          165155,
+          163275
+        ],
+        "median": 163275.0,
+        "cycle_delta": 0.019219108865411116,
+        "class": "measured",
+        "failures": []
+      },
+      "all": {
+        "cycles_in_order": [
+          25310,
+          26083,
+          26459,
+          26074,
+          25620
+        ],
+        "median": 26074.0,
+        "cycle_delta": 0.04406688655365498,
+        "class": "measured",
+        "failures": []
+      },
+      "fusion_speedup": 6.261985119275907
+    },
+    "HW-D": {
+      "none": {
+        "cycles_in_order": [
+          298246,
+          292531,
+          291110,
+          294609,
+          299029
+        ],
+        "median": 294609.0,
+        "cycle_delta": 0.026879694781897362,
+        "class": "measured",
+        "failures": []
+      },
+      "all": {
+        "cycles_in_order": [
+          56020,
+          55971,
+          56088,
+          56080,
+          56097
+        ],
+        "median": 56080.0,
+        "cycle_delta": 0.0022467902995720397,
+        "class": "measured",
+        "failures": []
+      },
+      "fusion_speedup": 5.253370185449358
+    }
+  }
+}</pre>
+<h2>17. Co-design gate analytics</h2>
+<table><tr><th>HW</th><th>champion_fusion</th><th>fusion_speedup</th><th>per_hw_ratio</th></tr>
+<tr><td>HW-A</td><td>all</td><td>6.894889768641267</td><td>1.0</td></tr>
+<tr><td>HW-B</td><td>all</td><td>4.830162199009563</td><td>1.0</td></tr>
+<tr><td>HW-C</td><td>all</td><td>6.261985119275907</td><td>1.0</td></tr>
+<tr><td>HW-D</td><td>all</td><td>5.253370185449358</td><td>1.0</td></tr>
+</table>
+<ul>
+  <li><code>hw_x_fusion_interaction_significant</code>: <code>True</code></li>
+  <li><code>fusion_speedup_range.relative_range</code>: <code>0.427465473117048</code></li>
+  <li><code>gate1_analog_champion_migrates</code>: <code>False</code></li>
+  <li><code>gate2a_ratio_mean</code>: <code>1.0</code></li>
+  <li><code>gate2b_ratio_fusion</code>: <code>0.522766004370752</code></li>
+  <li><code>gate2b_passed</code>: <code>True</code></li>
+</ul>
+<p>完整 analysis JSON:</p>
+<pre>{
+  "champion_fusion_per_hw": {
+    "HW-A": "all",
+    "HW-B": "all",
+    "HW-C": "all",
+    "HW-D": "all"
+  },
+  "same_champion_across_all_hw": true,
+  "fusion_speedup_per_hw": {
+    "HW-A": 6.894889768641267,
+    "HW-B": 4.830162199009563,
+    "HW-C": 6.261985119275907,
+    "HW-D": 5.253370185449358
+  },
+  "fusion_speedup_range": {
+    "max": 6.894889768641267,
+    "min": 4.830162199009563,
+    "relative_range": 0.427465473117048
+  },
+  "hw_x_fusion_interaction_significant": true,
+  "gate1_analog_champion_migrates": false,
+  "global_champion_fusion": "all",
+  "mean_cycles_by_fusion": {
+    "none": 222158.75,
+    "all": 39891.0
+  },
+  "per_hw_ratio": {
+    "HW-A": 1.0,
+    "HW-B": 1.0,
+    "HW-C": 1.0,
+    "HW-D": 1.0
+  },
+  "mean_per_hw": 39891.0,
+  "mean_single_fusion": 39891.0,
+  "gate2a_ratio_mean": 1.0,
+  "gate2a_num_hw_meeting_threshold": 0,
+  "gate2a_passed": false,
+  "gate2b_ratio_fusion": 0.522766004370752,
+  "gate2b_passed": true,
+  "blocked_cells": []
+}</pre>
+<h2>18. Final co-design verdict + implication for next step</h2>
+<p><code>FUSION_CONV_CODESIGN_POSITIVE</code></p>
+<p>Conv workload 上 fusion axis 不只是固定的软件优化；其收益会随 HW 配置变化，因此可以作为 Route 4 后续 HW/SW co-design sweep 的正向证据。</p>
+<p>当前可编译 compiler-modification directions landscape:</p>
+<pre>{
+  "fusion": "proven strong on Conv (6.84x per Conv probe); proven weak on GPT-2 (1.9% - critical-path limited)",
+  "dataflow": "BLOCKED without source modification (per discovery)",
+  "SPAD partition": "NOT INVESTIGATED",
+  "DMA schedule": "NOT INVESTIGATED"
+}</pre>

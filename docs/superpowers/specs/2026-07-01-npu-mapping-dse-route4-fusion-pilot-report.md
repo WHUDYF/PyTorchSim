@@ -69,7 +69,7 @@
 
 ## 6. Verdict
 
-`FUSION_ROUTE_CRITICAL_PATH_LIMITED`
+`FUSION_CONV_CODESIGN_POSITIVE`
 
 ## 7. Next step recommendation
 
@@ -265,3 +265,226 @@ Conv probe 完成，`cycle_delta_between_variants` = `5.841693975296193`，`gene
 root cause classification: `structural_active`
 
 fusion axis 是真实存在的，但主要影响 Conv/epilogue 类结构；下一步应把 Route 4 workload 换成 ResNet、MobileNet 或 GEMM-stack，再设计后续 sweep。
+
+## 16. Conv sweep 4x2 matrix table
+
+本节使用 `conv3x3_probe`，即 Conv 3x3 `[1, 64, 56, 56] -> [1, 64, 56, 56]`，在 `codesign_v1_2x2` 的 `HW-A/B/C/D` 上分别比较 `codegen_compiler_optimization=none` 与 `all`。所有 run 均为 `pytorchsim_functional_mode=0`，每个 `(HW, fusion)` cell 使用 5 次 independent subprocess，`seed=0`，并保留原始 `cycles_in_order`。
+
+| HW | none cycles | none median | all cycles | all median | fusion_speedup |
+| --- | --- | --- | --- | --- | --- |
+| HW-A | `[189837, 189861, 189927, 189322, 189816]` | `189837.0` | `[27934, 27315, 27181, 27533, 27708]` | `27533.0` | `6.894889768641267` |
+| HW-B | `[240564, 240914, 240692, 241137, 240923]` | `240914.0` | `[49575, 50066, 49760, 49877, 50141]` | `49877.0` | `4.830162199009563` |
+| HW-C | `[163105, 162017, 164981, 165155, 163275]` | `163275.0` | `[25310, 26083, 26459, 26074, 25620]` | `26074.0` | `6.261985119275907` |
+| HW-D | `[298246, 292531, 291110, 294609, 299029]` | `294609.0` | `[56020, 55971, 56088, 56080, 56097]` | `56080.0` | `5.253370185449358` |
+
+完整 matrix JSON：
+
+```json
+{
+  "workload": "conv3x3_probe",
+  "hw_config_set": "codesign_v1_2x2",
+  "mapping": "harness_default",
+  "pytorchsim_functional_mode": 0,
+  "repeats_per_cell": 5,
+  "seed": 0,
+  "matrix": {
+    "HW-A": {
+      "none": {
+        "cycles_in_order": [
+          189837,
+          189861,
+          189927,
+          189322,
+          189816
+        ],
+        "median": 189837.0,
+        "cycle_delta": 0.003186944589305562,
+        "class": "measured",
+        "failures": []
+      },
+      "all": {
+        "cycles_in_order": [
+          27934,
+          27315,
+          27181,
+          27533,
+          27708
+        ],
+        "median": 27533.0,
+        "cycle_delta": 0.02734899938255911,
+        "class": "measured",
+        "failures": []
+      },
+      "fusion_speedup": 6.894889768641267
+    },
+    "HW-B": {
+      "none": {
+        "cycles_in_order": [
+          240564,
+          240914,
+          240692,
+          241137,
+          240923
+        ],
+        "median": 240914.0,
+        "cycle_delta": 0.002378442099670422,
+        "class": "measured",
+        "failures": []
+      },
+      "all": {
+        "cycles_in_order": [
+          49575,
+          50066,
+          49760,
+          49877,
+          50141
+        ],
+        "median": 49877.0,
+        "cycle_delta": 0.011347915873047697,
+        "class": "measured",
+        "failures": []
+      },
+      "fusion_speedup": 4.830162199009563
+    },
+    "HW-C": {
+      "none": {
+        "cycles_in_order": [
+          163105,
+          162017,
+          164981,
+          165155,
+          163275
+        ],
+        "median": 163275.0,
+        "cycle_delta": 0.019219108865411116,
+        "class": "measured",
+        "failures": []
+      },
+      "all": {
+        "cycles_in_order": [
+          25310,
+          26083,
+          26459,
+          26074,
+          25620
+        ],
+        "median": 26074.0,
+        "cycle_delta": 0.04406688655365498,
+        "class": "measured",
+        "failures": []
+      },
+      "fusion_speedup": 6.261985119275907
+    },
+    "HW-D": {
+      "none": {
+        "cycles_in_order": [
+          298246,
+          292531,
+          291110,
+          294609,
+          299029
+        ],
+        "median": 294609.0,
+        "cycle_delta": 0.026879694781897362,
+        "class": "measured",
+        "failures": []
+      },
+      "all": {
+        "cycles_in_order": [
+          56020,
+          55971,
+          56088,
+          56080,
+          56097
+        ],
+        "median": 56080.0,
+        "cycle_delta": 0.0022467902995720397,
+        "class": "measured",
+        "failures": []
+      },
+      "fusion_speedup": 5.253370185449358
+    }
+  }
+}
+```
+
+## 17. Co-design gate analytics
+
+| HW | champion_fusion | fusion_speedup | per_hw_ratio |
+| --- | --- | --- | --- |
+| HW-A | `all` | `6.894889768641267` | `1.0` |
+| HW-B | `all` | `4.830162199009563` | `1.0` |
+| HW-C | `all` | `6.261985119275907` | `1.0` |
+| HW-D | `all` | `5.253370185449358` | `1.0` |
+
+关键 gate 结果：
+
+- `hw_x_fusion_interaction_significant`: `True`
+- `fusion_speedup_range.relative_range`: `0.427465473117048`
+- `gate1_analog_champion_migrates`: `False`
+- `gate2a_ratio_mean`: `1.0`
+- `gate2b_ratio_fusion`: `0.522766004370752`
+- `gate2b_passed`: `True`
+
+完整 analysis JSON：
+
+```json
+{
+  "champion_fusion_per_hw": {
+    "HW-A": "all",
+    "HW-B": "all",
+    "HW-C": "all",
+    "HW-D": "all"
+  },
+  "same_champion_across_all_hw": true,
+  "fusion_speedup_per_hw": {
+    "HW-A": 6.894889768641267,
+    "HW-B": 4.830162199009563,
+    "HW-C": 6.261985119275907,
+    "HW-D": 5.253370185449358
+  },
+  "fusion_speedup_range": {
+    "max": 6.894889768641267,
+    "min": 4.830162199009563,
+    "relative_range": 0.427465473117048
+  },
+  "hw_x_fusion_interaction_significant": true,
+  "gate1_analog_champion_migrates": false,
+  "global_champion_fusion": "all",
+  "mean_cycles_by_fusion": {
+    "none": 222158.75,
+    "all": 39891.0
+  },
+  "per_hw_ratio": {
+    "HW-A": 1.0,
+    "HW-B": 1.0,
+    "HW-C": 1.0,
+    "HW-D": 1.0
+  },
+  "mean_per_hw": 39891.0,
+  "mean_single_fusion": 39891.0,
+  "gate2a_ratio_mean": 1.0,
+  "gate2a_num_hw_meeting_threshold": 0,
+  "gate2a_passed": false,
+  "gate2b_ratio_fusion": 0.522766004370752,
+  "gate2b_passed": true,
+  "blocked_cells": []
+}
+```
+
+## 18. Final co-design verdict + implication for next step
+
+`FUSION_CONV_CODESIGN_POSITIVE`
+
+Conv workload 上 fusion axis 不只是固定的软件优化；其收益会随 HW 配置变化，因此可以作为 Route 4 后续 HW/SW co-design sweep 的正向证据。
+
+当前可编译 compiler-modification directions landscape：
+
+```json
+{
+  "fusion": "proven strong on Conv (6.84x per Conv probe); proven weak on GPT-2 (1.9% - critical-path limited)",
+  "dataflow": "BLOCKED without source modification (per discovery)",
+  "SPAD partition": "NOT INVESTIGATED",
+  "DMA schedule": "NOT INVESTIGATED"
+}
+```
