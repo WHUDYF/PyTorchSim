@@ -1,4 +1,5 @@
 {
+  "codesign_analysis": null,
   "correctness": {
     "all": {
       "allclose_passed": false,
@@ -27,6 +28,43 @@
       "workload": "addmm_relu_128"
     }
   },
+  "phase_a_gpt2_generalization": {
+    "cycle_delta_between_variants": 0.01893965380602823,
+    "generalizes": false,
+    "hw_config": "HW-A codesign_v1_2x2",
+    "mapping": "006",
+    "note": "fusion generalizes if cycle_delta_between_variants >= 0.10; correctness remains deferred in mode=0",
+    "variants": {
+      "all": {
+        "class": "measured",
+        "cycle_delta": 0.07613239305341002,
+        "cycles_in_order": [
+          411299,
+          422711,
+          426208,
+          441478,
+          409296
+        ],
+        "failures": [],
+        "median": 422711.0
+      },
+      "none": {
+        "class": "measured",
+        "cycle_delta": 0.06763837972497022,
+        "cycles_in_order": [
+          430717,
+          416023,
+          428783,
+          445156,
+          441708
+        ],
+        "failures": [],
+        "median": 430717.0
+      }
+    },
+    "workload": "gpt2_block_prefill_s128"
+  },
+  "phase_b_hw_fusion_matrix": null,
   "spike_varch_diagnostic": "outputs/route4_fusion_pilot/spike_varch_diagnostic.md",
   "structural_diff": {
     "counts": {
@@ -93,6 +131,6 @@
       }
     }
   },
-  "verdict": "FUSION_PILOT_POSITIVE_MODE0_DEFERRED_CORRECTNESS",
-  "workload": "addmm_relu_128"
+  "verdict": "FUSION_NOT_GENERALIZABLE_ON_GPT2",
+  "workload": "gpt2_block_prefill_s128"
 }

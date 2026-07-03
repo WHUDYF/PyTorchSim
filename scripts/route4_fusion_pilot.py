@@ -27,6 +27,7 @@ from mapping_dse_minimal import (
     write_external_mapping_file,
     write_json,
 )
+from hw_config_factory import get_hw_config_set, patch_hw_yaml
 
 
 OUTPUT_ROOT = Path("outputs/route4_fusion_pilot")
@@ -1102,6 +1103,362 @@ def run_recovery_mode0(args: argparse.Namespace) -> int:
     return 0 if verdict != "FUSION_PILOT_STILL_BLOCKED" else 2
 
 
+def generate_v1_hw_fusion_configs(output_root: Path) -> dict[str, Any]:
+    baseline_path = repo_root() / BASELINE_CONFIG
+    baseline = yaml.safe_load(baseline_path.read_text(encoding="utf-8"))
+    if not isinstance(baseline, dict):
+        raise ValueError(f"baseline YAML must be a mapping: {baseline_path}")
+    config_set = get_hw_config_set("codesign_v1_2x2")
+    out_dir = output_root / "hw_fusion_configs"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    generated: dict[str, dict[str, dict[str, str]]] = {}
+    for hw_id, hw_patch in config_set.patch_matrix.items():
+        hw_base = patch_hw_yaml(baseline, hw_patch, config_set=config_set)
+        generated[hw_id] = {}
+        for variant in ("none", "all"):
+            patched = dict(hw_base)
+            patched["codegen_compiler_optimization"] = variant
+            path = out_dir / f"{hw_id}_fuse_{variant}.yml"
+            path.write_text(yaml.safe_dump(patched, sort_keys=False), encoding="utf-8")
+            generated[hw_id][variant] = {
+                "path": str(path),
+                "sha256": sha256_file(path),
+            }
+    manifest = {
+        "baseline_config": str(BASELINE_CONFIG),
+        "baseline_sha256": sha256_file(baseline_path),
+        "hw_config_set": "codesign_v1_2x2",
+        "patch_matrix": config_set.patch_matrix,
+        "fixed_mapping": MAPPING_CONFIG,
+        "generated": generated,
+    }
+    write_json(out_dir / "manifest.json", manifest)
+    return manifest
+
+
+def run_timing_cell(
+    *,
+    cell_dir: Path,
+    hw_config: Path,
+    workload: str,
+    variant: str,
+    repeats: int,
+    timeout_sec: int,
+) -> dict[str, Any]:
+    cycles: list[int] = []
+    run_summaries: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    for idx in range(repeats):
+        run_dir = cell_dir / f"run_{idx:02d}"
+        config_path = make_run_config(hw_config, run_dir, functional_mode=0)
+        code, result, stdout = run_child(
+            run_dir=run_dir,
+            config_path=config_path,
+            child_kind="timing",
+            workload=workload,
+            variant=variant,
+            seed=0,
+            timeout_sec=timeout_sec,
+        )
+        artifacts = collect_run_artifacts(run_dir)
+        total_cycles = int(artifacts.get("total_cycles", 0) or 0)
+        run_summary = {
+            "repeat": idx,
+            "child_returncode": code,
+            "child_ok": bool(result.get("ok", False)),
+            "total_cycles": total_cycles,
+            "artifact_message": artifacts.get("message", ""),
+            "log_paths": artifacts.get("log_paths", []),
+        }
+        write_json(run_dir / "timing_run_summary.json", run_summary)
+        run_summaries.append(run_summary)
+        cycles.append(total_cycles)
+        if code != 0 or total_cycles <= 0:
+            failures.append(
+                {
+                    "repeat": idx,
+                    "child_returncode": code,
+                    "total_cycles": total_cycles,
+                    "error": result.get("error", "") or artifacts.get("message", "") or stdout[-500:],
+                }
+            )
+    valid = [cycle for cycle in cycles if cycle > 0]
+    median = float(statistics.median(valid)) if valid else 0.0
+    cycle_delta = (max(valid) - min(valid)) / median if valid and median else 0.0
+    return {
+        "cycles_in_order": cycles,
+        "median": median,
+        "cycle_delta": cycle_delta,
+        "class": "measured" if len(valid) == repeats and not failures else "blocked",
+        "failures": failures,
+        "runs": run_summaries,
+    }
+
+
+def strip_runs_for_report(cell: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "cycles_in_order": cell.get("cycles_in_order", []),
+        "median": cell.get("median", 0),
+        "cycle_delta": cell.get("cycle_delta", 0),
+        "class": cell.get("class", ""),
+        "failures": cell.get("failures", []),
+    }
+
+
+def cycle_delta_between(none_cell: dict[str, Any], all_cell: dict[str, Any]) -> float | None:
+    medians = [float(none_cell.get("median", 0) or 0), float(all_cell.get("median", 0) or 0)]
+    if min(medians) <= 0:
+        return None
+    return (max(medians) - min(medians)) / min(medians)
+
+
+def analyze_hw_fusion_matrix(matrix: dict[str, dict[str, dict[str, Any]]]) -> dict[str, Any]:
+    fusion_speedup_per_hw: dict[str, float] = {}
+    champion_fusion_per_hw: dict[str, str] = {}
+    best_by_hw: dict[str, float] = {}
+    for hw_id, variants in matrix.items():
+        none_median = float(variants["none"]["median"])
+        all_median = float(variants["all"]["median"])
+        fusion_speedup_per_hw[hw_id] = none_median / all_median if all_median > 0 else 0.0
+        champion_fusion_per_hw[hw_id] = "all" if all_median <= none_median else "none"
+        best_by_hw[hw_id] = min(none_median, all_median)
+    speedups = list(fusion_speedup_per_hw.values())
+    speedup_max = max(speedups) if speedups else 0.0
+    speedup_min = min(speedups) if speedups else 0.0
+    relative_range = (speedup_max - speedup_min) / speedup_min if speedup_min else 0.0
+    best_b = best_by_hw.get("HW-B", 0.0)
+    best_c = best_by_hw.get("HW-C", 0.0)
+    gate2b_ratio = min(best_b, best_c) / max(best_b, best_c) if best_b > 0 and best_c > 0 else 0.0
+    return {
+        "fusion_speedup_per_hw": fusion_speedup_per_hw,
+        "fusion_speedup_range": {
+            "max": speedup_max,
+            "min": speedup_min,
+            "relative_range": relative_range,
+        },
+        "hw_x_fusion_interaction_significant": relative_range >= 0.15,
+        "gate2b_ratio": gate2b_ratio,
+        "gate2b_passed": gate2b_ratio <= 0.85 if gate2b_ratio else False,
+        "champion_fusion_per_hw": champion_fusion_per_hw,
+        "same_champion_across_all_hw": len(set(champion_fusion_per_hw.values())) == 1,
+    }
+
+
+def final_codesign_verdict(phase_a: dict[str, Any], analysis: dict[str, Any] | None, blocked: str = "") -> str:
+    if blocked:
+        return "FUSION_CODESIGN_BLOCKED"
+    if not phase_a.get("generalizes", False):
+        return "FUSION_NOT_GENERALIZABLE_ON_GPT2"
+    if not analysis:
+        return "FUSION_CODESIGN_BLOCKED"
+    if analysis.get("hw_x_fusion_interaction_significant") or analysis.get("gate2b_passed"):
+        return "FUSION_CODESIGN_POSITIVE"
+    return "FUSION_CODESIGN_NEGATIVE"
+
+
+def render_codesign_sections(
+    phase_a: dict[str, Any],
+    phase_b: dict[str, Any] | None,
+    analysis: dict[str, Any] | None,
+    verdict: str,
+) -> None:
+    docs_dir = repo_root() / "docs" / "superpowers" / "specs"
+    md_path = docs_dir / "2026-07-01-npu-mapping-dse-route4-fusion-pilot-report.md"
+    html_path = docs_dir / "2026-07-01-npu-mapping-dse-route4-fusion-pilot-report.html"
+    phase_a_json = json.dumps(phase_a, indent=2, ensure_ascii=False)
+    phase_b_json = json.dumps(phase_b or {}, indent=2, ensure_ascii=False)
+    analysis_json = json.dumps(analysis or {}, indent=2, ensure_ascii=False)
+    matrix = (phase_b or {}).get("matrix", {})
+    rows = []
+    for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D"):
+        item = matrix.get(hw_id, {})
+        if item:
+            rows.append(
+                f"| {hw_id} | `{item['none']['cycles_in_order']}` | `{item['none']['median']}` | "
+                f"`{item['all']['cycles_in_order']}` | `{item['all']['median']}` | `{item['fusion_speedup']}` |"
+            )
+    matrix_table = "\n".join(rows) if rows else "| N/A | `[]` | `0` | `[]` | `0` | `0` |"
+    analysis_rows = []
+    if analysis:
+        for hw_id, speedup in analysis.get("fusion_speedup_per_hw", {}).items():
+            analysis_rows.append(f"| {hw_id} | `{speedup}` | `{analysis['champion_fusion_per_hw'][hw_id]}` |")
+    analysis_table = "\n".join(analysis_rows) if analysis_rows else "| N/A | `0` | `N/A` |"
+    implication = {
+        "FUSION_CODESIGN_POSITIVE": "fusion axis 不只是软件侧优化，它已经表现出与 HW 配置相关的 co-design 信号；下一步可以扩展到更完整的 4-HW 或更大 workload 验证。",
+        "FUSION_CODESIGN_NEGATIVE": "fusion axis 在 GPT-2 上有效，但当前 4-HW 小矩阵下收益较均匀，暂时不能说明 HW/SW 交互明显。",
+        "FUSION_NOT_GENERALIZABLE_ON_GPT2": "fusion axis 在 addmm+relu 上有效，但没有迁移到 GPT-2 block，本轮不应进入更大 HW sweep。",
+        "FUSION_CODESIGN_BLOCKED": "至少一个 timing cell 未产生有效 cycles，应先修复阻塞点再扩大实验。",
+    }[verdict]
+    md_append = f"""
+
+## 9. Phase A workload generalization result
+
+Phase A 使用 `HW-A codesign_v1_2x2`、`TILE_M=128 TILE_N=64 TILE_K=64`、`GPT-2 single transformer block prefill seq=128`，在 `pytorchsim_functional_mode=0` 下比较 `fusion=none` 与 `fusion=all`。结果如下：
+
+```json
+{phase_a_json}
+```
+
+## 10. Phase B HW x fusion matrix
+
+| HW | none cycles | none median | all cycles | all median | fusion_speedup |
+| --- | --- | --- | --- | --- | --- |
+{matrix_table}
+
+完整 JSON：
+
+```json
+{phase_b_json}
+```
+
+## 11. Co-design analytics
+
+| HW | fusion_speedup | champion_fusion |
+| --- | --- | --- |
+{analysis_table}
+
+```json
+{analysis_json}
+```
+
+## 12. New final verdict + implication for next step
+
+`{verdict}`
+
+{implication}
+"""
+    md_text = md_path.read_text(encoding="utf-8")
+    md_text = re.split(r"\n## 9\. Phase A workload generalization result\n", md_text)[0].rstrip()
+    md_text = re.sub(r"(## 6\. Verdict\n\n)`[^`]+`", rf"\1`{verdict}`", md_text)
+    md_path.write_text(md_text + md_append, encoding="utf-8")
+
+    html_append = f"""
+<h2>9. Phase A workload generalization result</h2>
+<p>Phase A 使用 <code>HW-A codesign_v1_2x2</code>、<code>TILE_M=128 TILE_N=64 TILE_K=64</code>、<code>GPT-2 single transformer block prefill seq=128</code>，在 <code>pytorchsim_functional_mode=0</code> 下比较 <code>fusion=none</code> 与 <code>fusion=all</code>。</p>
+<pre>{phase_a_json}</pre>
+<h2>10. Phase B HW x fusion matrix</h2>
+<table><tr><th>HW</th><th>none cycles</th><th>none median</th><th>all cycles</th><th>all median</th><th>fusion_speedup</th></tr>
+"""
+    for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D"):
+        item = matrix.get(hw_id, {})
+        if item:
+            html_append += (
+                f"<tr><td>{hw_id}</td><td>{item['none']['cycles_in_order']}</td><td>{item['none']['median']}</td>"
+                f"<td>{item['all']['cycles_in_order']}</td><td>{item['all']['median']}</td><td>{item['fusion_speedup']}</td></tr>\n"
+            )
+    html_append += f"""</table>
+<pre>{phase_b_json}</pre>
+<h2>11. Co-design analytics</h2>
+<table><tr><th>HW</th><th>fusion_speedup</th><th>champion_fusion</th></tr>
+"""
+    if analysis:
+        for hw_id, speedup in analysis.get("fusion_speedup_per_hw", {}).items():
+            html_append += f"<tr><td>{hw_id}</td><td>{speedup}</td><td>{analysis['champion_fusion_per_hw'][hw_id]}</td></tr>\n"
+    html_append += f"""</table>
+<pre>{analysis_json}</pre>
+<h2>12. New final verdict + implication for next step</h2>
+<p><code>{verdict}</code></p>
+<p>{implication}</p>
+"""
+    html_text = html_path.read_text(encoding="utf-8")
+    html_text = re.split(r"\n<h2>9\. Phase A workload generalization result</h2>\n", html_text)[0]
+    html_text = re.sub(r"(<h2>6\. Verdict</h2>\n<p><code>)[^<]+(</code></p>)", rf"\1{verdict}\2", html_text)
+    if "</body>" in html_text:
+        html_text = html_text.replace("</body>\n</html>\n", html_append + "</body>\n</html>\n")
+    else:
+        html_text = html_text + html_append
+    html_path.write_text(html_text, encoding="utf-8")
+
+
+def run_codesign_mini_sweep(args: argparse.Namespace) -> int:
+    output_root = Path(args.output_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    manifest = generate_v1_hw_fusion_configs(output_root)
+    workload = "gpt2_block_prefill_s128"
+    repeats = args.repeats
+    timeout_sec = args.timing_timeout_sec
+
+    phase_a_variants: dict[str, dict[str, Any]] = {}
+    phase_a_blocked = ""
+    for variant in ("none", "all"):
+        config_path = repo_root() / manifest["generated"]["HW-A"][variant]["path"]
+        cell = run_timing_cell(
+            cell_dir=output_root / "phase_a_runs" / "HW-A" / variant,
+            hw_config=config_path,
+            workload=workload,
+            variant=variant,
+            repeats=repeats,
+            timeout_sec=timeout_sec,
+        )
+        phase_a_variants[variant] = strip_runs_for_report(cell)
+        if cell["class"] != "measured":
+            phase_a_blocked = f"Phase A HW-A {variant} failed: {cell['failures']}"
+    phase_a_delta = cycle_delta_between(phase_a_variants["none"], phase_a_variants["all"])
+    phase_a = {
+        "workload": workload,
+        "hw_config": "HW-A codesign_v1_2x2",
+        "mapping": "006",
+        "variants": phase_a_variants,
+        "cycle_delta_between_variants": phase_a_delta,
+        "generalizes": bool(phase_a_delta is not None and phase_a_delta >= 0.10 and not phase_a_blocked),
+        "note": "fusion generalizes if cycle_delta_between_variants >= 0.10; correctness remains deferred in mode=0",
+    }
+    if phase_a_blocked:
+        phase_a["blocked_reason"] = phase_a_blocked
+    write_json(output_root / "phase_a_gpt2_generalization.json", phase_a)
+
+    phase_b: dict[str, Any] | None = None
+    analysis: dict[str, Any] | None = None
+    blocked = phase_a_blocked
+    if not blocked and phase_a["generalizes"]:
+        matrix: dict[str, dict[str, dict[str, Any]]] = {}
+        for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D"):
+            matrix[hw_id] = {}
+            for variant in ("none", "all"):
+                config_path = repo_root() / manifest["generated"][hw_id][variant]["path"]
+                cell = run_timing_cell(
+                    cell_dir=output_root / "phase_b_runs" / hw_id / variant,
+                    hw_config=config_path,
+                    workload=workload,
+                    variant=variant,
+                    repeats=repeats,
+                    timeout_sec=timeout_sec,
+                )
+                matrix[hw_id][variant] = strip_runs_for_report(cell)
+                if cell["class"] != "measured":
+                    blocked = f"Phase B {hw_id} {variant} failed: {cell['failures']}"
+        for hw_id, variants in matrix.items():
+            none_median = float(variants["none"].get("median", 0) or 0)
+            all_median = float(variants["all"].get("median", 0) or 0)
+            variants["fusion_speedup"] = none_median / all_median if all_median > 0 else 0.0
+        phase_b = {
+            "workload": workload,
+            "mapping": "006",
+            "matrix": matrix,
+        }
+        write_json(output_root / "phase_b_hw_fusion_matrix.json", phase_b)
+        if not blocked:
+            analysis = analyze_hw_fusion_matrix(matrix)
+            write_json(output_root / "codesign_analysis.json", analysis)
+
+    verdict = final_codesign_verdict(phase_a, analysis, blocked)
+    existing_summary = read_json_if_exists(output_root / "pilot_summary.json", {})
+    existing_summary.update(
+        {
+            "workload": workload,
+            "phase_a_gpt2_generalization": phase_a,
+            "phase_b_hw_fusion_matrix": phase_b,
+            "codesign_analysis": analysis,
+            "verdict": verdict,
+        }
+    )
+    if blocked:
+        existing_summary["blocked_reason"] = blocked
+    write_json(output_root / "pilot_summary.json", existing_summary)
+    render_codesign_sections(phase_a, phase_b, analysis, verdict)
+    return 0 if verdict != "FUSION_CODESIGN_BLOCKED" else 2
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Route 4 fusion-only pilot.")
     parser.add_argument("--output-root", default=str(OUTPUT_ROOT))
@@ -1109,6 +1466,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--correctness-timeout-sec", type=int, default=900)
     parser.add_argument("--timing-timeout-sec", type=int, default=900)
     parser.add_argument("--recovery-mode0", action="store_true")
+    parser.add_argument("--codesign-mini-sweep", action="store_true")
     parser.add_argument("--_child", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--child-kind", choices=["correctness", "timing"], help=argparse.SUPPRESS)
     parser.add_argument("--child-result", type=Path, help=argparse.SUPPRESS)
@@ -1125,6 +1483,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args._child:
         return child_main(args)
+    if args.codesign_mini_sweep:
+        return run_codesign_mini_sweep(args)
     if args.recovery_mode0:
         return run_recovery_mode0(args)
     return run_pilot(args)

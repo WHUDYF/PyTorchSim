@@ -67,7 +67,7 @@
   "observation": "本次 structural diff 只做浅层计数，不做语义等价证明。若 fusion=all 的 MLIR/TOG 出现 epilogue 或 relu/maximumf 等关键字，而 fusion=none 没有对应变化，则说明 fusion axis 已经影响编译产物；否则该 workload 下 fusion 结构差异不明显。"
 }</pre>
 <h2>6. Verdict</h2>
-<p><code>FUSION_PILOT_POSITIVE_MODE0_DEFERRED_CORRECTNESS</code></p>
+<p><code>FUSION_NOT_GENERALIZABLE_ON_GPT2</code></p>
 <h2>7. Next step recommendation</h2>
 <p>下一步应先修复 Spike `--varch` toolchain，再复跑 mode=1 correctness；若通过，再把 fusion axis 扩展到小型 4-HW sweep。</p>
 <h2>8. Recovery attempt (Phase A + Phase B result)</h2>
@@ -75,5 +75,53 @@
 <p>Phase B 已进入 timing-only fallback：两个 fusion variants 都使用 <code>pytorchsim_functional_mode=0</code>、相同 fixed mapping 和 <code>seed=0</code> 重复 5 次。<code>correctness_gate</code>: <code>deferred_due_to_spike_varch_blocker</code>；<code>correctness_proxy</code>: <code>structural_diff shows fusion=all has 'fused' keyword and ~10% fewer MLIR ops</code>。</p>
 <p><strong>scope_limitation:</strong> correctness gate deferred because pytorchsim_functional_mode=1 path requires a spike version compatible with --varch=vlen:256,elen:64 and no config-level fix was found within 30 minutes</p>
 <p><strong>Phase A diagnostic summary:</strong> 未找到配置级 workaround；`--varch=vlen:256,elen:64` 在 `Simulator/simulator.py` 中硬编码，当前 `/usr/bin/spike` 不支持 `--varch`，且 PATH 中没有替代 Spike。</p>
-</body>
-</html>
+
+<h2>9. Phase A workload generalization result</h2>
+<p>Phase A 使用 <code>HW-A codesign_v1_2x2</code>、<code>TILE_M=128 TILE_N=64 TILE_K=64</code>、<code>GPT-2 single transformer block prefill seq=128</code>，在 <code>pytorchsim_functional_mode=0</code> 下比较 <code>fusion=none</code> 与 <code>fusion=all</code>。</p>
+<pre>{
+  "cycle_delta_between_variants": 0.01893965380602823,
+  "generalizes": false,
+  "hw_config": "HW-A codesign_v1_2x2",
+  "mapping": "006",
+  "note": "fusion generalizes if cycle_delta_between_variants >= 0.10; correctness remains deferred in mode=0",
+  "variants": {
+    "all": {
+      "class": "measured",
+      "cycle_delta": 0.07613239305341002,
+      "cycles_in_order": [
+        411299,
+        422711,
+        426208,
+        441478,
+        409296
+      ],
+      "failures": [],
+      "median": 422711.0
+    },
+    "none": {
+      "class": "measured",
+      "cycle_delta": 0.06763837972497022,
+      "cycles_in_order": [
+        430717,
+        416023,
+        428783,
+        445156,
+        441708
+      ],
+      "failures": [],
+      "median": 430717.0
+    }
+  },
+  "workload": "gpt2_block_prefill_s128"
+}</pre>
+<h2>10. Phase B HW x fusion matrix</h2>
+<table><tr><th>HW</th><th>none cycles</th><th>none median</th><th>all cycles</th><th>all median</th><th>fusion_speedup</th></tr>
+</table>
+<pre>{}</pre>
+<h2>11. Co-design analytics</h2>
+<table><tr><th>HW</th><th>fusion_speedup</th><th>champion_fusion</th></tr>
+</table>
+<pre>{}</pre>
+<h2>12. New final verdict + implication for next step</h2>
+<p><code>FUSION_NOT_GENERALIZABLE_ON_GPT2</code></p>
+<p>fusion axis 在 addmm+relu 上有效，但没有迁移到 GPT-2 block，本轮不应进入更大 HW sweep。</p>

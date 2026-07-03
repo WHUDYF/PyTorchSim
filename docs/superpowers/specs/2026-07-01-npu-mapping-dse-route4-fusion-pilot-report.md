@@ -69,7 +69,7 @@
 
 ## 6. Verdict
 
-`FUSION_PILOT_POSITIVE_MODE0_DEFERRED_CORRECTNESS`
+`FUSION_NOT_GENERALIZABLE_ON_GPT2`
 
 ## 7. Next step recommendation
 
@@ -84,3 +84,74 @@ Phase B 已进入 timing-only fallback：两个 fusion variants 都使用 `pytor
 scope_limitation: correctness gate deferred because pytorchsim_functional_mode=1 path requires a spike version compatible with --varch=vlen:256,elen:64 and no config-level fix was found within 30 minutes
 
 Phase A diagnostic summary: 未找到配置级 workaround；`--varch=vlen:256,elen:64` 在 `Simulator/simulator.py` 中硬编码，当前 `/usr/bin/spike` 不支持 `--varch`，且 PATH 中没有替代 Spike。
+
+## 9. Phase A workload generalization result
+
+Phase A 使用 `HW-A codesign_v1_2x2`、`TILE_M=128 TILE_N=64 TILE_K=64`、`GPT-2 single transformer block prefill seq=128`，在 `pytorchsim_functional_mode=0` 下比较 `fusion=none` 与 `fusion=all`。结果如下：
+
+```json
+{
+  "cycle_delta_between_variants": 0.01893965380602823,
+  "generalizes": false,
+  "hw_config": "HW-A codesign_v1_2x2",
+  "mapping": "006",
+  "note": "fusion generalizes if cycle_delta_between_variants >= 0.10; correctness remains deferred in mode=0",
+  "variants": {
+    "all": {
+      "class": "measured",
+      "cycle_delta": 0.07613239305341002,
+      "cycles_in_order": [
+        411299,
+        422711,
+        426208,
+        441478,
+        409296
+      ],
+      "failures": [],
+      "median": 422711.0
+    },
+    "none": {
+      "class": "measured",
+      "cycle_delta": 0.06763837972497022,
+      "cycles_in_order": [
+        430717,
+        416023,
+        428783,
+        445156,
+        441708
+      ],
+      "failures": [],
+      "median": 430717.0
+    }
+  },
+  "workload": "gpt2_block_prefill_s128"
+}
+```
+
+## 10. Phase B HW x fusion matrix
+
+| HW | none cycles | none median | all cycles | all median | fusion_speedup |
+| --- | --- | --- | --- | --- | --- |
+| N/A | `[]` | `0` | `[]` | `0` | `0` |
+
+完整 JSON：
+
+```json
+{}
+```
+
+## 11. Co-design analytics
+
+| HW | fusion_speedup | champion_fusion |
+| --- | --- | --- |
+| N/A | `0` | `N/A` |
+
+```json
+{}
+```
+
+## 12. New final verdict + implication for next step
+
+`FUSION_NOT_GENERALIZABLE_ON_GPT2`
+
+fusion axis 在 addmm+relu 上有效，但没有迁移到 GPT-2 block，本轮不应进入更大 HW sweep。
