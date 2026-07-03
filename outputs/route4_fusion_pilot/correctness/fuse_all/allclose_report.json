@@ -1,0 +1,13 @@
+{
+  "allclose_passed": false,
+  "atol": 0.0001,
+  "child_returncode": 2,
+  "error": "spike: unrecognized option --varch=vlen:256,elen:64",
+  "fusion_variant": "all",
+  "max_abs_diff": null,
+  "max_rel_diff": null,
+  "npu_source": "pytorchsim functional_mode=1",
+  "reference_source": "torch cpu",
+  "rtol": 0.001,
+  "workload": "addmm_relu_128"
+}

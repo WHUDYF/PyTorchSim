@@ -1,0 +1,18 @@
+{
+  "cycle_delta_between_variants": null,
+  "note": "correctness gate failed; timing skipped",
+  "variants": {
+    "all": {
+      "class": "blocked",
+      "cycle_delta": 0,
+      "cycles_in_order": [],
+      "median": 0
+    },
+    "none": {
+      "class": "blocked",
+      "cycle_delta": 0,
+      "cycles_in_order": [],
+      "median": 0
+    }
+  }
+}

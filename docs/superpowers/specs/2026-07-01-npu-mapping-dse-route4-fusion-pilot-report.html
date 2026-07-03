@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Route 4 fusion-only pilot report</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.55; margin: 40px; max-width: 980px; }
+    code, pre { background: #f5f5f5; border-radius: 4px; }
+    code { padding: 1px 4px; }
+    pre { padding: 12px; overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #d0d0d0; padding: 6px 8px; text-align: left; vertical-align: top; }
+  </style>
+</head>
+<body>
+<h1>Route 4 fusion-only pilot report</h1>
+<h2>1. 目标与非目标</h2>
+<p>本实验只验证 fusion axis 是否能在一个小 workload 上被正确生成、数值验证并独立计时。非目标包括：不做 4-HW sweep，不做 10-mapping tile sweep，不触碰 dataflow，不修改 PyTorchSim / TOGSim / gem5 / ramulator2 源码。</p>
+<h2>2. Method</h2>
+<ul>
+  <li>workload: <code>addmm_relu_128</code></li>
+  <li>HW config baseline: <code>configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml</code></li>
+  <li>fusion variants: <code>none</code> 和 <code>all</code></li>
+  <li>fixed mapping: <code>TILE_M=128</code>, <code>TILE_N=64</code>, <code>TILE_K=64</code></li>
+  <li>correctness gate: <code>pytorchsim_functional_mode=1</code>, <code>rtol=0.001</code>, <code>atol=0.0001</code></li>
+  <li>timing repeats: 5 per variant</li>
+</ul>
+<h2>3. Correctness results</h2>
+<table><tr><th>variant</th><th>allclose_passed</th><th>max_abs_diff</th><th>max_rel_diff</th><th>error</th></tr>
+<tr><td>none</td><td>False</td><td>None</td><td>None</td><td>spike: unrecognized option --varch=vlen:256,elen:64</td></tr>
+<tr><td>all</td><td>False</td><td>None</td><td>None</td><td>spike: unrecognized option --varch=vlen:256,elen:64</td></tr></table>
+<h2>4. Timing results</h2>
+<table><tr><th>variant</th><th>cycles_in_order</th><th>median</th><th>cycle_delta</th><th>class</th></tr>
+<tr><td>none</td><td>[]</td><td>0</td><td>0</td><td>blocked</td></tr>
+<tr><td>all</td><td>[]</td><td>0</td><td>0</td><td>blocked</td></tr></table>
+<p><code>cycle_delta_between_variants = null</code>。如果该值低于 0.10，则 fusion axis 的效果处在或低于当前噪声地板，不能作为强结论。</p>
+<h2>5. Structural diff</h2>
+<pre>{
+  "counts": {
+    "none": {
+      "mlir_file_count": 6,
+      "onnx_tog_file_count": 2,
+      "raw_tog_file_count": 2,
+      "mlir_op_count": 1398,
+      "tog_node_count": 23,
+      "dma_node_count": 6,
+      "matmul_like_op_count": 4,
+      "fused_pattern_keywords": [
+        "epilogue",
+        "maximumf"
+      ]
+    },
+    "all": {
+      "mlir_file_count": 3,
+      "onnx_tog_file_count": 1,
+      "raw_tog_file_count": 1,
+      "mlir_op_count": 1268,
+      "tog_node_count": 19,
+      "dma_node_count": 4,
+      "matmul_like_op_count": 4,
+      "fused_pattern_keywords": [
+        "epilogue",
+        "fused",
+        "maximumf"
+      ]
+    }
+  },
+  "observation": "本次 structural diff 只做浅层计数，不做语义等价证明。若 fusion=all 的 MLIR/TOG 出现 epilogue 或 relu/maximumf 等关键字，而 fusion=none 没有对应变化，则说明 fusion axis 已经影响编译产物；否则该 workload 下 fusion 结构差异不明显。"
+}</pre>
+<h2>6. Verdict</h2>
+<p><code>FUSION_PILOT_BLOCKED</code></p>
+<h2>7. Next step recommendation</h2>
+<p>下一步应优先修复报告中记录的 correctness 或 timing 阻塞点，暂时不要扩展 HW sweep 或 dataflow 轴。</p>
+</body>
+</html>

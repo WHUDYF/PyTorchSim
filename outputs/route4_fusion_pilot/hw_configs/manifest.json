@@ -1,0 +1,21 @@
+{
+  "baseline_config": "configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml",
+  "baseline_sha256": "b6b5d309f356abb0d2e07483c765d0f4d73642cb86ca4f97e16bb6f33f573bcb",
+  "fixed_mapping": {
+    "TILE_K": 64,
+    "TILE_M": 128,
+    "TILE_N": 64,
+    "mapping_id": "006"
+  },
+  "generated": {
+    "all": {
+      "path": "outputs/route4_fusion_pilot/hw_configs/hw_baseline_fuse_all.yml",
+      "sha256": "82ff0aab981968ad5b2f1f537a678be385ca0c28753824997037243785dfdb42"
+    },
+    "none": {
+      "path": "outputs/route4_fusion_pilot/hw_configs/hw_baseline_fuse_none.yml",
+      "sha256": "e028437f4f2df7a5dfbc72ba282f8a34c77d599827bf41344ef5061bc23e68bb"
+    }
+  },
+  "only_changed_field": "codegen_compiler_optimization"
+}
