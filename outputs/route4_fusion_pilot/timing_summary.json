@@ -1,18 +1,33 @@
 {
-  "cycle_delta_between_variants": null,
-  "note": "correctness gate failed; timing skipped",
+  "correctness_gate": "deferred_due_to_spike_varch_blocker",
+  "correctness_proxy": "structural_diff shows fusion=all has 'fused' keyword and ~10% fewer MLIR ops",
+  "cycle_delta_between_variants": 0.9525939177101967,
+  "note": "if cycle_delta_between_variants < 0.10, the fusion axis effect is at or below noise floor and cannot be distinguished.",
+  "scope_limitation": "correctness gate deferred because pytorchsim_functional_mode=1 path requires a spike version compatible with --varch=vlen:256,elen:64 and no config-level fix was found within 30 minutes",
   "variants": {
     "all": {
-      "class": "blocked",
-      "cycle_delta": 0,
-      "cycles_in_order": [],
-      "median": 0
+      "class": "measured",
+      "cycle_delta": 0.01073345259391771,
+      "cycles_in_order": [
+        1119,
+        1118,
+        1113,
+        1125,
+        1118
+      ],
+      "median": 1118.0
     },
     "none": {
-      "class": "blocked",
-      "cycle_delta": 0,
-      "cycles_in_order": [],
-      "median": 0
+      "class": "measured",
+      "cycle_delta": 0.076042143838754,
+      "cycles_in_order": [
+        2180,
+        2346,
+        2181,
+        2195,
+        2183
+      ],
+      "median": 2183.0
     }
   }
 }
