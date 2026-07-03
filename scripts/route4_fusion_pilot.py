@@ -241,14 +241,75 @@ def run_gpt2_block_child(args: argparse.Namespace) -> int:
     return 0 if result.get("ok") else 2
 
 
+def run_conv3x3_probe_child(args: argparse.Namespace) -> int:
+    import torch
+
+    class ConvBnRelu(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.conv = torch.nn.Conv2d(64, 64, kernel_size=3, padding=1, bias=True)
+            self.bn = torch.nn.BatchNorm2d(64)
+            self.relu = torch.nn.ReLU()
+
+        def forward(self, x):
+            return self.relu(self.bn(self.conv(x)))
+
+    result_path = Path(args.child_result)
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    result: dict[str, Any] = {
+        "ok": False,
+        "workload": "conv3x3_probe",
+        "fusion_variant": args.variant,
+        "rtol": RTOL,
+        "atol": ATOL,
+        "reference_source": "torch cpu",
+        "npu_source": "pytorchsim functional_mode=0 timing probe",
+        "error": "",
+        "traceback": "",
+    }
+    try:
+        ensure_npu_registered()
+        clear_torch_caches()
+        torch.manual_seed(args.seed)
+        cpu_model = ConvBnRelu().eval()
+        npu_model = copy.deepcopy(cpu_model).to(device=torch.device("npu:0")).eval()
+        x_cpu = torch.randn(1, 64, 56, 56, dtype=torch.float32)
+        with torch.no_grad():
+            ref = cpu_model(x_cpu)
+            compiled = torch.compile(dynamic=False)(npu_model)
+            out = compiled(x_cpu.to("npu:0")).cpu()
+        max_abs, max_rel, passed = tensor_diffs(out, ref)
+        result.update(
+            {
+                "ok": True,
+                "max_abs_diff": max_abs,
+                "max_rel_diff": max_rel,
+                "allclose_passed": passed,
+            }
+        )
+    except Exception as exc:
+        result["error"] = str(exc)
+        result["traceback"] = traceback.format_exc()
+    write_json(result_path, result)
+    return 0 if result.get("ok") else 2
+
+
 def run_timing_child(args: argparse.Namespace) -> int:
-    return run_addmm_relu_child(args) if args.workload == "addmm_relu_128" else run_gpt2_block_child(args)
+    if args.workload == "addmm_relu_128":
+        return run_addmm_relu_child(args)
+    if args.workload == "gpt2_block_prefill_s128":
+        return run_gpt2_block_child(args)
+    if args.workload == "conv3x3_probe":
+        return run_conv3x3_probe_child(args)
+    raise ValueError(f"unknown workload: {args.workload}")
 
 
 def child_main(args: argparse.Namespace) -> int:
     if args.child_kind == "correctness":
         if args.workload == "gpt2_block_prefill_s128":
             return run_gpt2_block_child(args)
+        if args.workload == "conv3x3_probe":
+            return run_conv3x3_probe_child(args)
         return run_addmm_relu_child(args)
     if args.child_kind == "timing":
         return run_timing_child(args)
@@ -524,6 +585,44 @@ def count_mlir_ops(text: str) -> int:
     return count
 
 
+FUSED_PATTERN_KEYWORDS = (
+    "epilogue",
+    "fused",
+    "maximumf",
+    "relu",
+    "gelu",
+    "layernorm",
+    "softmax",
+    "elementwise_chain",
+)
+
+
+def structural_counts_for_root(root: Path) -> dict[str, Any]:
+    mlir_paths: list[Path] = []
+    tog_paths: list[Path] = []
+    if root.exists():
+        mlir_paths.extend(path for path in root.rglob("*.mlir") if path.is_file())
+        tog_paths.extend(path for path in root.rglob("*_tog.py") if path.is_file())
+        tog_paths.extend(path for path in root.rglob("tog.py") if path.is_file())
+    mlir_paths = sorted(set(mlir_paths))
+    tog_paths = sorted(set(tog_paths))
+    mlir_text = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in mlir_paths)
+    tog_text = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in tog_paths)
+    combined = mlir_text + "\n" + tog_text
+    keyword_hits = sorted(keyword for keyword in FUSED_PATTERN_KEYWORDS if keyword in combined.lower())
+    return {
+        "mlir_op_count": count_mlir_ops(mlir_text),
+        "tog_node_count": len(re.findall(r'"node_id"\s*:', tog_text)),
+        "dma_node_count": len(re.findall(r'"node_name"\s*:\s*"DMANode"', tog_text)),
+        "matmul_like_op_count": len(
+            re.findall(r"linalg\.matmul|MatmulCompute|compute_type\"\s*:\s*[12]", combined)
+        ),
+        "fused_pattern_keywords": keyword_hits,
+        "mlir_file_count": len(mlir_paths),
+        "raw_tog_file_count": len(tog_paths),
+    }
+
+
 def structural_counts_for_variant(output_root: Path, variant: str) -> dict[str, Any]:
     roots = [output_root / "timing" / variant, output_root / "correctness" / f"fuse_{variant}"]
     mlir_paths: list[Path] = []
@@ -539,11 +638,7 @@ def structural_counts_for_variant(output_root: Path, variant: str) -> dict[str, 
         onnx_paths.extend(path for path in root.rglob("tog.onnx") if path.is_file())
     mlir_text = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in sorted(set(mlir_paths)))
     tog_text = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in sorted(set(tog_paths)))
-    keyword_hits = sorted(
-        keyword
-        for keyword in ("fused", "epilogue", "elementwise_chain", "relu", "maximumf")
-        if keyword.lower() in (mlir_text + "\n" + tog_text).lower()
-    )
+    keyword_hits = sorted(keyword for keyword in FUSED_PATTERN_KEYWORDS if keyword in (mlir_text + "\n" + tog_text).lower())
     return {
         "mlir_file_count": len(set(mlir_paths)),
         "onnx_tog_file_count": len(set(onnx_paths)),
@@ -1459,6 +1554,288 @@ def run_codesign_mini_sweep(args: argparse.Namespace) -> int:
     return 0 if verdict != "FUSION_CODESIGN_BLOCKED" else 2
 
 
+def classify_gpt2_structural_diff(structural: dict[str, Any]) -> tuple[str, str]:
+    counts = structural.get("counts", {})
+    none = counts.get("none", {})
+    all_variant = counts.get("all", {})
+    none_ops = float(none.get("mlir_op_count", 0) or 0)
+    all_ops = float(all_variant.get("mlir_op_count", 0) or 0)
+    op_delta = abs(all_ops - none_ops) / none_ops if none_ops else 0.0
+    none_keywords = list(none.get("fused_pattern_keywords", []))
+    all_keywords = list(all_variant.get("fused_pattern_keywords", []))
+    if op_delta < 0.02 and none_keywords == all_keywords:
+        return (
+            "structural_noop",
+            (
+                f"`mlir_op_count` delta is {op_delta:.4f}, below 2%, and both variants expose "
+                f"the same fused pattern keywords {none_keywords}; `fusion=all` is a structural "
+                "no-op for this GPT-2 block."
+            ),
+        )
+    if op_delta >= 0.05 or none_keywords != all_keywords:
+        return (
+            "structural_active",
+            (
+                f"`mlir_op_count` delta is {op_delta:.4f} and keyword sets are "
+                f"none={none_keywords}, all={all_keywords}; `fusion=all` changes the generated "
+                "structure, so the weak GPT-2 timing result is more likely critical-path limited."
+            ),
+        )
+    return (
+        "ambiguous",
+        (
+            f"`mlir_op_count` delta is {op_delta:.4f}; this is between the no-op and active "
+            "thresholds, so the GPT-2 structural evidence is ambiguous."
+        ),
+    )
+
+
+def write_gpt2_structural_diff(output_root: Path, counts: dict[str, dict[str, Any]], observation: str) -> dict[str, Any]:
+    payload = {
+        "workload": "gpt2_block_prefill_s128",
+        "counts": counts,
+        "observation": observation,
+    }
+    write_json(output_root / "phase_a_gpt2_structural_diff.json", payload)
+    return payload
+
+
+def run_root_cause_gpt2_structural(args: argparse.Namespace, manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    output_root = Path(args.output_root)
+    run_root = output_root / "root_cause_gpt2_structural"
+    summaries: dict[str, Any] = {}
+    counts: dict[str, dict[str, Any]] = {}
+    for variant in ("none", "all"):
+        config_path = repo_root() / manifest["generated"]["HW-A"][variant]["path"]
+        cell_dir = run_root / variant
+        cell = run_timing_cell(
+            cell_dir=cell_dir,
+            hw_config=config_path,
+            workload="gpt2_block_prefill_s128",
+            variant=variant,
+            repeats=1,
+            timeout_sec=args.timing_timeout_sec,
+        )
+        summaries[variant] = strip_runs_for_report(cell)
+        counts[variant] = structural_counts_for_root(cell_dir)
+    structural = write_gpt2_structural_diff(
+        output_root,
+        counts,
+        (
+            "GPT-2 structural diff is extracted from one fresh mode=0 timing subprocess per "
+            "fusion variant under HW-A and mapping 006. Counts aggregate only the emitted MLIR "
+            "and raw TOG files in the fresh root-cause run directories."
+        ),
+    )
+    return structural, summaries
+
+
+def run_conv_probe(args: argparse.Namespace, manifest: dict[str, Any]) -> dict[str, Any]:
+    output_root = Path(args.output_root)
+    variants: dict[str, dict[str, Any]] = {}
+    skipped_reason = ""
+    for variant in ("none", "all"):
+        config_path = repo_root() / manifest["generated"]["HW-A"][variant]["path"]
+        cell = run_timing_cell(
+            cell_dir=output_root / "phase_b_conv_probe_runs" / variant,
+            hw_config=config_path,
+            workload="conv3x3_probe",
+            variant=variant,
+            repeats=3,
+            timeout_sec=args.timing_timeout_sec,
+        )
+        variants[variant] = strip_runs_for_report(cell)
+        if cell["class"] != "measured" and not skipped_reason:
+            skipped_reason = (
+                "Conv-heavy workload was attempted but did not produce three measured timing "
+                f"runs for fusion={variant}; this is treated as a harness limitation because "
+                "the handoff forbids PyTorchSim source changes."
+            )
+    delta = cycle_delta_between(variants["none"], variants["all"])
+    payload = {
+        "workload": "conv3x3_probe",
+        "variants": variants,
+        "cycle_delta_between_variants": delta,
+        "generalizes_to_conv": bool(delta is not None and delta >= 0.10 and not skipped_reason),
+    }
+    if skipped_reason:
+        payload["skipped_due_to_harness_limitation"] = True
+        payload["skip_reason"] = skipped_reason
+    write_json(output_root / "phase_b_conv_probe.json", payload)
+    return payload
+
+
+def root_cause_verdict(
+    structural_class: str,
+    structural_runs: dict[str, Any],
+    conv_probe: dict[str, Any] | None,
+) -> str:
+    if any(cell.get("class") != "measured" for cell in structural_runs.values()):
+        return "FUSION_ROUTE_BLOCKED_ON_MEASUREMENT"
+    if structural_class == "structural_noop":
+        return "FUSION_ROUTE_STRUCTURALLY_INEFFECTIVE"
+    if structural_class == "structural_active":
+        if conv_probe and conv_probe.get("generalizes_to_conv"):
+            return "FUSION_ROUTE_CRITICAL_PATH_LIMITED"
+        return "FUSION_ROUTE_NEEDS_HARNESS_EXTENSION"
+    return "FUSION_ROUTE_NEEDS_HARNESS_EXTENSION"
+
+
+def append_root_cause_report_sections(
+    structural: dict[str, Any],
+    structural_class: str,
+    structural_explanation: str,
+    structural_runs: dict[str, Any],
+    conv_probe: dict[str, Any] | None,
+    verdict: str,
+) -> None:
+    docs_dir = repo_root() / "docs" / "superpowers" / "specs"
+    md_path = docs_dir / "2026-07-01-npu-mapping-dse-route4-fusion-pilot-report.md"
+    html_path = docs_dir / "2026-07-01-npu-mapping-dse-route4-fusion-pilot-report.html"
+    structural_json = json.dumps(structural, indent=2, ensure_ascii=False)
+    structural_runs_json = json.dumps(structural_runs, indent=2, ensure_ascii=False)
+    conv_json = json.dumps(conv_probe or {}, indent=2, ensure_ascii=False)
+    if conv_probe is None:
+        conv_text = (
+            "Task 2 未运行，因为 Task 1 已经把 GPT-2 block 判定为 structural no-op；"
+            "按照 handoff，只有 structural active 或 ambiguous 时才继续 Conv probe。"
+        )
+    elif conv_probe.get("skipped_due_to_harness_limitation"):
+        conv_text = str(conv_probe.get("skip_reason", "Conv probe skipped due to harness limitation."))
+    else:
+        conv_text = (
+            f"Conv probe 完成，`cycle_delta_between_variants` = "
+            f"`{conv_probe.get('cycle_delta_between_variants')}`，"
+            f"`generalizes_to_conv` = `{conv_probe.get('generalizes_to_conv')}`。"
+        )
+    next_step = {
+        "FUSION_ROUTE_STRUCTURALLY_INEFFECTIVE": (
+            "Route 4 fusion axis 在 GPT-2 block 上没有传播到相关编译结构；下一步不应继续扩大 "
+            "fusion sweep，而应先检查 fusion flag 到 TorchInductor/MLIR lowering 的传播边界。"
+        ),
+        "FUSION_ROUTE_CRITICAL_PATH_LIMITED": (
+            "fusion axis 是真实存在的，但主要影响 Conv/epilogue 类结构；下一步应把 Route 4 "
+            "workload 换成 ResNet、MobileNet 或 GEMM-stack，再设计后续 sweep。"
+        ),
+        "FUSION_ROUTE_NEEDS_HARNESS_EXTENSION": (
+            "现有 harness 不能给出足够干净的 workload 证据；下一步需要扩展 workload harness，"
+            "但不应在本轮修改 PyTorchSim/TOGSim 源码。"
+        ),
+        "FUSION_ROUTE_BLOCKED_ON_MEASUREMENT": (
+            "至少一个必要 timing run 未产生有效 cycles；下一步先修复测量路径，再继续判断 fusion axis。"
+        ),
+    }[verdict]
+    md_append = f"""
+
+## 13. Task 1 structural diff on GPT-2 block
+
+Task 1 在 `HW-A codesign_v1_2x2`、`mapping=006`、`pytorchsim_functional_mode=0` 下各运行一个 `fusion=none` 与 `fusion=all` 的 GPT-2 block subprocess，并只从 fresh root-cause run 目录抽取 MLIR/TOG 结构计数。
+
+结构 run summary：
+
+```json
+{structural_runs_json}
+```
+
+结构 diff：
+
+```json
+{structural_json}
+```
+
+判读：{structural_explanation}
+
+## 14. Task 2 Conv probe result
+
+{conv_text}
+
+```json
+{conv_json}
+```
+
+## 15. Root cause classification and recommended next step
+
+`{verdict}`
+
+root cause classification: `{structural_class}`
+
+{next_step}
+"""
+    md_text = md_path.read_text(encoding="utf-8")
+    md_text = re.split(r"\n## 13\. Task 1 structural diff on GPT-2 block\n", md_text)[0].rstrip()
+    md_text = re.sub(r"(## 6\. Verdict\n\n)`[^`]+`", rf"\1`{verdict}`", md_text)
+    md_text = re.sub(
+        r"(## 12\. New final verdict \+ implication for next step\n\n)`[^`]+`\n\n[^\n]+",
+        rf"\1`{verdict}`\n\n{next_step}",
+        md_text,
+    )
+    md_path.write_text(md_text + md_append, encoding="utf-8")
+
+    html_append = f"""
+<h2>13. Task 1 structural diff on GPT-2 block</h2>
+<p>Task 1 在 <code>HW-A codesign_v1_2x2</code>、<code>mapping=006</code>、<code>pytorchsim_functional_mode=0</code> 下各运行一个 <code>fusion=none</code> 与 <code>fusion=all</code> 的 GPT-2 block subprocess，并只从 fresh root-cause run 目录抽取 MLIR/TOG 结构计数。</p>
+<p>结构 run summary:</p>
+<pre>{structural_runs_json}</pre>
+<p>结构 diff:</p>
+<pre>{structural_json}</pre>
+<p>判读：{structural_explanation}</p>
+<h2>14. Task 2 Conv probe result</h2>
+<p>{conv_text}</p>
+<pre>{conv_json}</pre>
+<h2>15. Root cause classification and recommended next step</h2>
+<p><code>{verdict}</code></p>
+<p>root cause classification: <code>{structural_class}</code></p>
+<p>{next_step}</p>
+"""
+    html_text = html_path.read_text(encoding="utf-8")
+    html_text = re.split(r"\n<h2>13\. Task 1 structural diff on GPT-2 block</h2>\n", html_text)[0]
+    html_text = re.sub(r"(<h2>6\. Verdict</h2>\n<p><code>)[^<]+(</code></p>)", rf"\1{verdict}\2", html_text)
+    html_text = re.sub(
+        r"(<h2>12\. New final verdict \+ implication for next step</h2>\n<p><code>)[^<]+(</code></p>\n<p>)[^<]+(</p>)",
+        rf"\1{verdict}\2{next_step}\3",
+        html_text,
+    )
+    if "</body>" in html_text:
+        html_text = html_text.replace("</body>\n</html>\n", html_append + "</body>\n</html>\n")
+    else:
+        html_text += html_append
+    html_path.write_text(html_text, encoding="utf-8")
+
+
+def run_fusion_root_cause_investigation(args: argparse.Namespace) -> int:
+    output_root = Path(args.output_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    manifest = generate_v1_hw_fusion_configs(output_root)
+    structural, structural_runs = run_root_cause_gpt2_structural(args, manifest)
+    structural_class, structural_explanation = classify_gpt2_structural_diff(structural)
+    conv_probe: dict[str, Any] | None = None
+    if structural_class in {"structural_active", "ambiguous"}:
+        conv_probe = run_conv_probe(args, manifest)
+    verdict = root_cause_verdict(structural_class, structural_runs, conv_probe)
+    existing_summary = read_json_if_exists(output_root / "pilot_summary.json", {})
+    existing_summary.update(
+        {
+            "workload": "gpt2_block_prefill_s128",
+            "phase_a_gpt2_structural_diff": structural,
+            "phase_a_gpt2_structural_runs": structural_runs,
+            "phase_b_conv_probe": conv_probe,
+            "root_cause_classification": structural_class,
+            "root_cause_explanation": structural_explanation,
+            "verdict": verdict,
+        }
+    )
+    write_json(output_root / "pilot_summary.json", existing_summary)
+    append_root_cause_report_sections(
+        structural,
+        structural_class,
+        structural_explanation,
+        structural_runs,
+        conv_probe,
+        verdict,
+    )
+    return 0 if verdict != "FUSION_ROUTE_BLOCKED_ON_MEASUREMENT" else 2
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Route 4 fusion-only pilot.")
     parser.add_argument("--output-root", default=str(OUTPUT_ROOT))
@@ -1467,14 +1844,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--timing-timeout-sec", type=int, default=900)
     parser.add_argument("--recovery-mode0", action="store_true")
     parser.add_argument("--codesign-mini-sweep", action="store_true")
+    parser.add_argument("--fusion-root-cause-investigation", action="store_true")
     parser.add_argument("--_child", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--child-kind", choices=["correctness", "timing"], help=argparse.SUPPRESS)
     parser.add_argument("--child-result", type=Path, help=argparse.SUPPRESS)
-    parser.add_argument("--workload", choices=["gpt2_block_prefill_s128", "addmm_relu_128"], help=argparse.SUPPRESS)
+    parser.add_argument("--workload", choices=["gpt2_block_prefill_s128", "addmm_relu_128", "conv3x3_probe"], help=argparse.SUPPRESS)
     parser.add_argument("--variant", choices=["none", "all"], help=argparse.SUPPRESS)
     parser.add_argument("--seed", type=int, default=0, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
-    if args.repeats != 5:
+    if not args.fusion_root_cause_investigation and args.repeats != 5:
         parser.error("--repeats must remain 5 for this pilot")
     return args
 
@@ -1483,6 +1861,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args._child:
         return child_main(args)
+    if args.fusion_root_cause_investigation:
+        return run_fusion_root_cause_investigation(args)
     if args.codesign_mini_sweep:
         return run_codesign_mini_sweep(args)
     if args.recovery_mode0:

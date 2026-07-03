@@ -69,7 +69,7 @@
 
 ## 6. Verdict
 
-`FUSION_NOT_GENERALIZABLE_ON_GPT2`
+`FUSION_ROUTE_CRITICAL_PATH_LIMITED`
 
 ## 7. Next step recommendation
 
@@ -152,6 +152,116 @@ Phase A 使用 `HW-A codesign_v1_2x2`、`TILE_M=128 TILE_N=64 TILE_K=64`、`GPT-
 
 ## 12. New final verdict + implication for next step
 
-`FUSION_NOT_GENERALIZABLE_ON_GPT2`
+`FUSION_ROUTE_CRITICAL_PATH_LIMITED`
 
-fusion axis 在 addmm+relu 上有效，但没有迁移到 GPT-2 block，本轮不应进入更大 HW sweep。
+fusion axis 是真实存在的，但主要影响 Conv/epilogue 类结构；下一步应把 Route 4 workload 换成 ResNet、MobileNet 或 GEMM-stack，再设计后续 sweep。
+
+## 13. Task 1 structural diff on GPT-2 block
+
+Task 1 在 `HW-A codesign_v1_2x2`、`mapping=006`、`pytorchsim_functional_mode=0` 下各运行一个 `fusion=none` 与 `fusion=all` 的 GPT-2 block subprocess，并只从 fresh root-cause run 目录抽取 MLIR/TOG 结构计数。
+
+结构 run summary：
+
+```json
+{
+  "none": {
+    "cycles_in_order": [
+      416834
+    ],
+    "median": 416834.0,
+    "cycle_delta": 0.0,
+    "class": "measured",
+    "failures": []
+  },
+  "all": {
+    "cycles_in_order": [
+      449967
+    ],
+    "median": 449967.0,
+    "cycle_delta": 0.0,
+    "class": "measured",
+    "failures": []
+  }
+}
+```
+
+结构 diff：
+
+```json
+{
+  "workload": "gpt2_block_prefill_s128",
+  "counts": {
+    "none": {
+      "mlir_op_count": 5293,
+      "tog_node_count": 239,
+      "dma_node_count": 79,
+      "matmul_like_op_count": 24,
+      "fused_pattern_keywords": [
+        "epilogue",
+        "maximumf"
+      ],
+      "mlir_file_count": 42,
+      "raw_tog_file_count": 22
+    },
+    "all": {
+      "mlir_op_count": 4879,
+      "tog_node_count": 227,
+      "dma_node_count": 71,
+      "matmul_like_op_count": 26,
+      "fused_pattern_keywords": [
+        "epilogue",
+        "maximumf"
+      ],
+      "mlir_file_count": 36,
+      "raw_tog_file_count": 19
+    }
+  },
+  "observation": "GPT-2 structural diff is extracted from one fresh mode=0 timing subprocess per fusion variant under HW-A and mapping 006. Counts aggregate only the emitted MLIR and raw TOG files in the fresh root-cause run directories."
+}
+```
+
+判读：`mlir_op_count` delta is 0.0782 and keyword sets are none=['epilogue', 'maximumf'], all=['epilogue', 'maximumf']; `fusion=all` changes the generated structure, so the weak GPT-2 timing result is more likely critical-path limited.
+
+## 14. Task 2 Conv probe result
+
+Conv probe 完成，`cycle_delta_between_variants` = `5.841693975296193`，`generalizes_to_conv` = `True`。
+
+```json
+{
+  "workload": "conv3x3_probe",
+  "variants": {
+    "none": {
+      "cycles_in_order": [
+        189987,
+        189882,
+        190231
+      ],
+      "median": 189987.0,
+      "cycle_delta": 0.0018369677925331733,
+      "class": "measured",
+      "failures": []
+    },
+    "all": {
+      "cycles_in_order": [
+        27660,
+        27843,
+        27769
+      ],
+      "median": 27769.0,
+      "cycle_delta": 0.006590082466059275,
+      "class": "measured",
+      "failures": []
+    }
+  },
+  "cycle_delta_between_variants": 5.841693975296193,
+  "generalizes_to_conv": true
+}
+```
+
+## 15. Root cause classification and recommended next step
+
+`FUSION_ROUTE_CRITICAL_PATH_LIMITED`
+
+root cause classification: `structural_active`
+
+fusion axis 是真实存在的，但主要影响 Conv/epilogue 类结构；下一步应把 Route 4 workload 换成 ResNet、MobileNet 或 GEMM-stack，再设计后续 sweep。

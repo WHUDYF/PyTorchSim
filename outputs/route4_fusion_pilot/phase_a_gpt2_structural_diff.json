@@ -1,0 +1,30 @@
+{
+  "counts": {
+    "all": {
+      "dma_node_count": 71,
+      "fused_pattern_keywords": [
+        "epilogue",
+        "maximumf"
+      ],
+      "matmul_like_op_count": 26,
+      "mlir_file_count": 36,
+      "mlir_op_count": 4879,
+      "raw_tog_file_count": 19,
+      "tog_node_count": 227
+    },
+    "none": {
+      "dma_node_count": 79,
+      "fused_pattern_keywords": [
+        "epilogue",
+        "maximumf"
+      ],
+      "matmul_like_op_count": 24,
+      "mlir_file_count": 42,
+      "mlir_op_count": 5293,
+      "raw_tog_file_count": 22,
+      "tog_node_count": 239
+    }
+  },
+  "observation": "GPT-2 structural diff is extracted from one fresh mode=0 timing subprocess per fusion variant under HW-A and mapping 006. Counts aggregate only the emitted MLIR and raw TOG files in the fresh root-cause run directories.",
+  "workload": "gpt2_block_prefill_s128"
+}

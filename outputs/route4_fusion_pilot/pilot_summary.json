@@ -64,7 +64,88 @@
     },
     "workload": "gpt2_block_prefill_s128"
   },
+  "phase_a_gpt2_structural_diff": {
+    "counts": {
+      "all": {
+        "dma_node_count": 71,
+        "fused_pattern_keywords": [
+          "epilogue",
+          "maximumf"
+        ],
+        "matmul_like_op_count": 26,
+        "mlir_file_count": 36,
+        "mlir_op_count": 4879,
+        "raw_tog_file_count": 19,
+        "tog_node_count": 227
+      },
+      "none": {
+        "dma_node_count": 79,
+        "fused_pattern_keywords": [
+          "epilogue",
+          "maximumf"
+        ],
+        "matmul_like_op_count": 24,
+        "mlir_file_count": 42,
+        "mlir_op_count": 5293,
+        "raw_tog_file_count": 22,
+        "tog_node_count": 239
+      }
+    },
+    "observation": "GPT-2 structural diff is extracted from one fresh mode=0 timing subprocess per fusion variant under HW-A and mapping 006. Counts aggregate only the emitted MLIR and raw TOG files in the fresh root-cause run directories.",
+    "workload": "gpt2_block_prefill_s128"
+  },
+  "phase_a_gpt2_structural_runs": {
+    "all": {
+      "class": "measured",
+      "cycle_delta": 0.0,
+      "cycles_in_order": [
+        449967
+      ],
+      "failures": [],
+      "median": 449967.0
+    },
+    "none": {
+      "class": "measured",
+      "cycle_delta": 0.0,
+      "cycles_in_order": [
+        416834
+      ],
+      "failures": [],
+      "median": 416834.0
+    }
+  },
+  "phase_b_conv_probe": {
+    "cycle_delta_between_variants": 5.841693975296193,
+    "generalizes_to_conv": true,
+    "variants": {
+      "all": {
+        "class": "measured",
+        "cycle_delta": 0.006590082466059275,
+        "cycles_in_order": [
+          27660,
+          27843,
+          27769
+        ],
+        "failures": [],
+        "median": 27769.0
+      },
+      "none": {
+        "class": "measured",
+        "cycle_delta": 0.0018369677925331733,
+        "cycles_in_order": [
+          189987,
+          189882,
+          190231
+        ],
+        "failures": [],
+        "median": 189987.0
+      }
+    },
+    "workload": "conv3x3_probe"
+  },
   "phase_b_hw_fusion_matrix": null,
+  "root_cause_classification": "structural_active",
+  "root_cause_explanation": "`mlir_op_count` delta is 0.0782 and keyword sets are none=['epilogue', 'maximumf'], all=['epilogue', 'maximumf']; `fusion=all` changes the generated structure, so the weak GPT-2 timing result is more likely critical-path limited.",
   "spike_varch_diagnostic": "outputs/route4_fusion_pilot/spike_varch_diagnostic.md",
   "structural_diff": {
     "counts": {
@@ -131,6 +212,6 @@
       }
     }
   },
-  "verdict": "FUSION_NOT_GENERALIZABLE_ON_GPT2",
+  "verdict": "FUSION_ROUTE_CRITICAL_PATH_LIMITED",
   "workload": "gpt2_block_prefill_s128"
 }

@@ -1,0 +1,29 @@
+{
+  "cycle_delta_between_variants": 5.841693975296193,
+  "generalizes_to_conv": true,
+  "variants": {
+    "all": {
+      "class": "measured",
+      "cycle_delta": 0.006590082466059275,
+      "cycles_in_order": [
+        27660,
+        27843,
+        27769
+      ],
+      "failures": [],
+      "median": 27769.0
+    },
+    "none": {
+      "class": "measured",
+      "cycle_delta": 0.0018369677925331733,
+      "cycles_in_order": [
+        189987,
+        189882,
+        190231
+      ],
+      "failures": [],
+      "median": 189987.0
+    }
+  },
+  "workload": "conv3x3_probe"
+}
