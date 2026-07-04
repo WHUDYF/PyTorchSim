@@ -1,0 +1,1 @@
+先来看 evidence chain 的起点。v1 的 setup 是 GPT-2 单个 block 的 prefill、序列长度 128、tiling-only 的二乘二 SPAD 与带宽搜索空间。commit 92623de 初次判决 NEGATIVE，commit 09b9ac3 在 10 个百分点的 Gate 1 阈值下重算，NEGATIVE 保持。verdict 名字叫 FUSION_TILING_ONLY_NEGATIVE，注意名字里明确带了 TILING_ONLY 前缀，这是 scope-aware 命名的关键。它告诉我们的下一步不是放弃 co-design，而是换 axis。这就自然导出 Route 4 探索四个编译器修改维度。

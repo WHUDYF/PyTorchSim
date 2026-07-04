@@ -1,0 +1,1 @@
+我们先建立共同语境。PyTorchSim 是 POSTECH 提出的一个 NPU 模拟框架，它把 PyTorch 模型经过 PyTorch2 编译器生成 NPU 机器码和 Tile-Operation Graph，然后 TOGSim 执行这个 TOG 做高速仿真，同时集成 BookSim 建 NoC、Ramulator2 建 DRAM，保证共享资源是周期精确的。核心创新叫 Tile-Level Simulation，本质是利用 tile 计算延迟的确定性。原论文相对 TPUv3 的 runtime 平均绝对误差是百分之十一点五。对我们的工作来说重要的是，它给出了一个可以无源码切换编译器优化、mapping、以及 L2 cache 的实验平台，这是后面所有协同设计实验的基础设施。

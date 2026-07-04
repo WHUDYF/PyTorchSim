@@ -1,0 +1,1 @@
+v2 我们做了一步补救：加了 R4 命名 pattern 分类器，只把符合 m_config_ 或 CONFIG_ 这类现代命名 pattern 的 symbol 判为 knob。结果 11 条 edge 语义抽检百分百通过，但覆盖率从 6 分之 6 崩到 6 分之 1，AC-C3 硬 Go 条件失败，判决还是 NO_GO_NEGATIVE，这次属于假阴性，方向和 v1 正好相反。副作用是 pattern 只匹配现代命名，gpgpu-sim 里许多真 knob 用的是老命名比如 n_sets、n_ways、line_size，R4 全部误伤剔除掉了。合起来的结论是：任何单一规则式 validator 都无法通吃异质命名规范的老代码库。我们必须放弃规则式，转向 AST 分析或者 LLM 两步 prompt。
