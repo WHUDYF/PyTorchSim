@@ -1,1 +1,0 @@
-汇报分四个部分。首先花四页介绍 PyTorchSim 与 Lumina 各自的架构、以及为什么从 GPU 迁移到 NPU 这条研究路径和迁移中需要关注的新问题。然后用六页展开 PyTorchSim 主线的完整证据链，从 v1 NEGATIVE 到 fusion 与硬件配置形成 measured 交互作用的 POSITIVE。接着用四页讲 Lumina QualE 复现的两次失败模式和背后的 Gap Analysis。最后两页做方法论总结和下一步。

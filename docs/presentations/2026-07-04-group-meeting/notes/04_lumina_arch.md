@@ -1,1 +1,0 @@
-Lumina 是 2026 年 arXiv 的一篇 LLM 辅助 GPU 架构探索的论文，它使用的仿真器是 LLMCompass，不是通用的 gpgpu-sim 或 Accel-Sim。这一点后面会成为核心 gap，请大家先记住。它的框架有四个模块：QualE 从仿真器源码提取架构参数到 PPA 指标的定性因果图，QuanE 跑 micro-benchmark 把定性边填上定量灵敏度系数，SE 从 critical path 挑选瓶颈选择改哪些 knob，EE 做闭环探索并返回一个 Pareto set。整个框架靠迭代式知识积累。QualE 是四个模块里最前端的一步，我们本次只复现它。

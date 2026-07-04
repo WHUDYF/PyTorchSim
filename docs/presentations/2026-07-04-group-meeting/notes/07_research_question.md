@@ -1,1 +1,0 @@
-Part B 主线的核心问题是：在 PyTorchSim 上，给定 workload 和硬件配置空间，硬件软件协同设计是否显著优于在固定硬件上单独调 workload 或者反过来的组合。判据是 measured 数据，Gate 2b 相对 range 超过 15 个百分点才算 significant interaction。我们明确不接受占位、模型推导、待测量、或者空 telemetry 这四种数据来源。上一版 v1 已经在 tiling-only 空间给出 NEGATIVE，所以 Route 4 的目标是扩展到贴近真实编译器控制面的修改维度。
