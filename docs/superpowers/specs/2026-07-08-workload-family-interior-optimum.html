@@ -18,22 +18,39 @@
 <p>- `tile_interior_evidence`: `True`</p>
 <p>- `global_min_cell`: `{&quot;fusion&quot;: &quot;all&quot;, &quot;hw&quot;: &quot;HW-A&quot;, &quot;median&quot;: 5880.0, &quot;tile&quot;: &quot;tile_C&quot;}`</p>
 <h3>conv3x3_large</h3>
-<p>- `tile_interior_evidence`: `False`</p>
-<p>- `global_min_cell`: `{&quot;fusion&quot;: &quot;all&quot;, &quot;hw&quot;: &quot;HW-A&quot;, &quot;median&quot;: 6545.0, &quot;tile&quot;: &quot;tile_A&quot;}`</p>
+<p>- `tile_interior_evidence`: `True`</p>
+<p>- `global_min_cell`: `{&quot;fusion&quot;: &quot;all&quot;, &quot;hw&quot;: &quot;HW-C&quot;, &quot;median&quot;: 6506.0, &quot;tile&quot;: &quot;tile_A_a&quot;}`</p>
 <h3>conv1x1</h3>
 <p>- `tile_interior_evidence`: `True`</p>
 <p>- `global_min_cell`: `{&quot;fusion&quot;: &quot;all&quot;, &quot;hw&quot;: &quot;HW-C&quot;, &quot;median&quot;: 1007.0, &quot;tile&quot;: &quot;tile_B2&quot;}`</p>
 <h2>4. Family-level verdict</h2>
-<p>- `workload_family_all_have_interior`: `False`</p>
+<p>- `workload_family_all_have_interior`: `True`</p>
 <p>- `champion_tile_stability_across_workloads`: `0.417`</p>
-<p>- `verdict`: `PARTIAL_WORKLOAD_FAMILY_INTERIOR`</p>
+<p>- `verdict`: `WORKLOAD_FAMILY_INTERIOR_OPTIMUM_CONFIRMED`</p>
 <h2>5. Cross-workload comparison</h2>
 <h2>6. Scope limitations</h2>
 <p>- Tested family is Conv-heavy but still small: inherited Conv3x3, Conv3x3-large, Conv1x1。</p>
 <p>- Additional workloads have smaller valid tile working sets than the inherited `[1,64,56,56]` Conv3x3; neither reaches the smallest-SPAD 85-110% fit-boundary target with valid single-batch tiles。</p>
+<p>- The upgraded family verdict depends on densifying only the <code>conv3x3_large</code> region between <code>tile_A</code> and <code>tile_A2</code>; it is still not a broad ResNet/MobileNet family claim。</p>
 <p>- DepthwiseConv3x3 smoke test produced cycles but has grouped/multi-kernel lowering behavior, so it was not selected under the two-additional-workload cap。</p>
 <p>- Mode=1 correctness remains deferred; this report is mode=0 timing evidence。</p>
 <p>- Existing determinism diagnosis gives a non-trivial noise floor; medians should be interpreted as timing evidence, not exact silicon prediction。</p>
 <h2>7. Next step recommendation</h2>
-<p>下一步应优先扩大 workload family 或增加真实 HW interior points，因为当前 family evidence 已显示 workload-dependent tile optimum。</p>
+<p>下一步应优先扩大 workload family 或增加真实 HW interior points。当前 densified family evidence 已支持 Conv-heavy 小 family 的 interior optimum，但 champion tile 仍明显 workload-dependent。</p>
+<h2>8. Conv3x3-large densification follow-up</h2>
+<p>为检查 <code>conv3x3_large/HW-A</code> 的 <code>tile_A</code> 是否只是粗粒度 tile search 造成的 boundary artifact，本轮只在 <code>tile_A</code> 与 <code>tile_A2</code> 之间加入 3 个新 tile，并只 sweep <code>conv3x3_large</code>。</p>
+<table><tr><th>New tile</th><th>TILE_O_W</th><th>TILE_K</th><th>TILE_N</th><th>Working set bytes</th></tr>
+<tr><td><code>tile_A_a</code></td><td>2</td><td>16</td><td>64</td><td>58,880</td></tr>
+<tr><td><code>tile_A_b</code></td><td>3</td><td>16</td><td>64</td><td>67,968</td></tr>
+<tr><td><code>tile_A_c</code></td><td>4</td><td>16</td><td>64</td><td>77,056</td></tr>
+</table>
+<table><tr><th>HW</th><th>Champion after densification</th><th>Fusion</th><th>Median cycles</th></tr>
+<tr><td>HW-A</td><td><code>tile_A</code></td><td><code>all</code></td><td>6,545</td></tr>
+<tr><td>HW-B</td><td><code>tile_A_b</code></td><td><code>all</code></td><td>19,382</td></tr>
+<tr><td>HW-C</td><td><code>tile_A_a</code></td><td><code>all</code></td><td>6,506</td></tr>
+<tr><td>HW-D</td><td><code>tile_C3</code></td><td><code>all</code></td><td>19,438</td></tr>
+</table>
+<p>Updated <code>conv3x3_large.tile_interior_evidence</code>: <code>True</code></p>
+<p>Updated <code>conv3x3_large.global_min_cell</code>: <code>{&quot;fusion&quot;: &quot;all&quot;, &quot;hw&quot;: &quot;HW-C&quot;, &quot;median&quot;: 6506.0, &quot;tile&quot;: &quot;tile_A_a&quot;}</code></p>
+<p>Updated family verdict: <code>WORKLOAD_FAMILY_INTERIOR_OPTIMUM_CONFIRMED</code></p>
 </body></html>

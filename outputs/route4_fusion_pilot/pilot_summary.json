@@ -6,6 +6,18 @@
     "dataflow": "BLOCKED without source modification (per discovery)",
     "fusion": "proven strong on Conv (6.84x per Conv probe); proven weak on GPT-2 (1.9% - critical-path limited)"
   },
+  "conv3x3_large_densification": {
+    "analysis": "outputs/route4_fusion_pilot/workload_family_interior_analysis_v2.json",
+    "family_verdict": "WORKLOAD_FAMILY_INTERIOR_OPTIMUM_CONFIRMED",
+    "matrix": "outputs/route4_fusion_pilot/conv3x3_large_densification_matrix.json",
+    "tile_variants": "outputs/route4_fusion_pilot/tile_variants_conv3x3_large_densified.json",
+    "updated_conv3x3_large_global_min_cell": {
+      "fusion": "all",
+      "hw": "HW-C",
+      "median": 6506.0,
+      "tile": "tile_A_a"
+    }
+  },
   "conv_codesign_analysis": {
     "blocked_cells": [],
     "champion_fusion_per_hw": {
