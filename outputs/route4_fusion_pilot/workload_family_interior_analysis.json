@@ -1,0 +1,296 @@
+{
+  "family_level": {
+    "champion_tile_stability_across_workloads": 0.41666666666666663,
+    "champion_tile_stability_per_hw": {
+      "HW-A": 0.3333333333333333,
+      "HW-B": 0.6666666666666666,
+      "HW-C": 0.3333333333333333,
+      "HW-D": 0.3333333333333333
+    },
+    "family_migration_pattern": {
+      "distinct_champion_tile_count": 6,
+      "distinct_champion_tiles": [
+        "tile_A",
+        "tile_A2",
+        "tile_B",
+        "tile_B2",
+        "tile_C",
+        "tile_C3"
+      ],
+      "mapping": {
+        "conv1x1/HW-A": "tile_B2",
+        "conv1x1/HW-B": "tile_C",
+        "conv1x1/HW-C": "tile_B2",
+        "conv1x1/HW-D": "tile_B",
+        "conv3x3_large/HW-A": "tile_A",
+        "conv3x3_large/HW-B": "tile_B",
+        "conv3x3_large/HW-C": "tile_C",
+        "conv3x3_large/HW-D": "tile_C3",
+        "conv3x3_probe/HW-A": "tile_C",
+        "conv3x3_probe/HW-B": "tile_C",
+        "conv3x3_probe/HW-C": "tile_A2",
+        "conv3x3_probe/HW-D": "tile_C"
+      }
+    },
+    "selected_additional_workloads": [
+      "conv3x3_large",
+      "conv1x1"
+    ],
+    "tested_workloads": [
+      "conv3x3_probe",
+      "conv3x3_large",
+      "conv1x1"
+    ],
+    "timeboxed": false,
+    "verdict": "PARTIAL_WORKLOAD_FAMILY_INTERIOR",
+    "workload_family_all_have_interior": false
+  },
+  "per_workload": {
+    "conv1x1": {
+      "champion_migration": true,
+      "champion_per_hw": {
+        "HW-A": {
+          "fusion": "all",
+          "median": 1013.0,
+          "tile": "tile_B2"
+        },
+        "HW-B": {
+          "fusion": "all",
+          "median": 3290.0,
+          "tile": "tile_C"
+        },
+        "HW-C": {
+          "fusion": "all",
+          "median": 1007.0,
+          "tile": "tile_B2"
+        },
+        "HW-D": {
+          "fusion": "all",
+          "median": 3289.0,
+          "tile": "tile_B"
+        }
+      },
+      "distinct_champion_tuples": 3,
+      "fit_tiles_by_hw": {
+        "HW-A": [
+          "tile_A",
+          "tile_A2",
+          "tile_B",
+          "tile_B2",
+          "tile_C",
+          "tile_C2",
+          "tile_C3",
+          "tile_D"
+        ],
+        "HW-B": [
+          "tile_A",
+          "tile_A2",
+          "tile_B",
+          "tile_B2",
+          "tile_C",
+          "tile_C2",
+          "tile_C3",
+          "tile_D"
+        ],
+        "HW-C": [
+          "tile_A",
+          "tile_A2",
+          "tile_B",
+          "tile_B2",
+          "tile_C",
+          "tile_C2",
+          "tile_C3",
+          "tile_D"
+        ],
+        "HW-D": [
+          "tile_A",
+          "tile_A2",
+          "tile_B",
+          "tile_B2",
+          "tile_C",
+          "tile_C2",
+          "tile_C3",
+          "tile_D"
+        ]
+      },
+      "global_min_cell": {
+        "fusion": "all",
+        "hw": "HW-C",
+        "median": 1007.0,
+        "tile": "tile_B2"
+      },
+      "global_min_tile_is_extreme_for_hw": false,
+      "tile_interior_evidence": true
+    },
+    "conv3x3_large": {
+      "champion_migration": true,
+      "champion_per_hw": {
+        "HW-A": {
+          "fusion": "all",
+          "median": 6545.0,
+          "tile": "tile_A"
+        },
+        "HW-B": {
+          "fusion": "all",
+          "median": 19420.0,
+          "tile": "tile_B"
+        },
+        "HW-C": {
+          "fusion": "all",
+          "median": 6611.0,
+          "tile": "tile_C"
+        },
+        "HW-D": {
+          "fusion": "all",
+          "median": 19438.0,
+          "tile": "tile_C3"
+        }
+      },
+      "distinct_champion_tuples": 4,
+      "fit_tiles_by_hw": {
+        "HW-A": [
+          "tile_A",
+          "tile_A2",
+          "tile_B",
+          "tile_B2",
+          "tile_C",
+          "tile_C2",
+          "tile_C3",
+          "tile_D"
+        ],
+        "HW-B": [
+          "tile_A",
+          "tile_A2",
+          "tile_B",
+          "tile_B2",
+          "tile_C",
+          "tile_C2",
+          "tile_C3",
+          "tile_D"
+        ],
+        "HW-C": [
+          "tile_A",
+          "tile_A2",
+          "tile_B",
+          "tile_B2",
+          "tile_C",
+          "tile_C2",
+          "tile_C3",
+          "tile_D"
+        ],
+        "HW-D": [
+          "tile_A",
+          "tile_A2",
+          "tile_B",
+          "tile_B2",
+          "tile_C",
+          "tile_C2",
+          "tile_C3",
+          "tile_D"
+        ]
+      },
+      "global_min_cell": {
+        "fusion": "all",
+        "hw": "HW-A",
+        "median": 6545.0,
+        "tile": "tile_A"
+      },
+      "global_min_tile_is_extreme_for_hw": true,
+      "tile_interior_evidence": false
+    },
+    "conv3x3_probe": {
+      "champion_migration": true,
+      "champion_per_hw": {
+        "HW-A": {
+          "fusion": "all",
+          "median": 5880.0,
+          "tile": "tile_C"
+        },
+        "HW-B": {
+          "fusion": "all",
+          "median": 16716.0,
+          "tile": "tile_C"
+        },
+        "HW-C": {
+          "fusion": "all",
+          "median": 5928.0,
+          "tile": "tile_A2"
+        },
+        "HW-D": {
+          "fusion": "all",
+          "median": 16836.0,
+          "tile": "tile_C"
+        }
+      },
+      "distinct_champion_tuples": 2,
+      "fit_tiles_by_hw": {
+        "HW-A": [
+          "tile_A",
+          "tile_A2",
+          "tile_B",
+          "tile_B2",
+          "tile_C",
+          "tile_C2",
+          "tile_C3",
+          "tile_D"
+        ],
+        "HW-B": [
+          "tile_A",
+          "tile_A2",
+          "tile_B",
+          "tile_B2",
+          "tile_C",
+          "tile_C2",
+          "tile_C3",
+          "tile_D"
+        ],
+        "HW-C": [
+          "tile_A",
+          "tile_A2",
+          "tile_B",
+          "tile_B2",
+          "tile_C",
+          "tile_C2",
+          "tile_C3"
+        ],
+        "HW-D": [
+          "tile_A",
+          "tile_A2",
+          "tile_B",
+          "tile_B2",
+          "tile_C",
+          "tile_C2",
+          "tile_C3"
+        ]
+      },
+      "gain_over_v1_matrix": {
+        "absolute_cycle_delta": 41.0,
+        "relative_improvement": 0.00692450599560885,
+        "v1_global_min_median": 5921.0,
+        "v2_global_min_median": 5880.0
+      },
+      "global_min_cell": {
+        "fusion": "all",
+        "hw": "HW-A",
+        "median": 5880.0,
+        "tile": "tile_C"
+      },
+      "global_min_hw_is_corner_hw": true,
+      "global_min_is_at_corner_original": false,
+      "global_min_tile_is_extreme_for_hw": false,
+      "hw_interior_evidence": false,
+      "hw_interior_reason": "This handoff intentionally uses only the 2x2 HW corner set HW-A/B/C/D.",
+      "run_accounting": {
+        "measured_runs": 450,
+        "not_run_timebox_cells": 0,
+        "planned_run_slots": 480,
+        "runtime_failed_cells": 0,
+        "total_cells": 96,
+        "unavailable_run_slots": 30
+      },
+      "source": "inherited_from_tile_fusion_hw_matrix_v2",
+      "tile_interior_evidence": true,
+      "verdict": "TILE_FUSION_INTERIOR_OPTIMUM_CONFIRMED_V2"
+    }
+  }
+}

@@ -407,5 +407,17 @@
     }
   },
   "verdict": "FUSION_CONV_CODESIGN_POSITIVE",
-  "workload": "conv3x3_probe"
+  "workload": "conv3x3_probe",
+  "workload_family_interior_optimum": {
+    "analysis": "outputs/route4_fusion_pilot/workload_family_interior_analysis.json",
+    "discovery": "outputs/route4_fusion_pilot/workload_family_discovery.md",
+    "matrix": "outputs/route4_fusion_pilot/tile_fusion_hw_matrix_per_workload.json",
+    "tested_workloads": [
+      "conv3x3_probe",
+      "conv3x3_large",
+      "conv1x1"
+    ],
+    "tile_variants_per_workload": "outputs/route4_fusion_pilot/tile_variants_per_workload.json",
+    "verdict": "PARTIAL_WORKLOAD_FAMILY_INTERIOR"
+  }
 }

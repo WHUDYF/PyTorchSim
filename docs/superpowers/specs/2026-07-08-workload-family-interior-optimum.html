@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset='utf-8'><title>NPU workload family interior-optimum verification</title>
+<style>body{font-family:Arial,sans-serif;line-height:1.55;max-width:1180px;margin:32px auto;padding:0 20px}table{border-collapse:collapse;width:100%;margin:16px 0}th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}code{background:#f3f3f3;padding:1px 4px}</style>
+</head><body>
+<h1>NPU workload family interior-optimum verification</h1>
+<p>Date: 2026-07-08</p>
+<h2>1. Motivation</h2>
+<p>Conv3x3 v2 已在 `23ea49f` 证明 single-workload `TILE_FUSION_INTERIOR_OPTIMUM_CONFIRMED_V2`。本轮把同一 tile x fusion x HW 方法扩展到 workload family，检查 interior optimum 是否只属于单个 Conv3x3 case，还是能跨 Conv-heavy family 保持。</p>
+<h2>2. Method</h2>
+<p>- Inherited workload: `conv3x3_probe`，直接引用 `tile_fusion_hw_matrix_v2.json` 与 `interior_optimum_analysis_v2.json`。</p>
+<p>- Additional workloads: `conv3x3_large` 与 `conv1x1`。</p>
+<p>- HW: `codesign_v1_2x2` 的 `HW-A/B/C/D`。</p>
+<p>- Fusion variants: `none` 与 `all`。</p>
+<p>- Repeats: 5 per measured cell，`pytorchsim_functional_mode=0`，`CUDA_VISIBLE_DEVICES=1`。</p>
+<p>- Source rule: 未修改 PyTorchSim / TOGSim / gem5 / ramulator2 / spike source；新 workload 通过临时 harness 复用 external Conv tile mapping。</p>
+<p>Discovery 文档：`outputs/route4_fusion_pilot/workload_family_discovery.md`。</p>
+<h2>3. Per-workload results</h2>
+<h3>conv3x3_probe</h3>
+<p>- `tile_interior_evidence`: `True`</p>
+<p>- `global_min_cell`: `{&quot;fusion&quot;: &quot;all&quot;, &quot;hw&quot;: &quot;HW-A&quot;, &quot;median&quot;: 5880.0, &quot;tile&quot;: &quot;tile_C&quot;}`</p>
+<h3>conv3x3_large</h3>
+<p>- `tile_interior_evidence`: `False`</p>
+<p>- `global_min_cell`: `{&quot;fusion&quot;: &quot;all&quot;, &quot;hw&quot;: &quot;HW-A&quot;, &quot;median&quot;: 6545.0, &quot;tile&quot;: &quot;tile_A&quot;}`</p>
+<h3>conv1x1</h3>
+<p>- `tile_interior_evidence`: `True`</p>
+<p>- `global_min_cell`: `{&quot;fusion&quot;: &quot;all&quot;, &quot;hw&quot;: &quot;HW-C&quot;, &quot;median&quot;: 1007.0, &quot;tile&quot;: &quot;tile_B2&quot;}`</p>
+<h2>4. Family-level verdict</h2>
+<p>- `workload_family_all_have_interior`: `False`</p>
+<p>- `champion_tile_stability_across_workloads`: `0.417`</p>
+<p>- `verdict`: `PARTIAL_WORKLOAD_FAMILY_INTERIOR`</p>
+<h2>5. Cross-workload comparison</h2>
+<h2>6. Scope limitations</h2>
+<p>- Tested family is Conv-heavy but still small: inherited Conv3x3, Conv3x3-large, Conv1x1。</p>
+<p>- Additional workloads have smaller valid tile working sets than the inherited `[1,64,56,56]` Conv3x3; neither reaches the smallest-SPAD 85-110% fit-boundary target with valid single-batch tiles。</p>
+<p>- DepthwiseConv3x3 smoke test produced cycles but has grouped/multi-kernel lowering behavior, so it was not selected under the two-additional-workload cap。</p>
+<p>- Mode=1 correctness remains deferred; this report is mode=0 timing evidence。</p>
+<p>- Existing determinism diagnosis gives a non-trivial noise floor; medians should be interpreted as timing evidence, not exact silicon prediction。</p>
+<h2>7. Next step recommendation</h2>
+<p>下一步应优先扩大 workload family 或增加真实 HW interior points，因为当前 family evidence 已显示 workload-dependent tile optimum。</p>
+</body></html>
