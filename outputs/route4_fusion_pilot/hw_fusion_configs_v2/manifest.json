@@ -1,0 +1,118 @@
+{
+  "baseline_config": "configs/systolic_ws_128x128_c1_simple_noc_tpuv3.yml",
+  "baseline_sha256": "b6b5d309f356abb0d2e07483c765d0f4d73642cb86ca4f97e16bb6f33f573bcb",
+  "fixed_mapping": {
+    "TILE_K": 64,
+    "TILE_M": 128,
+    "TILE_N": 64,
+    "mapping_id": "006"
+  },
+  "fusion_variants": {
+    "all": "all",
+    "fusion": [
+      "fusion"
+    ],
+    "none": "none"
+  },
+  "generated": {
+    "HW-A": {
+      "all": {
+        "codegen_compiler_optimization": "all",
+        "path": "outputs/route4_fusion_pilot/hw_fusion_configs_v2/HW-A_fuse_all.yml",
+        "sha256": "ce6b6d21c9891bccf2b8d532e380500e228c01fb6f553fc702f96d4ec0ab0eb2"
+      },
+      "fusion": {
+        "codegen_compiler_optimization": [
+          "fusion"
+        ],
+        "path": "outputs/route4_fusion_pilot/hw_fusion_configs_v2/HW-A_fuse_fusion.yml",
+        "sha256": "ea28de2f17ef720debcfb53f458eb7ebaff76b40f6fcb6ac2bd4d75dc4ca7830"
+      },
+      "none": {
+        "codegen_compiler_optimization": "none",
+        "path": "outputs/route4_fusion_pilot/hw_fusion_configs_v2/HW-A_fuse_none.yml",
+        "sha256": "daee92d84ff12fb659aaa2be4d244a194665d55d8d6294b014285ed549b3ad04"
+      }
+    },
+    "HW-B": {
+      "all": {
+        "codegen_compiler_optimization": "all",
+        "path": "outputs/route4_fusion_pilot/hw_fusion_configs_v2/HW-B_fuse_all.yml",
+        "sha256": "6397e01f5070d349952308d27659645d42858ac5e6bacf6990d36d72762c9b8c"
+      },
+      "fusion": {
+        "codegen_compiler_optimization": [
+          "fusion"
+        ],
+        "path": "outputs/route4_fusion_pilot/hw_fusion_configs_v2/HW-B_fuse_fusion.yml",
+        "sha256": "26bd4b78ae9ba1366f15fe68cdbd37c41fe5eabab4911c238098bde8bfbd1c1b"
+      },
+      "none": {
+        "codegen_compiler_optimization": "none",
+        "path": "outputs/route4_fusion_pilot/hw_fusion_configs_v2/HW-B_fuse_none.yml",
+        "sha256": "518ae8070e0ae108eaedaecafdd835389963efb46e1cab44c08a1efd4c150d82"
+      }
+    },
+    "HW-C": {
+      "all": {
+        "codegen_compiler_optimization": "all",
+        "path": "outputs/route4_fusion_pilot/hw_fusion_configs_v2/HW-C_fuse_all.yml",
+        "sha256": "c2ca5a25ca7e4404cf2090ca4df9e8ec1b23baac454c3175ec518f3218afc5bd"
+      },
+      "fusion": {
+        "codegen_compiler_optimization": [
+          "fusion"
+        ],
+        "path": "outputs/route4_fusion_pilot/hw_fusion_configs_v2/HW-C_fuse_fusion.yml",
+        "sha256": "dc48febd95d6c6c8be3e3b0f5bdd32f8a2d5bbed0058ad2885a11e8ad567fef0"
+      },
+      "none": {
+        "codegen_compiler_optimization": "none",
+        "path": "outputs/route4_fusion_pilot/hw_fusion_configs_v2/HW-C_fuse_none.yml",
+        "sha256": "6d7211431d43e26f8cad4fd5a42fb6561b8c0b0fd60ba1baa671cd106e66ee12"
+      }
+    },
+    "HW-D": {
+      "all": {
+        "codegen_compiler_optimization": "all",
+        "path": "outputs/route4_fusion_pilot/hw_fusion_configs_v2/HW-D_fuse_all.yml",
+        "sha256": "daefa4bb18b9801f4386aeffad0dcff1f9bbe66b175d0f318d3b88386c0c9f53"
+      },
+      "fusion": {
+        "codegen_compiler_optimization": [
+          "fusion"
+        ],
+        "path": "outputs/route4_fusion_pilot/hw_fusion_configs_v2/HW-D_fuse_fusion.yml",
+        "sha256": "7ef939e75227ca9de2a47cf97f544a4f4c41be31cc5e37e875c00cdc02f6201c"
+      },
+      "none": {
+        "codegen_compiler_optimization": "none",
+        "path": "outputs/route4_fusion_pilot/hw_fusion_configs_v2/HW-D_fuse_none.yml",
+        "sha256": "d21de700653e323a9e4fd25eb4b684e197c1c57650bd29a2cef61353bf853fce"
+      }
+    }
+  },
+  "hw_config_set": "codesign_v1_2x2",
+  "patch_matrix": {
+    "HW-A": {
+      "dram_channels": 32,
+      "icnt_injection_ports_per_core": 16,
+      "vpu_spad_size_kb_per_lane": 128
+    },
+    "HW-B": {
+      "dram_channels": 8,
+      "icnt_injection_ports_per_core": 4,
+      "vpu_spad_size_kb_per_lane": 128
+    },
+    "HW-C": {
+      "dram_channels": 32,
+      "icnt_injection_ports_per_core": 16,
+      "vpu_spad_size_kb_per_lane": 32
+    },
+    "HW-D": {
+      "dram_channels": 8,
+      "icnt_injection_ports_per_core": 4,
+      "vpu_spad_size_kb_per_lane": 32
+    }
+  }
+}

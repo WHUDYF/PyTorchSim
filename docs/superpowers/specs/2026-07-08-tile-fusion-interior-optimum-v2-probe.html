@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>tile x fusion x HW interior-optimum v2 probe</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; max-width: 1280px; margin: 28px auto; padding: 0 24px; color: #222; }
+    h1 { border-bottom: 3px solid #333; padding-bottom: 8px; }
+    h2 { margin-top: 30px; border-left: 4px solid #333; padding-left: 10px; }
+    table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13px; }
+    th, td { border: 1px solid #d6d6d6; padding: 7px 8px; text-align: left; vertical-align: top; }
+    th { background: #333; color: #fff; }
+    code { background: #f5f5f5; padding: 1px 4px; border-radius: 4px; }
+    pre { background: #f7f7f7; padding: 12px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+<h1>tile x fusion x HW interior-optimum v2 probe</h1>
+<p>Date: 2026-07-08</p>
+<h2>1. Motivation</h2>
+<p><code>5f16398</code> 的 v1 verdict 是 <code>CHAMPION_MIGRATION_ONLY</code>。v2 在不增加 HW 维度的前提下加密 software tile space，并加入 <code>fusion = ["fusion"]</code> 作为第三个 fusion variant。</p>
+<h2>2. Method</h2>
+<ul>
+  <li>Workload: Conv 3x3 <code>[1, 64, 56, 56] -&gt; [1, 64, 56, 56]</code></li>
+  <li>HW: <code>codesign_v1_2x2</code> 的 <code>HW-A/B/C/D</code></li>
+  <li>Tile: 8 variants, all with <code>TILE_O_H=56</code></li>
+  <li>Fusion: <code>[&#x27;none&#x27;, &#x27;fusion&#x27;, &#x27;all&#x27;]</code></li>
+  <li>Repeats: 5 per cell, mode=0 timing</li>
+</ul>
+<pre>{
+  &quot;total_cells&quot;: 96,
+  &quot;planned_run_slots&quot;: 480,
+  &quot;measured_runs&quot;: 450,
+  &quot;unavailable_run_slots&quot;: 30,
+  &quot;runtime_failed_cells&quot;: 0,
+  &quot;not_run_timebox_cells&quot;: 0
+}</pre>
+<h2>3. Full 4-HW x 8-tile x N-fusion matrix</h2>
+<table><tr><th> HW </th><th> Tile </th><th> Working set KB </th><th> Small-SPAD fit </th><th> none median/state </th><th> fusion median/state </th><th> all median/state </th></tr>
+<tr><td>HW-A</td><td>tile_A</td><td>487.0</td><td>yes</td><td>185,433 / `measured`</td><td>181,608 / `measured`</td><td>6,115 / `measured`</td></tr><tr><td>HW-A</td><td>tile_A2</td><td>657.0</td><td>yes</td><td>184,538 / `measured`</td><td>180,720 / `measured`</td><td>6,194 / `measured`</td></tr><tr><td>HW-A</td><td>tile_B</td><td>912.0</td><td>yes</td><td>184,341 / `measured`</td><td>181,506 / `measured`</td><td>6,129 / `measured`</td></tr><tr><td>HW-A</td><td>tile_B2</td><td>1145.5</td><td>yes</td><td>290,423 / `measured`</td><td>289,339 / `measured`</td><td>6,140 / `measured`</td></tr><tr><td>HW-A</td><td>tile_C</td><td>1507.0</td><td>yes</td><td>185,891 / `measured`</td><td>185,336 / `measured`</td><td>5,880 / `measured`</td></tr><tr><td>HW-A</td><td>tile_C2</td><td>1850.2</td><td>yes</td><td>536,391 / `measured`</td><td>539,427 / `measured`</td><td>6,174 / `measured`</td></tr><tr><td>HW-A</td><td>tile_C3</td><td>1976.0</td><td>yes</td><td>311,237 / `measured`</td><td>314,025 / `measured`</td><td>6,180 / `measured`</td></tr><tr><td>HW-A</td><td>tile_D</td><td>2384.0</td><td>yes</td><td>162,261 / `measured`</td><td>165,365 / `measured`</td><td>6,089 / `measured`</td></tr><tr><td>HW-B</td><td>tile_A</td><td>487.0</td><td>yes</td><td>210,648 / `measured`</td><td>196,015 / `measured`</td><td>17,102 / `measured`</td></tr><tr><td>HW-B</td><td>tile_A2</td><td>657.0</td><td>yes</td><td>211,200 / `measured`</td><td>197,562 / `measured`</td><td>17,165 / `measured`</td></tr><tr><td>HW-B</td><td>tile_B</td><td>912.0</td><td>yes</td><td>211,496 / `measured`</td><td>198,397 / `measured`</td><td>16,827 / `measured`</td></tr><tr><td>HW-B</td><td>tile_B2</td><td>1145.5</td><td>yes</td><td>329,293 / `measured`</td><td>318,190 / `measured`</td><td>16,852 / `measured`</td></tr><tr><td>HW-B</td><td>tile_C</td><td>1507.0</td><td>yes</td><td>216,923 / `measured`</td><td>205,609 / `measured`</td><td>16,716 / `measured`</td></tr><tr><td>HW-B</td><td>tile_C2</td><td>1850.2</td><td>yes</td><td>567,092 / `measured`</td><td>559,712 / `measured`</td><td>16,966 / `measured`</td></tr><tr><td>HW-B</td><td>tile_C3</td><td>1976.0</td><td>yes</td><td>355,138 / `measured`</td><td>347,849 / `measured`</td><td>16,945 / `measured`</td></tr><tr><td>HW-B</td><td>tile_D</td><td>2384.0</td><td>yes</td><td>214,895 / `measured`</td><td>207,511 / `measured`</td><td>16,870 / `measured`</td></tr><tr><td>HW-C</td><td>tile_A</td><td>487.0</td><td>yes</td><td>185,256 / `measured`</td><td>181,391 / `measured`</td><td>6,258 / `measured`</td></tr><tr><td>HW-C</td><td>tile_A2</td><td>657.0</td><td>yes</td><td>184,061 / `measured`</td><td>180,853 / `measured`</td><td>5,928 / `measured`</td></tr><tr><td>HW-C</td><td>tile_B</td><td>912.0</td><td>yes</td><td>184,181 / `measured`</td><td>181,714 / `measured`</td><td>6,019 / `measured`</td></tr><tr><td>HW-C</td><td>tile_B2</td><td>1145.5</td><td>yes</td><td>290,188 / `measured`</td><td>289,282 / `measured`</td><td>6,095 / `measured`</td></tr><tr><td>HW-C</td><td>tile_C</td><td>1507.0</td><td>yes</td><td>186,285 / `measured`</td><td>185,454 / `measured`</td><td>6,402 / `measured`</td></tr><tr><td>HW-C</td><td>tile_C2</td><td>1850.2</td><td>yes</td><td>536,287 / `measured`</td><td>539,597 / `measured`</td><td>5,988 / `measured`</td></tr><tr><td>HW-C</td><td>tile_C3</td><td>1976.0</td><td>yes</td><td>310,920 / `measured`</td><td>313,994 / `measured`</td><td>6,158 / `measured`</td></tr><tr><td>HW-C</td><td>tile_D</td><td>2384.0</td><td>no</td><td>unavailable / `unavailable`</td><td>unavailable / `unavailable`</td><td>unavailable / `unavailable`</td></tr><tr><td>HW-D</td><td>tile_A</td><td>487.0</td><td>yes</td><td>210,632 / `measured`</td><td>196,309 / `measured`</td><td>17,131 / `measured`</td></tr><tr><td>HW-D</td><td>tile_A2</td><td>657.0</td><td>yes</td><td>211,474 / `measured`</td><td>197,282 / `measured`</td><td>17,051 / `measured`</td></tr><tr><td>HW-D</td><td>tile_B</td><td>912.0</td><td>yes</td><td>211,675 / `measured`</td><td>198,675 / `measured`</td><td>16,916 / `measured`</td></tr><tr><td>HW-D</td><td>tile_B2</td><td>1145.5</td><td>yes</td><td>330,077 / `measured`</td><td>318,249 / `measured`</td><td>16,881 / `measured`</td></tr><tr><td>HW-D</td><td>tile_C</td><td>1507.0</td><td>yes</td><td>217,066 / `measured`</td><td>205,391 / `measured`</td><td>16,836 / `measured`</td></tr><tr><td>HW-D</td><td>tile_C2</td><td>1850.2</td><td>yes</td><td>567,309 / `measured`</td><td>559,481 / `measured`</td><td>16,860 / `measured`</td></tr><tr><td>HW-D</td><td>tile_C3</td><td>1976.0</td><td>yes</td><td>355,101 / `measured`</td><td>347,585 / `measured`</td><td>16,861 / `measured`</td></tr><tr><td>HW-D</td><td>tile_D</td><td>2384.0</td><td>no</td><td>unavailable / `unavailable`</td><td>unavailable / `unavailable`</td><td>unavailable / `unavailable`</td></tr>
+</table>
+<h2>4. Fit-boundary map</h2>
+<table><tr><th> Tile </th><th> Regime </th><th> Working set KB </th><th> Small-SPAD fit fraction </th><th> HW-A </th><th> HW-B </th><th> HW-C </th><th> HW-D </th></tr>
+<tr><td>tile_A</td><td>tiny</td><td>487.0</td><td>0.238</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr><tr><td>tile_A2</td><td>tiny_dense</td><td>657.0</td><td>0.321</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr><tr><td>tile_B</td><td>small</td><td>912.0</td><td>0.445</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr><tr><td>tile_B2</td><td>small_dense</td><td>1145.5</td><td>0.559</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr><tr><td>tile_C</td><td>medium</td><td>1507.0</td><td>0.736</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr><tr><td>tile_C2</td><td>near_boundary_fit</td><td>1850.2</td><td>0.903</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr><tr><td>tile_C3</td><td>fit_boundary</td><td>1976.0</td><td>0.965</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr><tr><td>tile_D</td><td>large_unavailable_small_spad</td><td>2384.0</td><td>1.164</td><td>yes</td><td>yes</td><td>no</td><td>no</td></tr>
+</table>
+<h2>5. Champion analysis</h2>
+<table><tr><th> HW </th><th> Champion tile </th><th> Champion fusion </th><th> Median cycles </th></tr>
+<tr><td>HW-A</td><td>tile_C</td><td>all</td><td>5,880</td></tr><tr><td>HW-B</td><td>tile_C</td><td>all</td><td>16,716</td></tr><tr><td>HW-C</td><td>tile_A2</td><td>all</td><td>5,928</td></tr><tr><td>HW-D</td><td>tile_C</td><td>all</td><td>16,836</td></tr>
+</table>
+<p><code>distinct_champion_tuples = 2</code>, <code>champion_migration = True</code></p>
+<pre>{
+  &quot;hw&quot;: &quot;HW-A&quot;,
+  &quot;tile&quot;: &quot;tile_C&quot;,
+  &quot;fusion&quot;: &quot;all&quot;,
+  &quot;median&quot;: 5880.0
+}</pre>
+<h2>6. Interior optimum verdict</h2>
+<p><code>TILE_FUSION_INTERIOR_OPTIMUM_CONFIRMED_V2</code></p>
+<ul>
+  <li><code>global_min_hw_is_corner_hw = True</code></li>
+  <li><code>global_min_tile_is_extreme_for_hw = False</code></li>
+  <li><code>tile_interior_evidence = True</code></li>
+</ul>
+<pre>{
+  &quot;v1_global_min_median&quot;: 5921.0,
+  &quot;v2_global_min_median&quot;: 5880.0,
+  &quot;absolute_cycle_delta&quot;: 41.0,
+  &quot;relative_improvement&quot;: 0.00692450599560885
+}</pre>
+<h2>7. Next step recommendation</h2>
+<p>本轮已经得到 tile interior optimum，下一步应换到 ResNet stage 或 GPT-2 block 做 generalization。</p>
+</body>
+</html>

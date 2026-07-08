@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import html
 import json
 import math
 import os
@@ -1973,6 +1974,684 @@ def run_interior_optimum_probe(args: argparse.Namespace) -> int:
     return 0
 
 
+def make_conv_tile_variant(tile: dict[str, int], regime: str) -> dict[str, Any]:
+    smallest_budget = 32 * 1024 * 128 // 2
+    largest_budget = 128 * 1024 * 128 // 2
+    ws = conv_tile_working_set_bytes(tile)
+    payload = {
+        **{k: int(tile[k]) for k in ["TILE_K_H", "TILE_K_W", "TILE_O_H", "TILE_O_W", "TILE_M", "TILE_N", "TILE_K"]},
+        "working_set_bytes": ws["total_bytes"],
+        "predicted_working_set_bytes": ws["total_bytes"],
+        "predicted_fit_all_hw": ws["total_bytes"] <= smallest_budget,
+        "regime": regime,
+        "fit_fraction_smallest_spad": ws["total_bytes"] / smallest_budget,
+        "fit_fraction_largest_spad": ws["total_bytes"] / largest_budget,
+    }
+    return payload
+
+
+def select_conv_tile_variants_v2() -> dict[str, dict[str, Any]]:
+    base = {"TILE_M": 1, "TILE_N": 128}
+    specs = [
+        ("tile_A", {**base, "TILE_K_H": 3, "TILE_K_W": 3, "TILE_O_H": 56, "TILE_O_W": 4, "TILE_K": 64}, "tiny"),
+        ("tile_A2", {**base, "TILE_K_H": 3, "TILE_K_W": 3, "TILE_O_H": 56, "TILE_O_W": 8, "TILE_K": 64}, "tiny_dense"),
+        ("tile_B", {**base, "TILE_K_H": 3, "TILE_K_W": 3, "TILE_O_H": 56, "TILE_O_W": 14, "TILE_K": 64}, "small"),
+        ("tile_B2", {**base, "TILE_K_H": 3, "TILE_K_W": 3, "TILE_O_H": 56, "TILE_O_W": 28, "TILE_K": 32}, "small_dense"),
+        ("tile_C", {**base, "TILE_K_H": 3, "TILE_K_W": 3, "TILE_O_H": 56, "TILE_O_W": 28, "TILE_K": 64}, "medium"),
+        ("tile_C2", {**base, "TILE_K_H": 3, "TILE_K_W": 3, "TILE_O_H": 56, "TILE_O_W": 56, "TILE_K": 16}, "near_boundary_fit"),
+        ("tile_C3", {**base, "TILE_K_H": 1, "TILE_K_W": 1, "TILE_O_H": 56, "TILE_O_W": 56, "TILE_K": 32}, "fit_boundary"),
+        ("tile_D", {**base, "TILE_K_H": 1, "TILE_K_W": 1, "TILE_O_H": 56, "TILE_O_W": 56, "TILE_K": 64}, "large_unavailable_small_spad"),
+    ]
+    return {name: make_conv_tile_variant(tile, regime) for name, tile, regime in specs}
+
+
+def shell_capture(command: str, *, timeout_sec: int = 30) -> dict[str, Any]:
+    def as_text(value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="replace")
+        return str(value)
+
+    try:
+        proc = subprocess.run(
+            ["bash", "-lc", f"set -o pipefail; {command}"],
+            cwd=repo_root(),
+            text=True,
+            capture_output=True,
+            timeout=timeout_sec,
+        )
+        return {
+            "command": command,
+            "returncode": proc.returncode,
+            "stdout": as_text(proc.stdout),
+            "stderr": as_text(proc.stderr),
+            "timed_out": False,
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "command": command,
+            "returncode": None,
+            "stdout": as_text(exc.stdout),
+            "stderr": as_text(exc.stderr),
+            "timed_out": True,
+        }
+
+
+def write_fusion_variants_discovery(output_root: Path) -> dict[str, Any]:
+    commands = [
+        'grep -rn "codegen_compiler_optimization\\|compiler_optimization" PyTorchSimFrontend/mlir/ TOGSim/ configs/ scripts/ 2>/dev/null | head -30',
+        'grep -rn \'"none"\\|"all"\\|"fusion_only"\\|"epilogue"\\|"elementwise"\' PyTorchSimFrontend/mlir/ TOGSim/ configs/ 2>/dev/null | head -20',
+        "rg -n \"codegen_compiler_optimization|compiler_optimization\" PyTorchSimFrontend/mlir TOGSim configs scripts -g '!TOGSim/extern/**' | head -40",
+        "sed -n '90,125p' PyTorchSimFrontend/extension_config.py",
+    ]
+    results = [shell_capture(command) for command in commands]
+    fusion_variants = {
+        "none": "none",
+        "fusion": ["fusion"],
+        "all": "all",
+    }
+    lines = [
+        "# Fusion variants discovery",
+        "",
+        "本轮目标是检查 `codegen_compiler_optimization` 除 `none/all` 外是否存在可作为第三个 fusion family 的稳定取值。",
+        "",
+    ]
+    for result in results:
+        lines.append(f"## Command")
+        lines.append("")
+        lines.append(f"```bash\n{result['command']}\n```")
+        lines.append("")
+        status = "timed out" if result["timed_out"] else f"returncode={result['returncode']}"
+        lines.append(f"Status: `{status}`")
+        lines.append("")
+        stdout = result["stdout"].strip() or "(no stdout)"
+        stderr = result["stderr"].strip()
+        lines.append("```text")
+        lines.append(stdout[:12000])
+        lines.append("```")
+        if stderr:
+            lines.append("")
+            lines.append("stderr:")
+            lines.append("```text")
+            lines.append(stderr[:4000])
+            lines.append("```")
+        lines.append("")
+    lines.extend(
+        [
+            "## Decision",
+            "",
+            "`PyTorchSimFrontend/extension_config.py` accepts `codegen_compiler_optimization` as `all`, `none`, or a list drawn from:",
+            "",
+            "- `fusion`",
+            "- `reduction_epilogue`",
+            "- `reduction_reduction`",
+            "- `prologue`",
+            "- `single_batch_conv`",
+            "- `multi_tile_conv`",
+            "- `subtile`",
+            "",
+            "因此本轮使用第三个 meaningful variant：`fusion = [\"fusion\"]`。它只打开 `CONFIG_FUSION`，不同于 `all` 同时打开所有 compiler optimization。最终 sweep 的 fusion variants 为 `none`、`fusion`、`all`，即 `N=3`。",
+            "",
+        ]
+    )
+    path = output_root / "fusion_variants_discovery.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return {
+        "variants": fusion_variants,
+        "variant_count": len(fusion_variants),
+        "discovery_path": str(path),
+        "commands": results,
+    }
+
+
+def generate_v1_hw_fusion_configs_for_variants(
+    output_root: Path,
+    fusion_variants: dict[str, Any],
+    *,
+    subdir: str,
+) -> dict[str, Any]:
+    baseline_path = repo_root() / BASELINE_CONFIG
+    baseline = yaml.safe_load(baseline_path.read_text(encoding="utf-8"))
+    if not isinstance(baseline, dict):
+        raise ValueError(f"baseline YAML must be a mapping: {baseline_path}")
+    config_set = get_hw_config_set("codesign_v1_2x2")
+    out_dir = output_root / subdir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    generated: dict[str, dict[str, dict[str, Any]]] = {}
+    for hw_id, hw_patch in config_set.patch_matrix.items():
+        hw_base = patch_hw_yaml(baseline, hw_patch, config_set=config_set)
+        generated[hw_id] = {}
+        for variant, opt_value in fusion_variants.items():
+            patched = copy.deepcopy(hw_base)
+            patched["codegen_compiler_optimization"] = opt_value
+            path = out_dir / f"{hw_id}_fuse_{variant}.yml"
+            path.write_text(yaml.safe_dump(patched, sort_keys=False), encoding="utf-8")
+            generated[hw_id][variant] = {
+                "path": str(path),
+                "sha256": sha256_file(path),
+                "codegen_compiler_optimization": opt_value,
+            }
+    manifest = {
+        "baseline_config": str(BASELINE_CONFIG),
+        "baseline_sha256": sha256_file(baseline_path),
+        "hw_config_set": "codesign_v1_2x2",
+        "patch_matrix": config_set.patch_matrix,
+        "fixed_mapping": MAPPING_CONFIG,
+        "fusion_variants": fusion_variants,
+        "generated": generated,
+    }
+    write_json(out_dir / "manifest.json", manifest)
+    return manifest
+
+
+def summarize_tile_fusion_matrix(matrix: dict[str, Any], repeats: int) -> dict[str, Any]:
+    measured_runs = 0
+    unavailable_slots = 0
+    runtime_failed_cells = 0
+    not_run_cells = 0
+    total_cells = 0
+    for tile_map in matrix.values():
+        for variants in tile_map.values():
+            for cell in variants.values():
+                total_cells += 1
+                cls = cell.get("class")
+                if cls == "measured":
+                    measured_runs += len([cycle for cycle in cell.get("cycles_in_order", []) if int(cycle) > 0])
+                elif cls == "unavailable":
+                    unavailable_slots += repeats
+                elif cls == "not_run_timebox":
+                    not_run_cells += 1
+                else:
+                    runtime_failed_cells += 1
+    return {
+        "total_cells": total_cells,
+        "planned_run_slots": total_cells * repeats,
+        "measured_runs": measured_runs,
+        "unavailable_run_slots": unavailable_slots,
+        "runtime_failed_cells": runtime_failed_cells,
+        "not_run_timebox_cells": not_run_cells,
+    }
+
+
+def analyze_tile_fusion_matrix_v2(
+    matrix: dict[str, dict[str, dict[str, Any]]],
+    selected_tiles: dict[str, dict[str, Any]],
+    *,
+    timeboxed: bool,
+) -> dict[str, Any]:
+    measured_cells = []
+    for hw_id, tile_map in matrix.items():
+        for tile_name, variants in tile_map.items():
+            for variant, cell in variants.items():
+                if cell.get("class") == "measured" and float(cell.get("median", 0) or 0) > 0:
+                    measured_cells.append(
+                        {
+                            "hw": hw_id,
+                            "tile": tile_name,
+                            "fusion": variant,
+                            "median": float(cell["median"]),
+                        }
+                    )
+
+    champion_per_hw: dict[str, Any] = {}
+    for hw_id, tile_map in matrix.items():
+        best = None
+        for tile_name, variants in tile_map.items():
+            for variant, cell in variants.items():
+                if cell.get("class") != "measured" or float(cell.get("median", 0) or 0) <= 0:
+                    continue
+                cand = (float(cell["median"]), tile_name, variant)
+                if best is None or cand[0] < best[0]:
+                    best = cand
+        champion_per_hw[hw_id] = None if best is None else {"tile": best[1], "fusion": best[2], "median": best[0]}
+
+    champion_pairs = {(item["tile"], item["fusion"]) for item in champion_per_hw.values() if item}
+    global_min = min(measured_cells, key=lambda item: item["median"]) if measured_cells else None
+    fit_tiles_by_hw = {
+        hw_id: [
+            tile_name
+            for tile_name, tile in sorted(selected_tiles.items(), key=lambda item: item[1]["predicted_working_set_bytes"])
+            if classify_fit_regime(tile, hw_id)["fits"]
+        ]
+        for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D")
+    }
+    global_min_tile_is_extreme_for_hw = None
+    if global_min:
+        fit_tiles = fit_tiles_by_hw.get(global_min["hw"], [])
+        extremes = {fit_tiles[0], fit_tiles[-1]} if fit_tiles else set()
+        global_min_tile_is_extreme_for_hw = global_min["tile"] in extremes
+    tile_interior_evidence = bool(global_min and global_min_tile_is_extreme_for_hw is False)
+    global_min_hw_is_corner_hw = bool(global_min and global_min["hw"] in {"HW-A", "HW-B", "HW-C", "HW-D"})
+    global_min_is_at_corner_original = bool(
+        global_min
+        and global_min["hw"] in {"HW-A", "HW-D"}
+        and global_min["tile"] in {"tile_A", "tile_D"}
+    )
+    v1_global_min = 5921.0
+    v2_global_min = float(global_min["median"]) if global_min else 0.0
+    gain_over_v1 = {
+        "v1_global_min_median": v1_global_min,
+        "v2_global_min_median": v2_global_min,
+        "absolute_cycle_delta": v1_global_min - v2_global_min if v2_global_min else None,
+        "relative_improvement": (v1_global_min - v2_global_min) / v1_global_min if v2_global_min else None,
+    }
+    if timeboxed:
+        verdict = "TILE_FUSION_PARTIAL_SCOPE_LIMITATION"
+    elif tile_interior_evidence:
+        verdict = "TILE_FUSION_INTERIOR_OPTIMUM_CONFIRMED_V2"
+    elif len(champion_pairs) > 3:
+        verdict = "TILE_FUSION_MIGRATION_STRONGER_THAN_V1"
+    else:
+        verdict = "TILE_FUSION_STILL_CORNER_OPTIMUM"
+    return {
+        "champion_migration": len(champion_pairs) > 1,
+        "champion_per_hw": champion_per_hw,
+        "distinct_champion_tuples": len(champion_pairs),
+        "global_min_cell": global_min,
+        "global_min_hw_is_corner_hw": global_min_hw_is_corner_hw,
+        "global_min_tile_is_extreme_for_hw": global_min_tile_is_extreme_for_hw,
+        "tile_interior_evidence": tile_interior_evidence,
+        "global_min_is_at_corner_original": global_min_is_at_corner_original,
+        "hw_interior_evidence": False,
+        "hw_interior_reason": "This handoff intentionally uses only the 2x2 HW corner set HW-A/B/C/D.",
+        "fit_tiles_by_hw": fit_tiles_by_hw,
+        "gain_over_v1_matrix": gain_over_v1,
+        "verdict": verdict,
+    }
+
+
+def format_median(cell: dict[str, Any]) -> str:
+    if cell.get("class") == "unavailable":
+        return "unavailable"
+    if cell.get("class") == "not_run_timebox":
+        return "not_run"
+    median = float(cell.get("median", 0) or 0)
+    return f"{median:,.0f}" if median > 0 else cell.get("class", "NA")
+
+
+def markdown_matrix_table_v2(matrix: dict[str, Any], tiles: dict[str, Any], fusion_names: list[str]) -> str:
+    header = ["HW", "Tile", "Working set KB", "Small-SPAD fit"] + [f"{name} median/state" for name in fusion_names]
+    rows = ["| " + " | ".join(header) + " |", "|" + "|".join(["---"] * len(header)) + "|"]
+    for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D"):
+        for tile_name, tile in tiles.items():
+            fit = classify_fit_regime(tile, hw_id)
+            cells = [
+                hw_id,
+                tile_name,
+                f"{tile['predicted_working_set_bytes'] / 1024:.1f}",
+                "yes" if fit["fits"] else "no",
+            ]
+            for fusion in fusion_names:
+                cell = matrix.get(hw_id, {}).get(tile_name, {}).get(fusion, {})
+                cells.append(f"{format_median(cell)} / `{cell.get('class', 'missing')}`")
+            rows.append("| " + " | ".join(cells) + " |")
+    return "\n".join(rows)
+
+
+def render_tile_fusion_v2_report(
+    output_root: Path,
+    matrix: dict[str, Any],
+    tiles: dict[str, Any],
+    fusion_names: list[str],
+    analysis: dict[str, Any],
+    run_accounting: dict[str, Any],
+    discovery: dict[str, Any],
+) -> None:
+    docs_dir = repo_root() / "docs" / "superpowers" / "specs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    md_path = docs_dir / "2026-07-08-tile-fusion-interior-optimum-v2-probe.md"
+    html_path = docs_dir / "2026-07-08-tile-fusion-interior-optimum-v2-probe.html"
+    matrix_table = markdown_matrix_table_v2(matrix, tiles, fusion_names)
+    fit_rows = []
+    for tile_name, tile in tiles.items():
+        fit_cells = [
+            "yes" if classify_fit_regime(tile, hw_id)["fits"] else "no"
+            for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D")
+        ]
+        fit_rows.append(
+            f"| {tile_name} | {tile['regime']} | {tile['predicted_working_set_bytes'] / 1024:.1f} | "
+            f"{tile['fit_fraction_smallest_spad']:.3f} | " + " | ".join(fit_cells) + " |"
+        )
+    fit_table = "\n".join(
+        ["| Tile | Regime | Working set KB | Small-SPAD fit fraction | HW-A | HW-B | HW-C | HW-D |", "|---|---|---:|---:|---|---|---|---|"]
+        + fit_rows
+    )
+    champion_rows = []
+    for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D"):
+        champ = analysis["champion_per_hw"].get(hw_id) or {}
+        champion_rows.append(
+            f"| {hw_id} | {champ.get('tile', 'NA')} | {champ.get('fusion', 'NA')} | {float(champ.get('median', 0) or 0):,.0f} |"
+        )
+    champion_table = "\n".join(["| HW | Champion tile | Champion fusion | Median cycles |", "|---|---|---|---:|"] + champion_rows)
+    next_step = (
+        "本轮已经得到 tile interior optimum，下一步应换到 ResNet stage 或 GPT-2 block 做 generalization。"
+        if analysis["verdict"] == "TILE_FUSION_INTERIOR_OPTIMUM_CONFIRMED_V2"
+        else "本轮仍不足以证明 strict interior optimum；下一步建议增加 interior HW points，例如 SPAD in `{32, 64, 128}` 和 DRAM channels in `{8, 16, 32}`，再和本轮 8-tile SW space 组合。"
+    )
+    md = f"""# tile x fusion x HW interior-optimum v2 probe
+
+Date: 2026-07-08
+
+## 1. Motivation
+
+`5f16398` 的 v1 verdict 是 `CHAMPION_MIGRATION_ONLY`：best `(tile, fusion)` 会随 HW 迁移，但 global minimum 仍在 corner。v2 的目标是在不增加 HW 维度的前提下，把 software tile space 从 4 个加密到 8 个，并加入第三个 fusion variant `fusion = [\"fusion\"]`，观察是否能把结果推进到 tile interior optimum。
+
+## 2. Method
+
+- Workload: Conv 3x3 `[1, 64, 56, 56] -> [1, 64, 56, 56]`，使用既有 `conv3x3_probe`。
+- HW: `codesign_v1_2x2` 的 `HW-A/B/C/D`，不增加 HW interior points。
+- Tile: `tile_A/A2/B/B2/C/C2/C3/D` 共 8 个，全部保持 `TILE_O_H=56`；近边界点通过合法的 `TILE_O_W` 与 `TILE_K` 组合形成。
+- Fusion: `{fusion_names}`，其中 `fusion` 表示 YAML list `['fusion']`。
+- Repeats: `5` per cell，`pytorchsim_functional_mode=0`，seed 0，独立 subprocess。
+- Fit rule: 若 `working_set > usable_spad_bytes`，该 cell 标记为 `unavailable` 并跳过 TOGSim。
+
+Run accounting:
+
+```json
+{json.dumps(run_accounting, indent=2, ensure_ascii=False)}
+```
+
+Fusion discovery 文档：`{discovery['discovery_path']}`。
+
+## 3. Full 4-HW x 8-tile x N-fusion matrix
+
+{matrix_table}
+
+完整 raw cycles 保存在 `outputs/route4_fusion_pilot/tile_fusion_hw_matrix_v2.json`。
+
+## 4. Fit-boundary map
+
+{fit_table}
+
+`tile_C2` 和 `tile_C3` 是 v2 加密后靠近 small-SPAD fit boundary 的两个关键点；`tile_D` 仍超过 small-SPAD double-buffer budget，因此在 `HW-C/HW-D` 上不可用。
+
+## 5. Champion analysis
+
+{champion_table}
+
+`distinct_champion_tuples = {analysis['distinct_champion_tuples']}`，`champion_migration = {analysis['champion_migration']}`。
+
+Global minimum:
+
+```json
+{json.dumps(analysis['global_min_cell'], indent=2, ensure_ascii=False)}
+```
+
+## 6. Interior optimum verdict
+
+`{analysis['verdict']}`
+
+- `global_min_hw_is_corner_hw = {analysis['global_min_hw_is_corner_hw']}`。本 handoff 只有 2x2 HW corners，所以 HW interior 证据必然为 false。
+- `global_min_tile_is_extreme_for_hw = {analysis['global_min_tile_is_extreme_for_hw']}`。
+- `tile_interior_evidence = {analysis['tile_interior_evidence']}`。
+- v1 global min median 是 `5921`；v2 对比为：
+
+```json
+{json.dumps(analysis['gain_over_v1_matrix'], indent=2, ensure_ascii=False)}
+```
+
+## 7. Next step recommendation
+
+{next_step}
+"""
+    md_path.write_text(md, encoding="utf-8")
+
+    def esc(value: Any) -> str:
+        return html.escape(str(value))
+
+    html_rows = []
+    for line in matrix_table.splitlines()[2:]:
+        cols = [col.strip() for col in line.strip("|").split("|")]
+        html_rows.append("<tr>" + "".join(f"<td>{esc(col)}</td>" for col in cols) + "</tr>")
+    fit_html_rows = []
+    for line in fit_table.splitlines()[2:]:
+        cols = [col.strip() for col in line.strip("|").split("|")]
+        fit_html_rows.append("<tr>" + "".join(f"<td>{esc(col)}</td>" for col in cols) + "</tr>")
+    champ_html_rows = []
+    for line in champion_table.splitlines()[2:]:
+        cols = [col.strip() for col in line.strip("|").split("|")]
+        champ_html_rows.append("<tr>" + "".join(f"<td>{esc(col)}</td>" for col in cols) + "</tr>")
+    html_text = f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>tile x fusion x HW interior-optimum v2 probe</title>
+  <style>
+    body {{ font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; max-width: 1280px; margin: 28px auto; padding: 0 24px; color: #222; }}
+    h1 {{ border-bottom: 3px solid #333; padding-bottom: 8px; }}
+    h2 {{ margin-top: 30px; border-left: 4px solid #333; padding-left: 10px; }}
+    table {{ border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13px; }}
+    th, td {{ border: 1px solid #d6d6d6; padding: 7px 8px; text-align: left; vertical-align: top; }}
+    th {{ background: #333; color: #fff; }}
+    code {{ background: #f5f5f5; padding: 1px 4px; border-radius: 4px; }}
+    pre {{ background: #f7f7f7; padding: 12px; overflow-x: auto; }}
+  </style>
+</head>
+<body>
+<h1>tile x fusion x HW interior-optimum v2 probe</h1>
+<p>Date: 2026-07-08</p>
+<h2>1. Motivation</h2>
+<p><code>5f16398</code> 的 v1 verdict 是 <code>CHAMPION_MIGRATION_ONLY</code>。v2 在不增加 HW 维度的前提下加密 software tile space，并加入 <code>fusion = ["fusion"]</code> 作为第三个 fusion variant。</p>
+<h2>2. Method</h2>
+<ul>
+  <li>Workload: Conv 3x3 <code>[1, 64, 56, 56] -&gt; [1, 64, 56, 56]</code></li>
+  <li>HW: <code>codesign_v1_2x2</code> 的 <code>HW-A/B/C/D</code></li>
+  <li>Tile: 8 variants, all with <code>TILE_O_H=56</code></li>
+  <li>Fusion: <code>{esc(fusion_names)}</code></li>
+  <li>Repeats: 5 per cell, mode=0 timing</li>
+</ul>
+<pre>{esc(json.dumps(run_accounting, indent=2, ensure_ascii=False))}</pre>
+<h2>3. Full 4-HW x 8-tile x N-fusion matrix</h2>
+<table><tr>{''.join(f'<th>{esc(col)}</th>' for col in matrix_table.splitlines()[0].strip('|').split('|'))}</tr>
+{''.join(html_rows)}
+</table>
+<h2>4. Fit-boundary map</h2>
+<table><tr>{''.join(f'<th>{esc(col)}</th>' for col in fit_table.splitlines()[0].strip('|').split('|'))}</tr>
+{''.join(fit_html_rows)}
+</table>
+<h2>5. Champion analysis</h2>
+<table><tr>{''.join(f'<th>{esc(col)}</th>' for col in champion_table.splitlines()[0].strip('|').split('|'))}</tr>
+{''.join(champ_html_rows)}
+</table>
+<p><code>distinct_champion_tuples = {analysis['distinct_champion_tuples']}</code>, <code>champion_migration = {analysis['champion_migration']}</code></p>
+<pre>{esc(json.dumps(analysis['global_min_cell'], indent=2, ensure_ascii=False))}</pre>
+<h2>6. Interior optimum verdict</h2>
+<p><code>{esc(analysis['verdict'])}</code></p>
+<ul>
+  <li><code>global_min_hw_is_corner_hw = {analysis['global_min_hw_is_corner_hw']}</code></li>
+  <li><code>global_min_tile_is_extreme_for_hw = {analysis['global_min_tile_is_extreme_for_hw']}</code></li>
+  <li><code>tile_interior_evidence = {analysis['tile_interior_evidence']}</code></li>
+</ul>
+<pre>{esc(json.dumps(analysis['gain_over_v1_matrix'], indent=2, ensure_ascii=False))}</pre>
+<h2>7. Next step recommendation</h2>
+<p>{esc(next_step)}</p>
+</body>
+</html>
+"""
+    html_path.write_text(html_text, encoding="utf-8")
+
+
+def update_progress_tracker_v2(analysis: dict[str, Any], run_accounting: dict[str, Any]) -> None:
+    docs_dir = repo_root() / "docs" / "superpowers" / "specs"
+    md_path = docs_dir / "2026-07-03-co-design-progress-tracker.md"
+    html_path = docs_dir / "2026-07-03-co-design-progress-tracker.html"
+    verdict = analysis["verdict"]
+    global_min = analysis.get("global_min_cell") or {}
+    md = md_path.read_text(encoding="utf-8")
+    md = re.sub(
+        r"当前状态：Route 4 已经在 Conv 3x3 workload 上得到 measured POSITIVE，并完成 strict interior-optimum extension。.*?\n\n",
+        (
+            "当前状态：Route 4 已经在 Conv 3x3 workload 上得到 measured POSITIVE，并完成 8-tile denser interior-optimum v2 probe。"
+            f"本次 v2 verdict 为 `{verdict}`；global min 为 `{global_min.get('hw')}/{global_min.get('tile')}/{global_min.get('fusion')}`，"
+            f"median `{global_min.get('median')}` cycles。\n\n"
+        ),
+        md,
+        flags=re.S,
+    )
+    new_row = (
+        f"| **8-tile denser interior probe** | 在 Conv 3x3 上把 tile space 从 4 加密到 8，并加入 `fusion=[\"fusion\"]` 第三 variant，检查 tile interior optimum | "
+        f"`/tmp/codesign-next-handoff.md` 8-tile denser sweep push interior optimum | 当前提交 | **{verdict}** | "
+        f"{run_accounting['measured_runs']} measured runs；{run_accounting['unavailable_run_slots']} unavailable slots；"
+        f"global min=`{global_min.get('hw')}/{global_min.get('tile')}/{global_min.get('fusion')}` |"
+    )
+    if "8-tile denser interior probe" not in md:
+        md = md.replace(
+            "| **Tile x fusion x HW interior probe** | 在 Conv 3x3 上检查 tile fit boundary 是否使最佳软件选择随 HW 迁移，或产生 strict interior optimum | `/tmp/codesign-next-handoff.md` interior-optimum probe on tile x fusion x HW | 当前提交 | **CHAMPION_MIGRATION_ONLY** | 140 measured runs + 20 unavailable run slots；HW-A/B champion=`tile_D+all`，HW-C=`tile_A+all`，HW-D=`tile_B+all`；global min=`HW-C/tile_A/all` 但仍是 corner |\n",
+            "| **Tile x fusion x HW interior probe** | 在 Conv 3x3 上检查 tile fit boundary 是否使最佳软件选择随 HW 迁移，或产生 strict interior optimum | `/tmp/codesign-next-handoff.md` interior-optimum probe on tile x fusion x HW | `5f16398` | **CHAMPION_MIGRATION_ONLY** | 140 measured runs + 20 unavailable run slots；HW-A/B champion=`tile_D+all`，HW-C=`tile_A+all`，HW-D=`tile_B+all`；global min=`HW-C/tile_A/all` 但仍是 corner |\n"
+            + new_row
+            + "\n",
+        )
+    md = md.replace(
+        "优先级如下：\n\n1. 为 tile x fusion x HW 增加真实 interior HW point，或在 small-SPAD fit boundary 附近加密 tile choices，争取把 `CHAMPION_MIGRATION_ONLY` 推进到 `INTERIOR_OPTIMUM_FOUND`。",
+        "优先级如下：\n\n1. 基于 8-tile denser v2 结果，下一步换到 ResNet stage 或 GPT-2 block 做 generalization，验证 tile interior optimum 是否能跨 workload 保持。",
+    )
+    md_path.write_text(md, encoding="utf-8")
+
+    html_text = html_path.read_text(encoding="utf-8")
+    html_text = re.sub(
+        r"<p><strong>当前状态：</strong>Route 4 已经在 Conv 3x3 workload 上得到 measured POSITIVE，并完成 strict interior-optimum extension。.*?</p>",
+        (
+            "<p><strong>当前状态：</strong>Route 4 已经在 Conv 3x3 workload 上得到 measured POSITIVE，并完成 8-tile denser interior-optimum v2 probe。"
+            f"本次 v2 verdict 为 <code>{html.escape(verdict)}</code>；global min 为 "
+            f"<code>{html.escape(str(global_min.get('hw')))} / {html.escape(str(global_min.get('tile')))} / {html.escape(str(global_min.get('fusion')))}</code>，"
+            f"median <code>{html.escape(str(global_min.get('median')))}</code> cycles。</p>"
+        ),
+        html_text,
+        flags=re.S,
+    )
+    html_row = (
+        f'<tr><td><strong>8-tile denser interior probe</strong></td><td>在 Conv 3x3 上把 tile space 从 4 加密到 8，并加入 <code>fusion=["fusion"]</code> 第三 variant，检查 tile interior optimum</td>'
+        f'<td><code>/tmp/codesign-next-handoff.md</code></td><td>当前提交</td><td class="positive">{html.escape(verdict)}</td>'
+        f'<td>{run_accounting["measured_runs"]} measured runs；{run_accounting["unavailable_run_slots"]} unavailable slots；'
+        f'global min=<code>{html.escape(str(global_min.get("hw")))}/{html.escape(str(global_min.get("tile")))}/{html.escape(str(global_min.get("fusion")))}</code></td></tr>'
+    )
+    if "8-tile denser interior probe" not in html_text:
+        html_text = html_text.replace(
+            '<tr><td><strong>Tile x fusion x HW interior probe</strong></td><td>检查 Conv tile fit boundary 是否使最佳软件选择随 HW 迁移，或产生 strict interior optimum</td><td><code>/tmp/codesign-next-handoff.md</code></td><td>当前提交</td><td class="positive">CHAMPION_MIGRATION_ONLY</td><td>140 measured runs + 20 unavailable run slots；HW-A/B champion=<code>tile_D+all</code>，HW-C=<code>tile_A+all</code>，HW-D=<code>tile_B+all</code>；global min=<code>HW-C/tile_A/all</code> 但仍是 corner</td></tr>',
+            '<tr><td><strong>Tile x fusion x HW interior probe</strong></td><td>检查 Conv tile fit boundary 是否使最佳软件选择随 HW 迁移，或产生 strict interior optimum</td><td><code>/tmp/codesign-next-handoff.md</code></td><td><code>5f16398</code></td><td class="positive">CHAMPION_MIGRATION_ONLY</td><td>140 measured runs + 20 unavailable run slots；HW-A/B champion=<code>tile_D+all</code>，HW-C=<code>tile_A+all</code>，HW-D=<code>tile_B+all</code>；global min=<code>HW-C/tile_A/all</code> 但仍是 corner</td></tr>'
+            + html_row,
+        )
+    html_text = html_text.replace(
+        "为 tile x fusion x HW 增加真实 interior HW point，或在 small-SPAD fit boundary 附近加密 tile choices，争取把 <code>CHAMPION_MIGRATION_ONLY</code> 推进到 <code>INTERIOR_OPTIMUM_FOUND</code>。",
+        "基于 8-tile denser v2 结果，下一步换到 ResNet stage 或 GPT-2 block 做 generalization，验证 tile interior optimum 是否能跨 workload 保持。",
+    )
+    html_path.write_text(html_text, encoding="utf-8")
+
+
+def run_interior_optimum_v2_probe(args: argparse.Namespace) -> int:
+    output_root = Path(args.output_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    selected_tiles = select_conv_tile_variants_v2()
+    write_json(output_root / "tile_variants_v2.json", selected_tiles)
+    discovery = write_fusion_variants_discovery(output_root)
+    fusion_variants = discovery["variants"]
+    fusion_names = list(fusion_variants.keys())
+    manifest = generate_v1_hw_fusion_configs_for_variants(
+        output_root,
+        fusion_variants,
+        subdir="hw_fusion_configs_v2",
+    )
+
+    matrix: dict[str, dict[str, dict[str, Any]]] = {
+        hw_id: {tile_name: {} for tile_name in selected_tiles}
+        for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D")
+    }
+    start_time = time.time()
+    timeboxed = False
+    for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D"):
+        for tile_name, tile in selected_tiles.items():
+            fit_info = classify_fit_regime(tile, hw_id)
+            for variant in fusion_names:
+                if time.time() - start_time > 5 * 3600:
+                    timeboxed = True
+                    matrix[hw_id][tile_name][variant] = {
+                        "class": "not_run_timebox",
+                        "cycles_in_order": [],
+                        "median": 0.0,
+                        "cycle_delta": 0.0,
+                        "failures": [],
+                        "fit_info": fit_info,
+                    }
+                    continue
+                cell_dir = output_root / "interior_runs_v2" / hw_id / tile_name / variant
+                cell_dir.mkdir(parents=True, exist_ok=True)
+                config_path = Path(manifest["generated"][hw_id][variant]["path"])
+                if not fit_info["fits"]:
+                    matrix[hw_id][tile_name][variant] = {
+                        "class": "unavailable",
+                        "cycles_in_order": [],
+                        "median": 0.0,
+                        "cycle_delta": 0.0,
+                        "failures": [],
+                        "fit_info": fit_info,
+                    }
+                    continue
+                mapping_path = cell_dir / "external_mapping.json"
+                write_conv_external_mapping(mapping_path, tile)
+                cell = run_timing_cell(
+                    cell_dir=cell_dir,
+                    hw_config=config_path,
+                    workload="conv3x3_probe",
+                    variant=variant,
+                    repeats=args.repeats,
+                    timeout_sec=args.timing_timeout_sec,
+                    use_external_mapping=True,
+                    external_mapping_override=mapping_path,
+                )
+                summary = strip_runs_for_report(cell)
+                summary["fit_info"] = fit_info
+                if summary["class"] != "measured":
+                    summary["class"] = "runtime_failed"
+                matrix[hw_id][tile_name][variant] = summary
+    for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D"):
+        for tile_name, tile in selected_tiles.items():
+            fit_info = classify_fit_regime(tile, hw_id)
+            for variant in fusion_names:
+                matrix[hw_id][tile_name].setdefault(
+                    variant,
+                    {
+                        "class": "not_run_timebox" if timeboxed else "missing",
+                        "cycles_in_order": [],
+                        "median": 0.0,
+                        "cycle_delta": 0.0,
+                        "failures": [],
+                        "fit_info": fit_info,
+                    },
+                )
+    matrix_payload = {
+        "workload": "conv3x3_probe",
+        "hw_config_set": "codesign_v1_2x2",
+        "fusion_variants": fusion_variants,
+        "tile_variants": selected_tiles,
+        "repeats_per_cell": args.repeats,
+        "seed": 0,
+        "pytorchsim_functional_mode": 0,
+        "timeboxed": timeboxed,
+        "matrix": matrix,
+    }
+    write_json(output_root / "tile_fusion_hw_matrix_v2.json", matrix_payload)
+    analysis = analyze_tile_fusion_matrix_v2(matrix, selected_tiles, timeboxed=timeboxed)
+    run_accounting = summarize_tile_fusion_matrix(matrix, args.repeats)
+    analysis["run_accounting"] = run_accounting
+    write_json(output_root / "interior_optimum_analysis_v2.json", analysis)
+
+    existing_summary = read_json_if_exists(output_root / "pilot_summary.json", {})
+    existing_summary["tile_fusion_interior_optimum_v2"] = {
+        "tile_variants": str(output_root / "tile_variants_v2.json"),
+        "fusion_variants_discovery": str(output_root / "fusion_variants_discovery.md"),
+        "matrix": str(output_root / "tile_fusion_hw_matrix_v2.json"),
+        "analysis": str(output_root / "interior_optimum_analysis_v2.json"),
+        "verdict": analysis["verdict"],
+        "global_min_cell": analysis["global_min_cell"],
+        "run_accounting": run_accounting,
+    }
+    write_json(output_root / "pilot_summary.json", existing_summary)
+    render_tile_fusion_v2_report(output_root, matrix, selected_tiles, fusion_names, analysis, run_accounting, discovery)
+    update_progress_tracker_v2(analysis, run_accounting)
+    return 0 if analysis["verdict"] != "TILE_FUSION_PARTIAL_SCOPE_LIMITATION" else 2
+
+
 def classify_gpt2_structural_diff(structural: dict[str, Any]) -> tuple[str, str]:
     counts = structural.get("counts", {})
     none = counts.get("none", {})
@@ -2560,14 +3239,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--fusion-root-cause-investigation", action="store_true")
     parser.add_argument("--conv-4hw-fusion-sweep", action="store_true")
     parser.add_argument("--interior-optimum-probe", action="store_true")
+    parser.add_argument("--interior-optimum-v2-probe", action="store_true")
     parser.add_argument("--_child", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--child-kind", choices=["correctness", "timing"], help=argparse.SUPPRESS)
     parser.add_argument("--child-result", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--workload", choices=["gpt2_block_prefill_s128", "addmm_relu_128", "conv3x3_probe"], help=argparse.SUPPRESS)
-    parser.add_argument("--variant", choices=["none", "all"], help=argparse.SUPPRESS)
+    parser.add_argument("--variant", choices=["none", "fusion", "all"], help=argparse.SUPPRESS)
     parser.add_argument("--seed", type=int, default=0, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
-    if not args.fusion_root_cause_investigation and not args.conv_4hw_fusion_sweep and not args.interior_optimum_probe and args.repeats != 5:
+    if (
+        not args.fusion_root_cause_investigation
+        and not args.conv_4hw_fusion_sweep
+        and not args.interior_optimum_probe
+        and not args.interior_optimum_v2_probe
+        and args.repeats != 5
+    ):
         parser.error("--repeats must remain 5 for this pilot")
     return args
 
@@ -2576,6 +3262,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args._child:
         return child_main(args)
+    if args.interior_optimum_v2_probe:
+        return run_interior_optimum_v2_probe(args)
     if args.interior_optimum_probe:
         return run_interior_optimum_probe(args)
     if args.conv_4hw_fusion_sweep:

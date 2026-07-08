@@ -6,7 +6,7 @@
 
 在 PyTorchSim 上通过扩大编译搜索空间（Route 4：fusion / dataflow / SPAD partition / DMA schedule）判断 HW/SW co-design thesis 是否有 measured POSITIVE 支撑。
 
-当前状态：Route 4 已经在 Conv 3x3 workload 上得到 measured POSITIVE，并完成 strict interior-optimum extension。`79e6259` 的 Conv 4-HW x 2-fusion sweep 显示 fusion x HW 有强交互；本次 tile x fusion x HW probe 的 verdict 为 `CHAMPION_MIGRATION_ONLY`：champion tile/fusion 组合随 HW 迁移，但 global minimum 仍位于 corner。
+当前状态：Route 4 已经在 Conv 3x3 workload 上得到 measured POSITIVE，并完成 8-tile denser interior-optimum v2 probe。本次 v2 verdict 为 `TILE_FUSION_INTERIOR_OPTIMUM_CONFIRMED_V2`；global min 为 `HW-A/tile_C/all`，median `5880.0` cycles。
 
 **最终停止条件（双必备）**：
 
@@ -27,7 +27,8 @@
 | Fusion root cause | 解释 GPT-2 no-op/critical path，并探测 Conv workload | `/tmp/codesign-next-handoff.md` fusion root cause investigation | `ce5f0e3` | **CRITICAL_PATH_LIMITED** | GPT-2 structural active but not critical path；Conv probe `189987 -> 27769`，约 6.84x |
 | **Conv 4-HW fusion sweep** | 在 Conv 3x3 上检查 fusion speedup 是否随 HW 变化 | `/tmp/codesign-next-handoff.md` Conv 4-HW fusion sweep | `79e6259` | **FUSION_CONV_CODESIGN_POSITIVE** | `HW-A=6.895x`，`HW-B=4.830x`，`HW-C=6.262x`，`HW-D=5.253x`；relative range `42.7%`；`gate2b_ratio_fusion=0.523` |
 | **Route 4 wrap-up** | 完成 compiler-modification landscape 与 POSITIVE declaration | `/tmp/codesign-next-handoff.md` Route 4 wrap-up | 当前提交 | **完成后归档** | landscape 文档 + POSITIVE declaration + tracker 更新 |
-| **Tile x fusion x HW interior probe** | 在 Conv 3x3 上检查 tile fit boundary 是否使最佳软件选择随 HW 迁移，或产生 strict interior optimum | `/tmp/codesign-next-handoff.md` interior-optimum probe on tile x fusion x HW | 当前提交 | **CHAMPION_MIGRATION_ONLY** | 140 measured runs + 20 unavailable run slots；HW-A/B champion=`tile_D+all`，HW-C=`tile_A+all`，HW-D=`tile_B+all`；global min=`HW-C/tile_A/all` 但仍是 corner |
+| **Tile x fusion x HW interior probe** | 在 Conv 3x3 上检查 tile fit boundary 是否使最佳软件选择随 HW 迁移，或产生 strict interior optimum | `/tmp/codesign-next-handoff.md` interior-optimum probe on tile x fusion x HW | `5f16398` | **CHAMPION_MIGRATION_ONLY** | 140 measured runs + 20 unavailable run slots；HW-A/B champion=`tile_D+all`，HW-C=`tile_A+all`，HW-D=`tile_B+all`；global min=`HW-C/tile_A/all` 但仍是 corner |
+| **8-tile denser interior probe** | 在 Conv 3x3 上把 tile space 从 4 加密到 8，并加入 `fusion=["fusion"]` 第三 variant，检查 tile interior optimum | `/tmp/codesign-next-handoff.md` 8-tile denser sweep push interior optimum | 当前提交 | **TILE_FUSION_INTERIOR_OPTIMUM_CONFIRMED_V2** | 450 measured runs；30 unavailable slots；global min=`HW-A/tile_C/all` |
 
 状态图例：**NEGATIVE**（实测证否，范围内有效）· **BLOCKED**（外部或源码约束）· **POSITIVE**（measured support，范围内有效）· **完成**。
 
@@ -68,7 +69,7 @@ v1 NEGATIVE 与 Route 4 POSITIVE 不冲突。
 
 优先级如下：
 
-1. 为 tile x fusion x HW 增加真实 interior HW point，或在 small-SPAD fit boundary 附近加密 tile choices，争取把 `CHAMPION_MIGRATION_ONLY` 推进到 `INTERIOR_OPTIMUM_FOUND`。
+1. 基于 8-tile denser v2 结果，下一步换到 ResNet stage 或 GPT-2 block 做 generalization，验证 tile interior optimum 是否能跨 workload 保持。
 2. 在 Conv-heavy workload 上做 fusion x HW x multi-mapping，补正式 Gate-1 / Gate-3 evidence。
 3. 用 ResNet-50 stage 或 MobileNet block 验证 Conv-heavy generalization。
 4. 若接受源码修改，优先考虑 DMA schedule axis；SPAD partition 次之。

@@ -1,0 +1,1999 @@
+{
+  "fusion_variants": {
+    "all": "all",
+    "fusion": [
+      "fusion"
+    ],
+    "none": "none"
+  },
+  "hw_config_set": "codesign_v1_2x2",
+  "matrix": {
+    "HW-A": {
+      "tile_A": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.08830744071954211,
+          "cycles_in_order": [
+            6337,
+            6117,
+            6115,
+            5797,
+            5956
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0594482421875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 498688
+          },
+          "median": 6115.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0036507202325888727,
+          "cycles_in_order": [
+            181576,
+            181765,
+            181608,
+            182221,
+            181558
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0594482421875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 498688
+          },
+          "median": 181608.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0025130370538145852,
+          "cycles_in_order": [
+            185555,
+            185089,
+            185167,
+            185458,
+            185433
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0594482421875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 498688
+          },
+          "median": 185433.0
+        }
+      },
+      "tile_A2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.05795931546658056,
+          "cycles_in_order": [
+            6413,
+            6054,
+            6194,
+            6200,
+            6069
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0802001953125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 672768
+          },
+          "median": 6194.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.004011730854360337,
+          "cycles_in_order": [
+            180956,
+            180651,
+            180720,
+            180369,
+            181094
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0802001953125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 672768
+          },
+          "median": 180720.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.006204684130097866,
+          "cycles_in_order": [
+            184433,
+            184010,
+            184538,
+            184638,
+            185155
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0802001953125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 672768
+          },
+          "median": 184538.0
+        }
+      },
+      "tile_B": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.0992005221080111,
+          "cycles_in_order": [
+            6417,
+            5809,
+            5967,
+            6273,
+            6129
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.111328125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 933888
+          },
+          "median": 6129.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.004032924531420449,
+          "cycles_in_order": [
+            181780,
+            181506,
+            181286,
+            181048,
+            181579
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.111328125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 933888
+          },
+          "median": 181506.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.004545923044791989,
+          "cycles_in_order": [
+            184405,
+            184153,
+            184341,
+            183612,
+            184450
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.111328125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 933888
+          },
+          "median": 184341.0
+        }
+      },
+      "tile_B2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.1503257328990228,
+          "cycles_in_order": [
+            6333,
+            5966,
+            6140,
+            5636,
+            6559
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.13983154296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1172992
+          },
+          "median": 6140.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0029031689471519565,
+          "cycles_in_order": [
+            288936,
+            289503,
+            289180,
+            289776,
+            289339
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.13983154296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1172992
+          },
+          "median": 289339.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.00381168158169291,
+          "cycles_in_order": [
+            290423,
+            290229,
+            290457,
+            289501,
+            290608
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.13983154296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1172992
+          },
+          "median": 290423.0
+        }
+      },
+      "tile_C": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.10850340136054422,
+          "cycles_in_order": [
+            6030,
+            5392,
+            5880,
+            5794,
+            5880
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.1839599609375,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1543168
+          },
+          "median": 5880.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0034909569646479907,
+          "cycles_in_order": [
+            185336,
+            185378,
+            185491,
+            185201,
+            184844
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.1839599609375,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1543168
+          },
+          "median": 185336.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.004540295119182747,
+          "cycles_in_order": [
+            186095,
+            186288,
+            185444,
+            185859,
+            185891
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.1839599609375,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1543168
+          },
+          "median": 185891.0
+        }
+      },
+      "tile_C2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.06041464204729511,
+          "cycles_in_order": [
+            6188,
+            6174,
+            5815,
+            6097,
+            6185
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.225860595703125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1894656
+          },
+          "median": 6174.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0014886166246776671,
+          "cycles_in_order": [
+            539418,
+            539621,
+            539427,
+            538855,
+            539658
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.225860595703125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1894656
+          },
+          "median": 539427.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0009228342757428816,
+          "cycles_in_order": [
+            536363,
+            536391,
+            536343,
+            536749,
+            536838
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.225860595703125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1894656
+          },
+          "median": 536391.0
+        }
+      },
+      "tile_C3": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.09482200647249191,
+          "cycles_in_order": [
+            5808,
+            6074,
+            6394,
+            6180,
+            6188
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.2412109375,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 2023424
+          },
+          "median": 6180.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0013088129925961308,
+          "cycles_in_order": [
+            314025,
+            314084,
+            314007,
+            314337,
+            313926
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.2412109375,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 2023424
+          },
+          "median": 314025.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.002692481934988449,
+          "cycles_in_order": [
+            311375,
+            311840,
+            311208,
+            311002,
+            311237
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.2412109375,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 2023424
+          },
+          "median": 311237.0
+        }
+      },
+      "tile_D": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.05140417145672524,
+          "cycles_in_order": [
+            5892,
+            6179,
+            5866,
+            6091,
+            6089
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.291015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 2441216
+          },
+          "median": 6089.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0048559247724730146,
+          "cycles_in_order": [
+            164940,
+            165743,
+            165365,
+            165493,
+            165276
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.291015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 2441216
+          },
+          "median": 165365.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0074940990133180495,
+          "cycles_in_order": [
+            162261,
+            162620,
+            163190,
+            162029,
+            161974
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.291015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 2441216
+          },
+          "median": 162261.0
+        }
+      }
+    },
+    "HW-B": {
+      "tile_A": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.0269559115892878,
+          "cycles_in_order": [
+            17102,
+            16833,
+            17177,
+            17089,
+            17294
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0594482421875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 498688
+          },
+          "median": 17102.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0031018034334107086,
+          "cycles_in_order": [
+            195792,
+            196176,
+            196400,
+            195985,
+            196015
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0594482421875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 498688
+          },
+          "median": 196015.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.006266378033496639,
+          "cycles_in_order": [
+            211051,
+            210930,
+            210648,
+            209731,
+            210091
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0594482421875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 498688
+          },
+          "median": 210648.0
+        }
+      },
+      "tile_A2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.02621613748907661,
+          "cycles_in_order": [
+            16846,
+            17184,
+            17296,
+            16991,
+            17165
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0802001953125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 672768
+          },
+          "median": 17165.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0019386319231431146,
+          "cycles_in_order": [
+            197357,
+            197562,
+            197269,
+            197652,
+            197621
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0802001953125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 672768
+          },
+          "median": 197562.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.007301136363636364,
+          "cycles_in_order": [
+            210691,
+            212233,
+            211410,
+            210776,
+            211200
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0802001953125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 672768
+          },
+          "median": 211200.0
+        }
+      },
+      "tile_B": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.028169014084507043,
+          "cycles_in_order": [
+            16709,
+            17183,
+            17005,
+            16827,
+            16806
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.111328125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 933888
+          },
+          "median": 16827.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0029587140934590746,
+          "cycles_in_order": [
+            198397,
+            198415,
+            198190,
+            198327,
+            198777
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.111328125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 933888
+          },
+          "median": 198397.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.005134848886030941,
+          "cycles_in_order": [
+            211747,
+            211496,
+            212269,
+            211354,
+            211183
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.111328125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 933888
+          },
+          "median": 211496.0
+        }
+      },
+      "tile_B2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.03281509613102302,
+          "cycles_in_order": [
+            16838,
+            16825,
+            16852,
+            17378,
+            16914
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.13983154296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1172992
+          },
+          "median": 16852.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0009239762406109557,
+          "cycles_in_order": [
+            318035,
+            318144,
+            318329,
+            318286,
+            318190
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.13983154296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1172992
+          },
+          "median": 318190.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.002772606766618179,
+          "cycles_in_order": [
+            329145,
+            329826,
+            328961,
+            329874,
+            329293
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.13983154296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1172992
+          },
+          "median": 329293.0
+        }
+      },
+      "tile_C": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.014477147642976789,
+          "cycles_in_order": [
+            16691,
+            16912,
+            16716,
+            16671,
+            16913
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.1839599609375,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1543168
+          },
+          "median": 16716.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.00196975813315565,
+          "cycles_in_order": [
+            205389,
+            205663,
+            205737,
+            205609,
+            205332
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.1839599609375,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1543168
+          },
+          "median": 205609.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.004176597225743697,
+          "cycles_in_order": [
+            217583,
+            216778,
+            216923,
+            217176,
+            216677
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.1839599609375,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1543168
+          },
+          "median": 216923.0
+        }
+      },
+      "tile_C2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.034244960509253804,
+          "cycles_in_order": [
+            17293,
+            16966,
+            16712,
+            17207,
+            16883
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.225860595703125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1894656
+          },
+          "median": 16966.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0009790749528328854,
+          "cycles_in_order": [
+            559732,
+            559394,
+            559507,
+            559712,
+            559942
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.225860595703125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1894656
+          },
+          "median": 559712.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.002530453612464997,
+          "cycles_in_order": [
+            568002,
+            567092,
+            567338,
+            566797,
+            566567
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.225860595703125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1894656
+          },
+          "median": 567092.0
+        }
+      },
+      "tile_C3": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.03263499557391561,
+          "cycles_in_order": [
+            16831,
+            17384,
+            16844,
+            16945,
+            17080
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.2412109375,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 2023424
+          },
+          "median": 16945.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0013425365604040835,
+          "cycles_in_order": [
+            347829,
+            348232,
+            347765,
+            347849,
+            347927
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.2412109375,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 2023424
+          },
+          "median": 347849.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.002421593859288502,
+          "cycles_in_order": [
+            354845,
+            354882,
+            355705,
+            355138,
+            355576
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.2412109375,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 2023424
+          },
+          "median": 355138.0
+        }
+      },
+      "tile_D": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.03758150563129816,
+          "cycles_in_order": [
+            16701,
+            16870,
+            16822,
+            17197,
+            17335
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.291015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 2441216
+          },
+          "median": 16870.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0018649613755415376,
+          "cycles_in_order": [
+            207681,
+            207511,
+            207774,
+            207467,
+            207387
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.291015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 2441216
+          },
+          "median": 207511.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.002582656646269108,
+          "cycles_in_order": [
+            214704,
+            214825,
+            214961,
+            215259,
+            214895
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.291015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 2441216
+          },
+          "median": 214895.0
+        }
+      }
+    },
+    "HW-C": {
+      "tile_A": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.046021093000958774,
+          "cycles_in_order": [
+            6313,
+            6025,
+            6194,
+            6258,
+            6295
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.23779296875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 498688
+          },
+          "median": 6258.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0023595437480360107,
+          "cycles_in_order": [
+            181387,
+            181647,
+            181391,
+            181271,
+            181699
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.23779296875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 498688
+          },
+          "median": 181391.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.004545061968303321,
+          "cycles_in_order": [
+            185322,
+            185537,
+            185256,
+            184695,
+            184951
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.23779296875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 498688
+          },
+          "median": 185256.0
+        }
+      },
+      "tile_A2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.22840755735492577,
+          "cycles_in_order": [
+            6134,
+            5928,
+            5520,
+            5837,
+            6874
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.32080078125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 672768
+          },
+          "median": 5928.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.005601234151493202,
+          "cycles_in_order": [
+            180394,
+            181149,
+            180734,
+            181407,
+            180853
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.32080078125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 672768
+          },
+          "median": 180853.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.003455376206801006,
+          "cycles_in_order": [
+            183597,
+            184061,
+            183951,
+            184232,
+            184233
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.32080078125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 672768
+          },
+          "median": 184061.0
+        }
+      },
+      "tile_B": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.1026748629340422,
+          "cycles_in_order": [
+            6186,
+            5637,
+            6019,
+            6255,
+            5826
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.4453125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 933888
+          },
+          "median": 6019.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.004088842906985703,
+          "cycles_in_order": [
+            181179,
+            181714,
+            181452,
+            181922,
+            181849
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.4453125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 933888
+          },
+          "median": 181714.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.006352446777897829,
+          "cycles_in_order": [
+            183691,
+            184861,
+            184109,
+            184465,
+            184181
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.4453125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 933888
+          },
+          "median": 184181.0
+        }
+      },
+      "tile_B2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.09893355209187858,
+          "cycles_in_order": [
+            6022,
+            6330,
+            6140,
+            5727,
+            6095
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.559326171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1172992
+          },
+          "median": 6095.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0014587841621670203,
+          "cycles_in_order": [
+            289134,
+            289282,
+            289539,
+            289375,
+            289117
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.559326171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1172992
+          },
+          "median": 289282.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.002636222035370174,
+          "cycles_in_order": [
+            290190,
+            290188,
+            289591,
+            289820,
+            290356
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.559326171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1172992
+          },
+          "median": 290188.0
+        }
+      },
+      "tile_C": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.09090909090909091,
+          "cycles_in_order": [
+            6159,
+            6478,
+            6741,
+            6218,
+            6402
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.73583984375,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1543168
+          },
+          "median": 6402.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.005419133585687017,
+          "cycles_in_order": [
+            185508,
+            185454,
+            185316,
+            184692,
+            185697
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.73583984375,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1543168
+          },
+          "median": 185454.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.008744665431999355,
+          "cycles_in_order": [
+            186788,
+            186012,
+            186416,
+            185159,
+            186285
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.73583984375,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1543168
+          },
+          "median": 186285.0
+        }
+      },
+      "tile_C2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.13577154308617234,
+          "cycles_in_order": [
+            6055,
+            5665,
+            5988,
+            6277,
+            5464
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.9034423828125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1894656
+          },
+          "median": 5988.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0016882970068402901,
+          "cycles_in_order": [
+            539453,
+            538756,
+            539612,
+            539597,
+            539667
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.9034423828125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1894656
+          },
+          "median": 539597.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0012642484341406747,
+          "cycles_in_order": [
+            536287,
+            536132,
+            536043,
+            536721,
+            536586
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.9034423828125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1894656
+          },
+          "median": 536287.0
+        }
+      },
+      "tile_C3": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.10880155894771029,
+          "cycles_in_order": [
+            6396,
+            6174,
+            6117,
+            5726,
+            6158
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.96484375,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 2023424
+          },
+          "median": 6158.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0018121365376408466,
+          "cycles_in_order": [
+            313473,
+            313566,
+            313994,
+            314042,
+            313995
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.96484375,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 2023424
+          },
+          "median": 313994.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0037244307217290623,
+          "cycles_in_order": [
+            311060,
+            310830,
+            311891,
+            310733,
+            310920
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.96484375,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 2023424
+          },
+          "median": 310920.0
+        }
+      },
+      "tile_D": {
+        "all": {
+          "class": "unavailable",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 1.1640625,
+            "fits": false,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 2441216
+          },
+          "median": 0.0
+        },
+        "fusion": {
+          "class": "unavailable",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 1.1640625,
+            "fits": false,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 2441216
+          },
+          "median": 0.0
+        },
+        "none": {
+          "class": "unavailable",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 1.1640625,
+            "fits": false,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 2441216
+          },
+          "median": 0.0
+        }
+      }
+    },
+    "HW-D": {
+      "tile_A": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.025392563189539433,
+          "cycles_in_order": [
+            17434,
+            16999,
+            17177,
+            16999,
+            17131
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.23779296875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 498688
+          },
+          "median": 17131.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.00345883275855921,
+          "cycles_in_order": [
+            196434,
+            196014,
+            196309,
+            195818,
+            196497
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.23779296875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 498688
+          },
+          "median": 196309.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0065659538911466446,
+          "cycles_in_order": [
+            210632,
+            210813,
+            209430,
+            210528,
+            210646
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.23779296875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 498688
+          },
+          "median": 210632.0
+        }
+      },
+      "tile_A2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.026156823646706937,
+          "cycles_in_order": [
+            17051,
+            16869,
+            16822,
+            17268,
+            17069
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.32080078125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 672768
+          },
+          "median": 17051.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0027118540971806855,
+          "cycles_in_order": [
+            197524,
+            197226,
+            197761,
+            197282,
+            197282
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.32080078125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 672768
+          },
+          "median": 197282.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.005305616766127278,
+          "cycles_in_order": [
+            211474,
+            212073,
+            211664,
+            211005,
+            210951
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.32080078125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 672768
+          },
+          "median": 211474.0
+        }
+      },
+      "tile_B": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.035942303144951525,
+          "cycles_in_order": [
+            17200,
+            16656,
+            17264,
+            16850,
+            16916
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.4453125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 933888
+          },
+          "median": 16916.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0020435384421794386,
+          "cycles_in_order": [
+            198744,
+            198744,
+            198675,
+            198344,
+            198338
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.4453125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 933888
+          },
+          "median": 198675.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.005447029644502185,
+          "cycles_in_order": [
+            211992,
+            210839,
+            211983,
+            211503,
+            211675
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.4453125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 933888
+          },
+          "median": 211675.0
+        }
+      },
+      "tile_B2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.03495053610568094,
+          "cycles_in_order": [
+            17245,
+            16846,
+            16739,
+            16881,
+            17329
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.559326171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1172992
+          },
+          "median": 16881.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0015522436834051324,
+          "cycles_in_order": [
+            318398,
+            318249,
+            317996,
+            318432,
+            317938
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.559326171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1172992
+          },
+          "median": 318249.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0037718471750530936,
+          "cycles_in_order": [
+            329046,
+            329053,
+            330146,
+            330077,
+            330291
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.559326171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1172992
+          },
+          "median": 330077.0
+        }
+      },
+      "tile_C": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.020194820622475646,
+          "cycles_in_order": [
+            16836,
+            16834,
+            16840,
+            17107,
+            16767
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.73583984375,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1543168
+          },
+          "median": 16836.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.002195811890491794,
+          "cycles_in_order": [
+            205391,
+            205315,
+            205398,
+            205766,
+            205375
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.73583984375,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1543168
+          },
+          "median": 205391.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.004123169911455502,
+          "cycles_in_order": [
+            217345,
+            217122,
+            217066,
+            216450,
+            216657
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.73583984375,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1543168
+          },
+          "median": 217066.0
+        }
+      },
+      "tile_C2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.024377224199288255,
+          "cycles_in_order": [
+            16860,
+            16918,
+            17140,
+            16729,
+            16751
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.9034423828125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1894656
+          },
+          "median": 16860.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.0009240707012391842,
+          "cycles_in_order": [
+            559320,
+            559685,
+            559481,
+            559797,
+            559280
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.9034423828125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1894656
+          },
+          "median": 559481.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0017697586324207796,
+          "cycles_in_order": [
+            567662,
+            567309,
+            567377,
+            566658,
+            566928
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.9034423828125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1894656
+          },
+          "median": 567309.0
+        }
+      },
+      "tile_C3": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.011209299567048218,
+          "cycles_in_order": [
+            17030,
+            16858,
+            16897,
+            16861,
+            16841
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.96484375,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 2023424
+          },
+          "median": 16861.0
+        },
+        "fusion": {
+          "class": "measured",
+          "cycle_delta": 0.00136657220535984,
+          "cycles_in_order": [
+            347585,
+            348008,
+            347556,
+            347800,
+            347533
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.96484375,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 2023424
+          },
+          "median": 347585.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.002331730972314919,
+          "cycles_in_order": [
+            355101,
+            354869,
+            355423,
+            354995,
+            355697
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.96484375,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 2023424
+          },
+          "median": 355101.0
+        }
+      },
+      "tile_D": {
+        "all": {
+          "class": "unavailable",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 1.1640625,
+            "fits": false,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 2441216
+          },
+          "median": 0.0
+        },
+        "fusion": {
+          "class": "unavailable",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 1.1640625,
+            "fits": false,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 2441216
+          },
+          "median": 0.0
+        },
+        "none": {
+          "class": "unavailable",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 1.1640625,
+            "fits": false,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 2441216
+          },
+          "median": 0.0
+        }
+      }
+    }
+  },
+  "pytorchsim_functional_mode": 0,
+  "repeats_per_cell": 5,
+  "seed": 0,
+  "tile_variants": {
+    "tile_A": {
+      "TILE_K": 64,
+      "TILE_K_H": 3,
+      "TILE_K_W": 3,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 56,
+      "TILE_O_W": 4,
+      "fit_fraction_largest_spad": 0.0594482421875,
+      "fit_fraction_smallest_spad": 0.23779296875,
+      "predicted_fit_all_hw": true,
+      "predicted_working_set_bytes": 498688,
+      "regime": "tiny",
+      "working_set_bytes": 498688
+    },
+    "tile_A2": {
+      "TILE_K": 64,
+      "TILE_K_H": 3,
+      "TILE_K_W": 3,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 56,
+      "TILE_O_W": 8,
+      "fit_fraction_largest_spad": 0.0802001953125,
+      "fit_fraction_smallest_spad": 0.32080078125,
+      "predicted_fit_all_hw": true,
+      "predicted_working_set_bytes": 672768,
+      "regime": "tiny_dense",
+      "working_set_bytes": 672768
+    },
+    "tile_B": {
+      "TILE_K": 64,
+      "TILE_K_H": 3,
+      "TILE_K_W": 3,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 56,
+      "TILE_O_W": 14,
+      "fit_fraction_largest_spad": 0.111328125,
+      "fit_fraction_smallest_spad": 0.4453125,
+      "predicted_fit_all_hw": true,
+      "predicted_working_set_bytes": 933888,
+      "regime": "small",
+      "working_set_bytes": 933888
+    },
+    "tile_B2": {
+      "TILE_K": 32,
+      "TILE_K_H": 3,
+      "TILE_K_W": 3,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 56,
+      "TILE_O_W": 28,
+      "fit_fraction_largest_spad": 0.13983154296875,
+      "fit_fraction_smallest_spad": 0.559326171875,
+      "predicted_fit_all_hw": true,
+      "predicted_working_set_bytes": 1172992,
+      "regime": "small_dense",
+      "working_set_bytes": 1172992
+    },
+    "tile_C": {
+      "TILE_K": 64,
+      "TILE_K_H": 3,
+      "TILE_K_W": 3,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 56,
+      "TILE_O_W": 28,
+      "fit_fraction_largest_spad": 0.1839599609375,
+      "fit_fraction_smallest_spad": 0.73583984375,
+      "predicted_fit_all_hw": true,
+      "predicted_working_set_bytes": 1543168,
+      "regime": "medium",
+      "working_set_bytes": 1543168
+    },
+    "tile_C2": {
+      "TILE_K": 16,
+      "TILE_K_H": 3,
+      "TILE_K_W": 3,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 56,
+      "TILE_O_W": 56,
+      "fit_fraction_largest_spad": 0.225860595703125,
+      "fit_fraction_smallest_spad": 0.9034423828125,
+      "predicted_fit_all_hw": true,
+      "predicted_working_set_bytes": 1894656,
+      "regime": "near_boundary_fit",
+      "working_set_bytes": 1894656
+    },
+    "tile_C3": {
+      "TILE_K": 32,
+      "TILE_K_H": 1,
+      "TILE_K_W": 1,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 56,
+      "TILE_O_W": 56,
+      "fit_fraction_largest_spad": 0.2412109375,
+      "fit_fraction_smallest_spad": 0.96484375,
+      "predicted_fit_all_hw": true,
+      "predicted_working_set_bytes": 2023424,
+      "regime": "fit_boundary",
+      "working_set_bytes": 2023424
+    },
+    "tile_D": {
+      "TILE_K": 64,
+      "TILE_K_H": 1,
+      "TILE_K_W": 1,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 56,
+      "TILE_O_W": 56,
+      "fit_fraction_largest_spad": 0.291015625,
+      "fit_fraction_smallest_spad": 1.1640625,
+      "predicted_fit_all_hw": false,
+      "predicted_working_set_bytes": 2441216,
+      "regime": "large_unavailable_small_spad",
+      "working_set_bytes": 2441216
+    }
+  },
+  "timeboxed": false,
+  "workload": "conv3x3_probe"
+}

@@ -22,7 +22,7 @@
 <p>最后更新：2026-07-08 · PyTorchSim · master 分支 · 相关会话 <code>codex-019edfa6</code></p>
 <div class="box">
 <p><strong>当前主线目的：</strong>在 PyTorchSim 上通过扩大编译搜索空间（Route 4：fusion / dataflow / SPAD partition / DMA schedule）判断 HW/SW co-design thesis 是否有 measured POSITIVE 支撑。</p>
-<p><strong>当前状态：</strong>Route 4 已经在 Conv 3x3 workload 上得到 measured POSITIVE，并完成 strict interior-optimum extension。<code>79e6259</code> 的 Conv 4-HW x 2-fusion sweep 显示 fusion x HW 有强交互；本次 tile x fusion x HW probe 的 verdict 为 <code>CHAMPION_MIGRATION_ONLY</code>：champion tile/fusion 组合随 HW 迁移，但 global minimum 仍位于 corner。</p>
+<p><strong>当前状态：</strong>Route 4 已经在 Conv 3x3 workload 上得到 measured POSITIVE，并完成 8-tile denser interior-optimum v2 probe。本次 v2 verdict 为 <code>TILE_FUSION_INTERIOR_OPTIMUM_CONFIRMED_V2</code>；global min 为 <code>HW-A / tile_C / all</code>，median <code>5880.0</code> cycles。</p>
 <ul>
   <li><strong>条件 A：已满足。</strong> <code>outputs/route4_fusion_pilot/pilot_summary.json</code> 显示 <code>FUSION_CONV_CODESIGN_POSITIVE</code>，commit <code>79e6259</code>。</li>
   <li><strong>条件 B：已处理。</strong> <code>2026-07-03-npu-compiler-modification-landscape.md</code> / <code>.html</code> 已梳理 fusion / dataflow / SPAD partition / DMA schedule。</li>
@@ -41,7 +41,7 @@
 <tr><td>Fusion root cause</td><td>解释 GPT-2 no-op/critical path，并探测 Conv workload</td><td><code>/tmp/codesign-next-handoff.md</code></td><td><code>ce5f0e3</code></td><td>CRITICAL_PATH_LIMITED</td><td>Conv probe：<code>189987 -&gt; 27769</code></td></tr>
 <tr><td><strong>Conv 4-HW fusion sweep</strong></td><td>在 Conv 3x3 上检查 fusion speedup 是否随 HW 变化</td><td><code>/tmp/codesign-next-handoff.md</code></td><td><code>79e6259</code></td><td class="positive">FUSION_CONV_CODESIGN_POSITIVE</td><td><code>HW-A=6.895x</code>，<code>HW-B=4.830x</code>，<code>HW-C=6.262x</code>，<code>HW-D=5.253x</code>；relative range <code>42.7%</code></td></tr>
 <tr><td><strong>Route 4 wrap-up</strong></td><td>完成 compiler-modification landscape 与 POSITIVE declaration</td><td><code>/tmp/codesign-next-handoff.md</code></td><td>当前提交</td><td>完成后归档</td><td>landscape 文档 + POSITIVE declaration + tracker 更新</td></tr>
-<tr><td><strong>Tile x fusion x HW interior probe</strong></td><td>检查 Conv tile fit boundary 是否使最佳软件选择随 HW 迁移，或产生 strict interior optimum</td><td><code>/tmp/codesign-next-handoff.md</code></td><td>当前提交</td><td class="positive">CHAMPION_MIGRATION_ONLY</td><td>140 measured runs + 20 unavailable run slots；HW-A/B champion=<code>tile_D+all</code>，HW-C=<code>tile_A+all</code>，HW-D=<code>tile_B+all</code>；global min=<code>HW-C/tile_A/all</code> 但仍是 corner</td></tr>
+<tr><td><strong>Tile x fusion x HW interior probe</strong></td><td>检查 Conv tile fit boundary 是否使最佳软件选择随 HW 迁移，或产生 strict interior optimum</td><td><code>/tmp/codesign-next-handoff.md</code></td><td><code>5f16398</code></td><td class="positive">CHAMPION_MIGRATION_ONLY</td><td>140 measured runs + 20 unavailable run slots；HW-A/B champion=<code>tile_D+all</code>，HW-C=<code>tile_A+all</code>，HW-D=<code>tile_B+all</code>；global min=<code>HW-C/tile_A/all</code> 但仍是 corner</td></tr><tr><td><strong>8-tile denser interior probe</strong></td><td>在 Conv 3x3 上把 tile space 从 4 加密到 8，并加入 <code>fusion=["fusion"]</code> 第三 variant，检查 tile interior optimum</td><td><code>/tmp/codesign-next-handoff.md</code></td><td>当前提交</td><td class="positive">TILE_FUSION_INTERIOR_OPTIMUM_CONFIRMED_V2</td><td>450 measured runs；30 unavailable slots；global min=<code>HW-A/tile_C/all</code></td></tr>
 </table>
 <h2>2. 当前证据链摘要</h2>
 <p>v1 NEGATIVE 与 Route 4 POSITIVE 不冲突。v1 NEGATIVE 的范围是 GPT-2 single block prefill seq=128、tiling-only search space、2x2 SPAD/BW HW corners。Route 4 POSITIVE 的范围是 Conv 3x3 kernel-level workload、fusion axis、<code>codesign_v1_2x2</code> 的 4 个 HW corners、single mapping、mode=0 timing。</p>
@@ -64,7 +64,7 @@
 </ul>
 <h2>5. 下一步建议</h2>
 <ol>
-  <li>为 tile x fusion x HW 增加真实 interior HW point，或在 small-SPAD fit boundary 附近加密 tile choices，争取把 <code>CHAMPION_MIGRATION_ONLY</code> 推进到 <code>INTERIOR_OPTIMUM_FOUND</code>。</li>
+  <li>基于 8-tile denser v2 结果，下一步换到 ResNet stage 或 GPT-2 block 做 generalization，验证 tile interior optimum 是否能跨 workload 保持。</li>
   <li>在 Conv-heavy workload 上做 fusion x HW x multi-mapping，补正式 Gate-1 / Gate-3 evidence。</li>
   <li>用 ResNet-50 stage 或 MobileNet block 验证 Conv-heavy generalization。</li>
   <li>若接受源码修改，优先考虑 DMA schedule axis；SPAD partition 次之。</li>

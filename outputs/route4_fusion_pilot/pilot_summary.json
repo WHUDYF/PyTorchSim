@@ -352,6 +352,27 @@
     },
     "observation": "\u672c\u6b21 structural diff \u53ea\u505a\u6d45\u5c42\u8ba1\u6570\uff0c\u4e0d\u505a\u8bed\u4e49\u7b49\u4ef7\u8bc1\u660e\u3002\u82e5 fusion=all \u7684 MLIR/TOG \u51fa\u73b0 epilogue \u6216 relu/maximumf \u7b49\u5173\u952e\u5b57\uff0c\u800c fusion=none \u6ca1\u6709\u5bf9\u5e94\u53d8\u5316\uff0c\u5219\u8bf4\u660e fusion axis \u5df2\u7ecf\u5f71\u54cd\u7f16\u8bd1\u4ea7\u7269\uff1b\u5426\u5219\u8be5 workload \u4e0b fusion \u7ed3\u6784\u5dee\u5f02\u4e0d\u660e\u663e\u3002"
   },
+  "tile_fusion_interior_optimum_v2": {
+    "analysis": "outputs/route4_fusion_pilot/interior_optimum_analysis_v2.json",
+    "fusion_variants_discovery": "outputs/route4_fusion_pilot/fusion_variants_discovery.md",
+    "global_min_cell": {
+      "fusion": "all",
+      "hw": "HW-A",
+      "median": 5880.0,
+      "tile": "tile_C"
+    },
+    "matrix": "outputs/route4_fusion_pilot/tile_fusion_hw_matrix_v2.json",
+    "run_accounting": {
+      "measured_runs": 450,
+      "not_run_timebox_cells": 0,
+      "planned_run_slots": 480,
+      "runtime_failed_cells": 0,
+      "total_cells": 96,
+      "unavailable_run_slots": 30
+    },
+    "tile_variants": "outputs/route4_fusion_pilot/tile_variants_v2.json",
+    "verdict": "TILE_FUSION_INTERIOR_OPTIMUM_CONFIRMED_V2"
+  },
   "timing": {
     "correctness_gate": "deferred_due_to_spike_varch_blocker",
     "correctness_proxy": "structural_diff shows fusion=all has 'fused' keyword and ~10% fewer MLIR ops",
