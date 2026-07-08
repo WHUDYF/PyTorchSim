@@ -1,0 +1,58 @@
+{
+  "tile_A": {
+    "TILE_K": 64,
+    "TILE_K_H": 3,
+    "TILE_K_W": 3,
+    "TILE_M": 1,
+    "TILE_N": 128,
+    "TILE_O_H": 56,
+    "TILE_O_W": 4,
+    "fit_fraction_largest_spad": 0.0594482421875,
+    "fit_fraction_smallest_spad": 0.23779296875,
+    "predicted_fit_all_hw": true,
+    "predicted_working_set_bytes": 498688,
+    "regime": "tiny"
+  },
+  "tile_B": {
+    "TILE_K": 64,
+    "TILE_K_H": 3,
+    "TILE_K_W": 3,
+    "TILE_M": 1,
+    "TILE_N": 128,
+    "TILE_O_H": 56,
+    "TILE_O_W": 14,
+    "fit_fraction_largest_spad": 0.111328125,
+    "fit_fraction_smallest_spad": 0.4453125,
+    "predicted_fit_all_hw": true,
+    "predicted_working_set_bytes": 933888,
+    "regime": "small"
+  },
+  "tile_C": {
+    "TILE_K": 64,
+    "TILE_K_H": 3,
+    "TILE_K_W": 3,
+    "TILE_M": 1,
+    "TILE_N": 128,
+    "TILE_O_H": 56,
+    "TILE_O_W": 28,
+    "fit_fraction_largest_spad": 0.1839599609375,
+    "fit_fraction_smallest_spad": 0.73583984375,
+    "predicted_fit_all_hw": true,
+    "predicted_working_set_bytes": 1543168,
+    "regime": "medium"
+  },
+  "tile_D": {
+    "TILE_K": 64,
+    "TILE_K_H": 1,
+    "TILE_K_W": 1,
+    "TILE_M": 1,
+    "TILE_N": 128,
+    "TILE_O_H": 56,
+    "TILE_O_W": 56,
+    "fit_fraction_largest_spad": 0.291015625,
+    "fit_fraction_smallest_spad": 1.1640625,
+    "predicted_fit_all_hw": false,
+    "predicted_working_set_bytes": 2441216,
+    "regime": "large"
+  }
+}

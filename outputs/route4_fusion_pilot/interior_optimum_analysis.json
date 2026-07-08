@@ -1,0 +1,199 @@
+{
+  "champion_migration": true,
+  "champion_pair_count": 3,
+  "champion_per_hw": {
+    "HW-A": {
+      "fusion": "all",
+      "median": 6022.0,
+      "tile": "tile_D"
+    },
+    "HW-B": {
+      "fusion": "all",
+      "median": 16876.0,
+      "tile": "tile_D"
+    },
+    "HW-C": {
+      "fusion": "all",
+      "median": 5921.0,
+      "tile": "tile_A"
+    },
+    "HW-D": {
+      "fusion": "all",
+      "median": 16815.0,
+      "tile": "tile_B"
+    }
+  },
+  "global_min_cell": {
+    "fusion": "all",
+    "hw_id": "HW-C",
+    "median": 5921.0,
+    "tile": "tile_A"
+  },
+  "global_min_is_at_corner": true,
+  "interior_optimum_evidence": false,
+  "selected_tiles": {
+    "tile_A": {
+      "TILE_K": 64,
+      "TILE_K_H": 3,
+      "TILE_K_W": 3,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 56,
+      "TILE_O_W": 4,
+      "fit_fraction_largest_spad": 0.0594482421875,
+      "fit_fraction_smallest_spad": 0.23779296875,
+      "predicted_fit_all_hw": true,
+      "predicted_working_set_bytes": 498688,
+      "regime": "tiny"
+    },
+    "tile_B": {
+      "TILE_K": 64,
+      "TILE_K_H": 3,
+      "TILE_K_W": 3,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 56,
+      "TILE_O_W": 14,
+      "fit_fraction_largest_spad": 0.111328125,
+      "fit_fraction_smallest_spad": 0.4453125,
+      "predicted_fit_all_hw": true,
+      "predicted_working_set_bytes": 933888,
+      "regime": "small"
+    },
+    "tile_C": {
+      "TILE_K": 64,
+      "TILE_K_H": 3,
+      "TILE_K_W": 3,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 56,
+      "TILE_O_W": 28,
+      "fit_fraction_largest_spad": 0.1839599609375,
+      "fit_fraction_smallest_spad": 0.73583984375,
+      "predicted_fit_all_hw": true,
+      "predicted_working_set_bytes": 1543168,
+      "regime": "medium"
+    },
+    "tile_D": {
+      "TILE_K": 64,
+      "TILE_K_H": 1,
+      "TILE_K_W": 1,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 56,
+      "TILE_O_W": 56,
+      "fit_fraction_largest_spad": 0.291015625,
+      "fit_fraction_smallest_spad": 1.1640625,
+      "predicted_fit_all_hw": false,
+      "predicted_working_set_bytes": 2441216,
+      "regime": "large"
+    }
+  },
+  "tile_fit_fraction_per_hw": {
+    "HW-A": {
+      "tile_A": {
+        "fit_fraction": 0.0594482421875,
+        "fits": true,
+        "usable_spad_bytes": 8388608,
+        "working_set_bytes": 498688
+      },
+      "tile_B": {
+        "fit_fraction": 0.111328125,
+        "fits": true,
+        "usable_spad_bytes": 8388608,
+        "working_set_bytes": 933888
+      },
+      "tile_C": {
+        "fit_fraction": 0.1839599609375,
+        "fits": true,
+        "usable_spad_bytes": 8388608,
+        "working_set_bytes": 1543168
+      },
+      "tile_D": {
+        "fit_fraction": 0.291015625,
+        "fits": true,
+        "usable_spad_bytes": 8388608,
+        "working_set_bytes": 2441216
+      }
+    },
+    "HW-B": {
+      "tile_A": {
+        "fit_fraction": 0.0594482421875,
+        "fits": true,
+        "usable_spad_bytes": 8388608,
+        "working_set_bytes": 498688
+      },
+      "tile_B": {
+        "fit_fraction": 0.111328125,
+        "fits": true,
+        "usable_spad_bytes": 8388608,
+        "working_set_bytes": 933888
+      },
+      "tile_C": {
+        "fit_fraction": 0.1839599609375,
+        "fits": true,
+        "usable_spad_bytes": 8388608,
+        "working_set_bytes": 1543168
+      },
+      "tile_D": {
+        "fit_fraction": 0.291015625,
+        "fits": true,
+        "usable_spad_bytes": 8388608,
+        "working_set_bytes": 2441216
+      }
+    },
+    "HW-C": {
+      "tile_A": {
+        "fit_fraction": 0.23779296875,
+        "fits": true,
+        "usable_spad_bytes": 2097152,
+        "working_set_bytes": 498688
+      },
+      "tile_B": {
+        "fit_fraction": 0.4453125,
+        "fits": true,
+        "usable_spad_bytes": 2097152,
+        "working_set_bytes": 933888
+      },
+      "tile_C": {
+        "fit_fraction": 0.73583984375,
+        "fits": true,
+        "usable_spad_bytes": 2097152,
+        "working_set_bytes": 1543168
+      },
+      "tile_D": {
+        "fit_fraction": 1.1640625,
+        "fits": false,
+        "usable_spad_bytes": 2097152,
+        "working_set_bytes": 2441216
+      }
+    },
+    "HW-D": {
+      "tile_A": {
+        "fit_fraction": 0.23779296875,
+        "fits": true,
+        "usable_spad_bytes": 2097152,
+        "working_set_bytes": 498688
+      },
+      "tile_B": {
+        "fit_fraction": 0.4453125,
+        "fits": true,
+        "usable_spad_bytes": 2097152,
+        "working_set_bytes": 933888
+      },
+      "tile_C": {
+        "fit_fraction": 0.73583984375,
+        "fits": true,
+        "usable_spad_bytes": 2097152,
+        "working_set_bytes": 1543168
+      },
+      "tile_D": {
+        "fit_fraction": 1.1640625,
+        "fits": false,
+        "usable_spad_bytes": 2097152,
+        "working_set_bytes": 2441216
+      }
+    }
+  },
+  "verdict": "CHAMPION_MIGRATION_ONLY"
+}

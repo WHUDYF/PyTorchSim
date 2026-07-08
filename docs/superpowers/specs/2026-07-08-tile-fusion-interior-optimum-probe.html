@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Route 4 Tile x Fusion x HW Interior-Optimum Probe</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; max-width: 1180px; margin: 28px auto; padding: 0 24px; color: #222; }
+    h1 { border-bottom: 3px solid #333; padding-bottom: 8px; }
+    h2 { margin-top: 30px; border-left: 4px solid #333; padding-left: 10px; }
+    table { border-collapse: collapse; width: 100%; margin: 14px 0 24px; font-size: 14px; }
+    th, td { border: 1px solid #d6d6d6; padding: 7px 9px; text-align: left; vertical-align: top; }
+    th { background: #333; color: white; }
+    code { background: #f5f5f5; padding: 1px 4px; border-radius: 4px; }
+    .verdict { background: #f4f8ff; border-left: 4px solid #2457a7; padding: 12px 16px; }
+  </style>
+</head>
+<body>
+<h1>Route 4 Tile x Fusion x HW Interior-Optimum Probe</h1>
+<p>Date: 2026-07-08</p>
+<div class="verdict"><strong>Verdict:</strong> CHAMPION_MIGRATION_ONLY. Champion tile migrates across HW, but the global minimum remains a corner point.</div>
+<h2>Scope and Run Accounting</h2>
+<p>Conv 3x3 [1,64,56,56] -> [1,64,56,56], codesign_v1_2x2 HW-A/B/C/D, fusion none/all, four tile variants, mode=0, five repeats. The 160 planned run slots produced 140 measured runs and 20 dry-run unavailable slots from small-SPAD tile_D.</p>
+<h2>Tile Variants</h2>
+<table>
+<tr><th>Tile</th><th>Regime</th><th>Parameters</th><th>Working set bytes</th><th>Small-SPAD fit</th><th>Large-SPAD fit</th><th>Fits all HW</th></tr>
+<tr><td>tile_A</td><td>tiny</td><td>TILE_K_H=3, TILE_K_W=3, TILE_O_H=56, TILE_O_W=4, TILE_M=1, TILE_N=128, TILE_K=64</td><td>498,688</td><td>23.8%</td><td>5.9%</td><td>yes</td></tr>
+<tr><td>tile_B</td><td>small</td><td>TILE_K_H=3, TILE_K_W=3, TILE_O_H=56, TILE_O_W=14, TILE_M=1, TILE_N=128, TILE_K=64</td><td>933,888</td><td>44.5%</td><td>11.1%</td><td>yes</td></tr>
+<tr><td>tile_C</td><td>medium</td><td>TILE_K_H=3, TILE_K_W=3, TILE_O_H=56, TILE_O_W=28, TILE_M=1, TILE_N=128, TILE_K=64</td><td>1,543,168</td><td>73.6%</td><td>18.4%</td><td>yes</td></tr>
+<tr><td>tile_D</td><td>large</td><td>TILE_K_H=1, TILE_K_W=1, TILE_O_H=56, TILE_O_W=56, TILE_M=1, TILE_N=128, TILE_K=64</td><td>2,441,216</td><td>116.4%</td><td>29.1%</td><td>no</td></tr>
+</table>
+<h2>Cell Matrix</h2>
+<table>
+<tr><th>HW</th><th>Tile</th><th>none state</th><th>none median</th><th>all state</th><th>all median</th><th>Fusion speedup</th></tr>
+<tr><td>HW-A</td><td>tile_A</td><td>measured</td><td>185,248</td><td>measured</td><td>6,167</td><td>30.04x</td></tr>
+<tr><td>HW-A</td><td>tile_B</td><td>measured</td><td>184,460</td><td>measured</td><td>6,155</td><td>29.97x</td></tr>
+<tr><td>HW-A</td><td>tile_C</td><td>measured</td><td>186,042</td><td>measured</td><td>6,196</td><td>30.03x</td></tr>
+<tr><td>HW-A</td><td>tile_D</td><td>measured</td><td>162,723</td><td>measured</td><td>6,022</td><td>27.02x</td></tr>
+<tr><td>HW-B</td><td>tile_A</td><td>measured</td><td>210,531</td><td>measured</td><td>17,160</td><td>12.27x</td></tr>
+<tr><td>HW-B</td><td>tile_B</td><td>measured</td><td>211,673</td><td>measured</td><td>17,107</td><td>12.37x</td></tr>
+<tr><td>HW-B</td><td>tile_C</td><td>measured</td><td>217,085</td><td>measured</td><td>17,363</td><td>12.50x</td></tr>
+<tr><td>HW-B</td><td>tile_D</td><td>measured</td><td>215,429</td><td>measured</td><td>16,876</td><td>12.77x</td></tr>
+<tr><td>HW-C</td><td>tile_A</td><td>measured</td><td>185,126</td><td>measured</td><td>5,921</td><td>31.27x</td></tr>
+<tr><td>HW-C</td><td>tile_B</td><td>measured</td><td>184,115</td><td>measured</td><td>6,264</td><td>29.39x</td></tr>
+<tr><td>HW-C</td><td>tile_C</td><td>measured</td><td>186,014</td><td>measured</td><td>6,098</td><td>30.50x</td></tr>
+<tr><td>HW-C</td><td>tile_D</td><td>unavailable</td><td>NA</td><td>unavailable</td><td>NA</td><td>NA</td></tr>
+<tr><td>HW-D</td><td>tile_A</td><td>measured</td><td>210,933</td><td>measured</td><td>16,858</td><td>12.51x</td></tr>
+<tr><td>HW-D</td><td>tile_B</td><td>measured</td><td>212,113</td><td>measured</td><td>16,815</td><td>12.61x</td></tr>
+<tr><td>HW-D</td><td>tile_C</td><td>measured</td><td>216,781</td><td>measured</td><td>17,198</td><td>12.61x</td></tr>
+<tr><td>HW-D</td><td>tile_D</td><td>unavailable</td><td>NA</td><td>unavailable</td><td>NA</td><td>NA</td></tr>
+</table>
+<h2>Champion Migration</h2>
+<table>
+<tr><th>HW</th><th>Champion tile</th><th>Champion fusion</th><th>Champion median cycles</th></tr>
+<tr><td>HW-A</td><td>tile_D</td><td>all</td><td>6,022</td></tr>
+<tr><td>HW-B</td><td>tile_D</td><td>all</td><td>16,876</td></tr>
+<tr><td>HW-C</td><td>tile_A</td><td>all</td><td>5,921</td></tr>
+<tr><td>HW-D</td><td>tile_B</td><td>all</td><td>16,815</td></tr>
+</table>
+<h2>Interior-Optimum Check</h2>
+<p>Global minimum: HW-C / tile_A / all at 5,921 cycles.</p>
+<p>Global minimum is at a corner: true. Strict interior-global-optimum evidence: false.</p>
+<p>The next handoff should add an actual interior HW point, densify tile choices around the fit boundary, or use a workload where the high-SPAD champion is not a boundary tile.</p>
+</body>
+</html>

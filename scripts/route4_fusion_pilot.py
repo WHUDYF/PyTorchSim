@@ -89,6 +89,7 @@ def make_run_config(
     *,
     functional_mode: int,
     use_external_mapping: bool = True,
+    external_mapping_override: Path | None = None,
 ) -> Path:
     data = yaml.safe_load(hw_config.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -98,8 +99,9 @@ def make_run_config(
     data["pytorchsim_timing_mode"] = 1
     if use_external_mapping:
         data["codegen_mapping_strategy"] = "external-then-heuristic"
-        external_mapping = run_dir / "external_mapping.json"
-        write_external_mapping_file(external_mapping, MAPPING_CONFIG, seq=128)
+        external_mapping = external_mapping_override or (run_dir / "external_mapping.json")
+        if external_mapping_override is None:
+            write_external_mapping_file(external_mapping, MAPPING_CONFIG, seq=128)
         data["codegen_external_mapping_file"] = str(external_mapping.resolve())
     else:
         data["codegen_mapping_strategy"] = "heuristic"
@@ -142,6 +144,74 @@ def tensor_diffs(out_cpu: Any, ref_cpu: Any) -> tuple[float, float, bool]:
     max_rel = float((diff / denom).max().item()) if diff.numel() else 0.0
     passed = bool(torch.allclose(out_cpu, ref_cpu, rtol=RTOL, atol=ATOL))
     return max_abs, max_rel, passed
+
+
+def _external_conv_tile_candidate(template_obj: Any, kernel: Any, *, mode: str, BATCH: int, I_C: int, O_C: int, K_H: int, K_W: int, O_H: int, O_W: int) -> list[list[int]] | None:
+    from PyTorchSimFrontend import extension_config
+
+    if "external" not in extension_config.codegen_mapping_strategy:
+        return None
+    path = Path(extension_config.codegen_external_mapping_file)
+    if not path.is_file():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    tile_info = data.get(conv_shape_key(BATCH, I_C, O_C, K_H, K_W, O_H, O_W))
+    if tile_info is None:
+        return None
+    keys = ["TILE_K_H", "TILE_K_W", "TILE_O_H", "TILE_O_W", "TILE_M", "TILE_N", "TILE_K"]
+    TILE_K_H, TILE_K_W, TILE_O_H, TILE_O_W, TILE_M, TILE_N, TILE_K = [int(tile_info[key]) for key in keys]
+    TILE_I_H = 1 + (TILE_O_H - 1) * template_obj.stride[0] + (TILE_K_H - 1) * template_obj.dilation[0]
+    if mode == "mt":
+        TILE_I_W = 1 + (TILE_O_W - 1) * template_obj.stride[1]
+    else:
+        TILE_I_W = 1 + (TILE_O_W - 1) * template_obj.stride[1] + (TILE_K_W - 1) * template_obj.dilation[1]
+    SUB_TILE_I_H, SUB_TILE_I_W, SUB_TILE_K_H, SUB_TILE_K_W = 1, 1, 1, 1
+    if mode == "sb":
+        SUB_TILE_M = TILE_I_W if TILE_I_W < kernel.vector_lane else kernel.vector_lane
+    else:
+        SUB_TILE_M = TILE_M if TILE_M < kernel.vector_lane else kernel.vector_lane
+    SUB_TILE_N = TILE_N if TILE_N < kernel.vector_lane else kernel.vector_lane
+    SUB_TILE_K = TILE_K
+    if mode in {"base", "mt"}:
+        SUB_TILE_N = TILE_N if TILE_N > 512 else SUB_TILE_N
+    return [[TILE_K_H, TILE_K_W, TILE_O_H, TILE_O_W, TILE_M, TILE_N, TILE_K, TILE_I_H, TILE_I_W, SUB_TILE_I_H, SUB_TILE_I_W, SUB_TILE_K_H, SUB_TILE_K_W, SUB_TILE_M, SUB_TILE_N, SUB_TILE_K]]
+
+
+def install_conv_external_tile_patch() -> None:
+    modules = [
+        ("base", "PyTorchSimFrontend.mlir.mlir_conv_template", "MLIRConvTemplate"),
+        ("mt", "PyTorchSimFrontend.mlir.mlir_conv_mt_template", "MLIRConvMultiTileTemplate"),
+        ("sb", "PyTorchSimFrontend.mlir.mlir_conv_sb_template", "MLIRConvSingleBatchTemplate"),
+        ("sbs", "PyTorchSimFrontend.mlir.mlir_conv_sbs_template", "MLIRConvSingleBatchStridedTemplate"),
+    ]
+    import importlib
+
+    for mode, module_name, class_name in modules:
+        module = importlib.import_module(module_name)
+        cls = getattr(module, class_name, None)
+        if cls is None or getattr(cls, "_route4_conv_external_tile_patch", False):
+            continue
+        original_select_tile = cls.select_tile
+
+        def patched_select_tile(self, kernel, n_extra_node, BATCH, I_C, O_C, K_H, K_W, O_H, O_W, precision_bytes, *, _mode=mode, _original=original_select_tile):
+            external = _external_conv_tile_candidate(
+                self,
+                kernel,
+                mode=_mode,
+                BATCH=BATCH,
+                I_C=I_C,
+                O_C=O_C,
+                K_H=K_H,
+                K_W=K_W,
+                O_H=O_H,
+                O_W=O_W,
+            )
+            if external is not None:
+                return external
+            return _original(self, kernel, n_extra_node, BATCH, I_C, O_C, K_H, K_W, O_H, O_W, precision_bytes)
+
+        cls.select_tile = patched_select_tile
+        cls._route4_conv_external_tile_patch = True
 
 
 def addmm_relu_fn(x, w, b):
@@ -280,6 +350,7 @@ def run_conv3x3_probe_child(args: argparse.Namespace) -> int:
     try:
         ensure_npu_registered()
         clear_torch_caches()
+        install_conv_external_tile_patch()
         torch.manual_seed(args.seed)
         cpu_model = ConvBnRelu().eval()
         npu_model = copy.deepcopy(cpu_model).to(device=torch.device("npu:0")).eval()
@@ -1250,17 +1321,31 @@ def run_timing_cell(
     repeats: int,
     timeout_sec: int,
     use_external_mapping: bool = True,
+    external_mapping_override: Path | None = None,
 ) -> dict[str, Any]:
     cycles: list[int] = []
     run_summaries: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
     for idx in range(repeats):
         run_dir = cell_dir / f"run_{idx:02d}"
+        summary_path = run_dir / "timing_run_summary.json"
+        if summary_path.exists():
+            existing_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            total_cycles = int(existing_summary.get("total_cycles", 0) or 0)
+            if total_cycles > 0:
+                run_summaries.append(existing_summary)
+                cycles.append(total_cycles)
+                continue
+        if run_dir.exists():
+            shutil.rmtree(run_dir)
+        run_dir.mkdir(parents=True, exist_ok=True)
+        override_for_run = clone_external_mapping_override(external_mapping_override, run_dir)
         config_path = make_run_config(
             hw_config,
             run_dir,
             functional_mode=0,
             use_external_mapping=use_external_mapping,
+            external_mapping_override=override_for_run,
         )
         code, result, stdout = run_child(
             run_dir=run_dir,
@@ -1281,7 +1366,7 @@ def run_timing_cell(
             "artifact_message": artifacts.get("message", ""),
             "log_paths": artifacts.get("log_paths", []),
         }
-        write_json(run_dir / "timing_run_summary.json", run_summary)
+        write_json(summary_path, run_summary)
         run_summaries.append(run_summary)
         cycles.append(total_cycles)
         if code != 0 or total_cycles <= 0:
@@ -1314,6 +1399,194 @@ def strip_runs_for_report(cell: dict[str, Any]) -> dict[str, Any]:
         "class": cell.get("class", ""),
         "failures": cell.get("failures", []),
     }
+
+
+def conv_shape_key(batch: int, i_c: int, o_c: int, k_h: int, k_w: int, o_h: int, o_w: int) -> str:
+    return f"conv2d_{batch}_{i_c}_{o_c}_{k_h}_{k_w}_{o_h}_{o_w}"
+
+
+def conv_tile_working_set_bytes(tile: dict[str, int], *, precision_bytes: int = 4, n_extra_node: int = 0) -> dict[str, int]:
+    tile_k_h = int(tile["TILE_K_H"])
+    tile_k_w = int(tile["TILE_K_W"])
+    tile_o_h = int(tile["TILE_O_H"])
+    tile_o_w = int(tile["TILE_O_W"])
+    tile_m = int(tile["TILE_M"])
+    tile_n = int(tile["TILE_N"])
+    tile_k = int(tile["TILE_K"])
+    tile_i_h = 1 + (tile_o_h - 1) + (tile_k_h - 1)
+    tile_i_w = 1 + (tile_o_w - 1) + (tile_k_w - 1)
+    weight_size = tile_k_w * tile_k_h * tile_k * tile_n
+    input_size = tile_i_w * tile_i_h * tile_m * tile_k
+    output_size = tile_o_w * tile_o_h * tile_m * tile_n
+    total_elems = weight_size + input_size + output_size * (1 + n_extra_node)
+    return {
+        "tile_i_h": tile_i_h,
+        "tile_i_w": tile_i_w,
+        "weight_bytes": weight_size * precision_bytes,
+        "input_bytes": input_size * precision_bytes,
+        "output_bytes": output_size * (1 + n_extra_node) * precision_bytes,
+        "total_bytes": total_elems * precision_bytes,
+    }
+
+
+def get_spad_size_per_lane(tile_m: int, tile_n: int, vector_lane: int = 128) -> int:
+    size = tile_m * ((tile_n + vector_lane - 1) // vector_lane)
+    return max(size, 2)
+
+
+def divisors(n: int) -> list[int]:
+    result = set()
+    for i in range(1, int(math.isqrt(n)) + 1):
+        if n % i == 0:
+            result.add(i)
+            result.add(n // i)
+    return sorted(result)
+
+
+def gemm_seed_tile_candidates(
+    M: int,
+    N: int,
+    K: int,
+    *,
+    spad_size_per_lane: int = 128 * 1024,
+    vector_lane: int = 128,
+    precision_bytes: int = 4,
+    n_extra_node: int = 0,
+) -> list[tuple[int, int, int]]:
+    spad_size = spad_size_per_lane * vector_lane
+    max_spad_size = spad_size // 2
+    max_spad_per_lane = spad_size_per_lane // 2
+    M_padded = M
+    N_padded = ((N + vector_lane - 1) // vector_lane) * vector_lane
+    K_padded = K
+    index_i = M_padded // vector_lane if M > vector_lane else 1
+    index_j = N_padded // vector_lane if N > vector_lane else 1
+    index_k = K_padded // vector_lane if K > vector_lane else 1
+    tile_M_range = divisors(index_i) if M > vector_lane else [1]
+    tile_N_range = divisors(index_j) if N > vector_lane else [1]
+    tile_K_range = divisors(index_k) if K > vector_lane else [1]
+    rows = []
+    for k in tile_K_range:
+        tile_K = k * vector_lane if K > vector_lane else K_padded
+        for i in tile_M_range:
+            tile_M = i * vector_lane if M > vector_lane else M_padded
+            for j in tile_N_range:
+                tile_N = j * vector_lane if N > vector_lane else N_padded
+                used_spad_size = (tile_M * tile_K + tile_K * tile_N + tile_M * tile_N * (1 + n_extra_node)) * precision_bytes
+                weight_size_per_lane = get_spad_size_per_lane(tile_K, tile_N, vector_lane)
+                input_size_per_lane = get_spad_size_per_lane(tile_M, tile_K, vector_lane)
+                output_size_per_lane = get_spad_size_per_lane(tile_M * (1 + n_extra_node), tile_N, vector_lane)
+                used_spad_size_per_lane = (weight_size_per_lane + input_size_per_lane + output_size_per_lane) * precision_bytes
+                if used_spad_size < max_spad_size and used_spad_size_per_lane < max_spad_per_lane:
+                    rows.append((used_spad_size, (tile_M, tile_N, tile_K)))
+    rows.sort(key=lambda item: item[0], reverse=True)
+    return [values for _, values in rows]
+
+
+def get_conv_tile_candidates() -> list[dict[str, Any]]:
+    M, N, K = gemm_seed_tile_candidates(1, 64, 64)[0]
+    K = min(K, 128)
+    rows = []
+    for o_h in divisors(56):
+        for o_w in divisors(56):
+            for k_h in divisors(3):
+                for k_w in divisors(3):
+                    tile = {
+                        "TILE_K_H": int(k_h),
+                        "TILE_K_W": int(k_w),
+                        "TILE_O_H": int(o_h),
+                        "TILE_O_W": int(o_w),
+                        "TILE_M": int(M),
+                        "TILE_N": int(N),
+                        "TILE_K": int(K),
+                    }
+                    ws = conv_tile_working_set_bytes(tile)
+                    weight_size_per_lane = get_spad_size_per_lane(k_w * k_h * K, N)
+                    input_size_per_lane = get_spad_size_per_lane(ws["tile_i_w"] * ws["tile_i_h"] * M, K)
+                    output_size_per_lane = get_spad_size_per_lane(o_w * o_h * M, N)
+                    used_spad_size_per_lane = (weight_size_per_lane + input_size_per_lane + output_size_per_lane) * 4
+                    if ws["total_bytes"] < (128 * 1024 * 128 // 2) and used_spad_size_per_lane < (128 * 1024 // 2):
+                        rows.append({**tile, **ws})
+    rows.sort(key=lambda row: row["total_bytes"])
+    return rows
+
+
+def select_conv_tile_variants(candidates: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    smallest_budget = 32 * 1024 * 128 // 2
+    largest_budget = 128 * 1024 * 128 // 2
+    bands = [
+        ("tile_A", 0.00, 0.25, "tiny"),
+        ("tile_B", 0.25, 0.50, "small"),
+        ("tile_C", 0.50, 0.90, "medium"),
+    ]
+    selected: dict[str, dict[str, Any]] = {}
+    used = set()
+    for name, lo, hi, regime in bands:
+        band_rows = [row for row in candidates if lo <= row["total_bytes"] / smallest_budget < hi and tuple(row.items()) not in used]
+        if not band_rows:
+            band_rows = [row for row in candidates if row["total_bytes"] / smallest_budget < hi and tuple(row.items()) not in used]
+        row = band_rows[-1] if band_rows else None
+        if row is None:
+            raise RuntimeError(f"unable to select {name} tile candidate")
+        used.add(tuple(row.items()))
+        selected[name] = {
+            **{k: row[k] for k in ["TILE_K_H", "TILE_K_W", "TILE_O_H", "TILE_O_W", "TILE_M", "TILE_N", "TILE_K"]},
+            "predicted_working_set_bytes": row["total_bytes"],
+            "predicted_fit_all_hw": True,
+            "regime": regime,
+            "fit_fraction_smallest_spad": row["total_bytes"] / smallest_budget,
+            "fit_fraction_largest_spad": row["total_bytes"] / largest_budget,
+        }
+    large_rows = [row for row in candidates if row["total_bytes"] > smallest_budget and row["total_bytes"] < largest_budget and tuple(row.items()) not in used]
+    if not large_rows:
+        large_rows = [row for row in candidates if tuple(row.items()) not in used]
+    row = large_rows[0]
+    selected["tile_D"] = {
+        **{k: row[k] for k in ["TILE_K_H", "TILE_K_W", "TILE_O_H", "TILE_O_W", "TILE_M", "TILE_N", "TILE_K"]},
+        "predicted_working_set_bytes": row["total_bytes"],
+        "predicted_fit_all_hw": row["total_bytes"] <= smallest_budget,
+        "regime": "large",
+        "fit_fraction_smallest_spad": row["total_bytes"] / smallest_budget,
+        "fit_fraction_largest_spad": row["total_bytes"] / largest_budget,
+    }
+    return selected
+
+
+def write_conv_tile_discovery(output_root: Path, candidates: list[dict[str, Any]], selected_tiles: dict[str, dict[str, Any]]) -> None:
+    smallest_budget = 32 * 1024 * 128 // 2
+    lines = [
+        '# Conv tile axis discovery',
+        '',
+        '- Conv 3x3 uses a 7-parameter heuristic tile axis: `TILE_K_H`, `TILE_K_W`, `TILE_O_H`, `TILE_O_W`, `TILE_M`, `TILE_N`, `TILE_K`.',
+        '- Derived input extents are `TILE_I_H = 1 + (TILE_O_H - 1) * stride_h + (TILE_K_H - 1) * dilation_h` and `TILE_I_W = 1 + (TILE_O_W - 1) * stride_w + (TILE_K_W - 1) * dilation_w`.',
+        '- Existing `external_mapping.json` originally exposed only GEMM `TILE_M/N/K`; this probe adds a Conv-specific key `conv2d_1_64_64_3_3_56_56` carrying the 7 Conv tile parameters so Route 4 can sweep tiles without touching simulator sources.',
+        '- Working-set model from `conv_combination_mapping`: `weight = K_H * K_W * TILE_K * TILE_N`, `input = TILE_I_H * TILE_I_W * TILE_M * TILE_K`, `output = TILE_O_H * TILE_O_W * TILE_M * TILE_N`, `bytes = 4 * (weight + input + output)` for this unfused Conv core.',
+        f'- Smallest-SPAD HW usable double-buffer budget: `{smallest_budget}` bytes (4 MiB total physical SPAD / 2 for double buffering).',
+        '',
+        '## Selected tiles',
+        '',
+    ]
+    for name, tile in selected_tiles.items():
+        lines.append(f'- `{name}`: {json.dumps(tile, sort_keys=True)}')
+    lines.extend(['', '## Candidate sample (smallest to largest working set)', ''])
+    for row in candidates[:8] + candidates[-8:]:
+        summary = {k: row[k] for k in ["TILE_K_H", "TILE_K_W", "TILE_O_H", "TILE_O_W", "TILE_M", "TILE_N", "TILE_K", "total_bytes"]}
+        lines.append(f'- `{json.dumps(summary, sort_keys=True)}`')
+    (output_root / 'tile_axis_discovery.md').write_text("\n".join(lines) + "\n", encoding='utf-8')
+
+
+def write_conv_external_mapping(path: Path, tile: dict[str, Any]) -> None:
+    payload = {conv_shape_key(1, 64, 64, 3, 3, 56, 56): {k: int(tile[k]) for k in ["TILE_K_H", "TILE_K_W", "TILE_O_H", "TILE_O_W", "TILE_M", "TILE_N", "TILE_K"]}}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding='utf-8')
+
+
+def clone_external_mapping_override(base_path: Path | None, run_dir: Path) -> Path | None:
+    if base_path is None:
+        return None
+    target = run_dir / 'external_mapping.json'
+    target.write_text(base_path.read_text(encoding='utf-8'), encoding='utf-8')
+    return target
 
 
 def cycle_delta_between(none_cell: dict[str, Any], all_cell: dict[str, Any]) -> float | None:
@@ -1568,6 +1841,136 @@ def run_codesign_mini_sweep(args: argparse.Namespace) -> int:
     write_json(output_root / "pilot_summary.json", existing_summary)
     render_codesign_sections(phase_a, phase_b, analysis, verdict)
     return 0 if verdict != "FUSION_CODESIGN_BLOCKED" else 2
+
+
+def classify_fit_regime(tile: dict[str, Any], hw_id: str) -> dict[str, Any]:
+    spad_kb = 128 if hw_id in {"HW-A", "HW-B"} else 32
+    usable_bytes = spad_kb * 1024 * 128 // 2
+    working_set = int(tile["predicted_working_set_bytes"])
+    return {
+        "usable_spad_bytes": usable_bytes,
+        "working_set_bytes": working_set,
+        "fit_fraction": working_set / usable_bytes,
+        "fits": working_set <= usable_bytes,
+    }
+
+
+def run_interior_optimum_probe(args: argparse.Namespace) -> int:
+    output_root = Path(args.output_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    manifest = generate_v1_hw_fusion_configs(output_root)
+    candidates = get_conv_tile_candidates()
+    selected_tiles = select_conv_tile_variants(candidates)
+    write_conv_tile_discovery(output_root, candidates, selected_tiles)
+    write_json(output_root / 'tile_variants.json', selected_tiles)
+
+    matrix: dict[str, dict[str, dict[str, Any]]] = {}
+    start_time = time.time()
+    for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D"):
+        matrix[hw_id] = {}
+        for tile_name, tile in selected_tiles.items():
+            matrix[hw_id][tile_name] = {}
+            fit_info = classify_fit_regime(tile, hw_id)
+            for variant in ("none", "all"):
+                cell_dir = output_root / 'interior_runs' / hw_id / tile_name / variant
+                cell_dir.mkdir(parents=True, exist_ok=True)
+                config_path = Path(manifest['generated'][hw_id][variant]['path'])
+                if not fit_info['fits']:
+                    matrix[hw_id][tile_name][variant] = {
+                        'class': 'unavailable',
+                        'cycles_in_order': [],
+                        'median': 0.0,
+                        'cycle_delta': 0.0,
+                        'failures': [],
+                        'fit_info': fit_info,
+                    }
+                    continue
+                mapping_path = cell_dir / 'external_mapping.json'
+                write_conv_external_mapping(mapping_path, tile)
+                cell = run_timing_cell(
+                    cell_dir=cell_dir,
+                    hw_config=config_path,
+                    workload='conv3x3_probe',
+                    variant=variant,
+                    repeats=args.repeats,
+                    timeout_sec=args.timing_timeout_sec,
+                    use_external_mapping=True,
+                    external_mapping_override=mapping_path,
+                )
+                summary = strip_runs_for_report(cell)
+                summary['fit_info'] = fit_info
+                if summary['class'] != 'measured':
+                    summary['class'] = 'runtime_failed'
+                matrix[hw_id][tile_name][variant] = summary
+                if time.time() - start_time > 4 * 3600:
+                    break
+            if time.time() - start_time > 4 * 3600:
+                break
+        if time.time() - start_time > 4 * 3600:
+            break
+
+    write_json(output_root / 'tile_fusion_hw_matrix.json', matrix)
+
+    measured_cells = []
+    for hw_id, tile_map in matrix.items():
+        for tile_name, variants in tile_map.items():
+            for variant, cell in variants.items():
+                if cell.get('class') == 'measured' and float(cell.get('median', 0) or 0) > 0:
+                    measured_cells.append({
+                        'hw_id': hw_id,
+                        'tile': tile_name,
+                        'fusion': variant,
+                        'median': float(cell['median']),
+                    })
+
+    champion_per_hw = {}
+    for hw_id, tile_map in matrix.items():
+        best = None
+        for tile_name, variants in tile_map.items():
+            for variant, cell in variants.items():
+                if cell.get('class') != 'measured' or float(cell.get('median', 0) or 0) <= 0:
+                    continue
+                cand = (float(cell['median']), tile_name, variant)
+                if best is None or cand[0] < best[0]:
+                    best = cand
+        champion_per_hw[hw_id] = None if best is None else {'median': best[0], 'tile': best[1], 'fusion': best[2]}
+
+    champion_pairs = {(v['tile'], v['fusion']) for v in champion_per_hw.values() if v}
+    global_min = min(measured_cells, key=lambda item: item['median']) if measured_cells else None
+    corner_cells = {
+        (hw_id, tile_name, variant)
+        for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D")
+        for tile_name in ("tile_A", "tile_D")
+        for variant in ("none", "all")
+    }
+    global_min_is_at_corner = bool(global_min and (global_min['hw_id'], global_min['tile'], global_min['fusion']) in corner_cells)
+    interior_optimum = bool(global_min and not global_min_is_at_corner)
+    champion_migration = len(champion_pairs) > 1
+    if interior_optimum:
+        verdict = 'INTERIOR_OPTIMUM_FOUND'
+    elif champion_migration:
+        verdict = 'CHAMPION_MIGRATION_ONLY'
+    elif measured_cells:
+        verdict = 'CORNER_MONOTONIC'
+    else:
+        verdict = 'PARTIAL_SCOPE_LIMITATION'
+
+    analysis = {
+        'verdict': verdict,
+        'champion_per_hw': champion_per_hw,
+        'champion_pair_count': len(champion_pairs),
+        'champion_migration': champion_migration,
+        'global_min_cell': global_min,
+        'global_min_is_at_corner': global_min_is_at_corner,
+        'interior_optimum_evidence': interior_optimum,
+        'selected_tiles': selected_tiles,
+        'tile_fit_fraction_per_hw': {
+            hw_id: {tile_name: classify_fit_regime(tile, hw_id) for tile_name, tile in selected_tiles.items()}
+            for hw_id in ("HW-A", "HW-B", "HW-C", "HW-D")
+        },
+    }
+    write_json(output_root / 'interior_optimum_analysis.json', analysis)
+    return 0
 
 
 def classify_gpt2_structural_diff(structural: dict[str, Any]) -> tuple[str, str]:
@@ -2156,6 +2559,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--codesign-mini-sweep", action="store_true")
     parser.add_argument("--fusion-root-cause-investigation", action="store_true")
     parser.add_argument("--conv-4hw-fusion-sweep", action="store_true")
+    parser.add_argument("--interior-optimum-probe", action="store_true")
     parser.add_argument("--_child", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--child-kind", choices=["correctness", "timing"], help=argparse.SUPPRESS)
     parser.add_argument("--child-result", type=Path, help=argparse.SUPPRESS)
@@ -2163,7 +2567,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--variant", choices=["none", "all"], help=argparse.SUPPRESS)
     parser.add_argument("--seed", type=int, default=0, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
-    if not args.fusion_root_cause_investigation and not args.conv_4hw_fusion_sweep and args.repeats != 5:
+    if not args.fusion_root_cause_investigation and not args.conv_4hw_fusion_sweep and not args.interior_optimum_probe and args.repeats != 5:
         parser.error("--repeats must remain 5 for this pilot")
     return args
 
@@ -2172,6 +2576,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args._child:
         return child_main(args)
+    if args.interior_optimum_probe:
+        return run_interior_optimum_probe(args)
     if args.conv_4hw_fusion_sweep:
         return run_conv_4hw_fusion_sweep(args)
     if args.fusion_root_cause_investigation:
