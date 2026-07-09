@@ -1,0 +1,93 @@
+{
+  "champion_migration": true,
+  "champion_per_hw": {
+    "HW-A": {
+      "fusion": "all",
+      "median": 13035.0,
+      "tile": "tile_A"
+    },
+    "HW-B": {
+      "fusion": "all",
+      "median": 44236.0,
+      "tile": "tile_C3"
+    },
+    "HW-C": {
+      "fusion": "all",
+      "median": 13044.0,
+      "tile": "tile_A_b"
+    },
+    "HW-D": {
+      "fusion": "all",
+      "median": 44233.0,
+      "tile": "tile_C2"
+    }
+  },
+  "data_label": "measured",
+  "densification_applied": true,
+  "fit_tiles_by_hw": {
+    "HW-A": [
+      "tile_A",
+      "tile_A_a",
+      "tile_A_b",
+      "tile_A_c",
+      "tile_A2",
+      "tile_B",
+      "tile_B2",
+      "tile_C",
+      "tile_C2",
+      "tile_C3",
+      "tile_D"
+    ],
+    "HW-B": [
+      "tile_A",
+      "tile_A_a",
+      "tile_A_b",
+      "tile_A_c",
+      "tile_A2",
+      "tile_B",
+      "tile_B2",
+      "tile_C",
+      "tile_C2",
+      "tile_C3",
+      "tile_D"
+    ],
+    "HW-C": [
+      "tile_A",
+      "tile_A_a",
+      "tile_A_b",
+      "tile_A_c",
+      "tile_A2",
+      "tile_B",
+      "tile_B2",
+      "tile_C",
+      "tile_C2",
+      "tile_C3",
+      "tile_D"
+    ],
+    "HW-D": [
+      "tile_A",
+      "tile_A_a",
+      "tile_A_b",
+      "tile_A_c",
+      "tile_A2",
+      "tile_B",
+      "tile_B2",
+      "tile_C",
+      "tile_C2",
+      "tile_C3",
+      "tile_D"
+    ]
+  },
+  "global_min_cell": {
+    "fusion": "all",
+    "hw": "HW-A",
+    "median": 13035.0,
+    "tile": "tile_A"
+  },
+  "global_min_tile_is_extreme_for_hw": true,
+  "measured_cell_count": 80,
+  "tile_interior_evidence": false,
+  "timeboxed": false,
+  "verdict": "PARTIAL_RESNET_BOTTLENECK_INTERIOR",
+  "workload": "resnet50_bottleneck_c3"
+}

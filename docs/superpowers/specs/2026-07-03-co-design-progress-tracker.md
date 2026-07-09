@@ -6,7 +6,7 @@
 
 在 PyTorchSim 上通过扩大编译搜索空间（Route 4：fusion / dataflow / SPAD partition / DMA schedule）判断 HW/SW co-design thesis 是否有 measured POSITIVE 支撑。
 
-当前状态：Route 4 已完成 `conv3x3_large` densification follow-up。Family verdict 为 `WORKLOAD_FAMILY_INTERIOR_OPTIMUM_CONFIRMED`；`conv3x3_large` 的 global min 为 `HW-C/tile_A_a/all`。
+当前状态：Route 4 已完成 ResNet-50 bottleneck interior-optimum probe。Verdict 为 `PARTIAL_RESNET_BOTTLENECK_INTERIOR`。
 
 **最终停止条件（双必备）**：
 
@@ -31,6 +31,7 @@
 | **8-tile denser interior probe** | 在 Conv 3x3 上把 tile space 从 4 加密到 8，并加入 `fusion=["fusion"]` 第三 variant，检查 tile interior optimum | `/tmp/codesign-next-handoff.md` 8-tile denser sweep push interior optimum | `23ea49f` | **TILE_FUSION_INTERIOR_OPTIMUM_CONFIRMED_V2** | 450 measured runs；30 unavailable slots；global min=`HW-A/tile_C/all` |
 | **Workload family interior probe** | 在 inherited Conv3x3 v2 基础上扩展到 Conv3x3-large 与 Conv1x1，检查 tile interior optimum 是否跨 workload family 保持 | `/tmp/codesign-next-handoff.md` workload family interior-optimum generalization | `51b5de7` | **PARTIAL_WORKLOAD_FAMILY_INTERIOR** | tested workloads=`conv3x3_probe/conv3x3_large/conv1x1`；all_have_interior=`False` |
 | **Conv3x3-large densification** | 只在 `conv3x3_large` 的 `tile_A` 与 `tile_A2` 之间加入 3 个 tile，检查 HW-A fit-extreme optimum 是否可被细化推翻 | `/tmp/codesign-next-handoff.md` family densification for conv3x3_large | 当前提交 | **WORKLOAD_FAMILY_INTERIOR_OPTIMUM_CONFIRMED** | conv3x3_large global min=`HW-C/tile_A_a/all`；interior=`True` |
+| **ResNet-50 bottleneck interior probe** | 将 isolated Conv family 的 tile interior optimum 推进到 ResNet-50 `conv3_x` composite bottleneck，只 sweep 3x3 core tile | `/tmp/codesign-next-handoff.md` Route 4 direction A ResNet-50 bottleneck interior optimum | 当前提交 | **PARTIAL_RESNET_BOTTLENECK_INTERIOR** | global min=`{'hw': 'HW-A', 'tile': 'tile_A', 'fusion': 'all', 'median': 13035.0}`；champion_migration=`True`；interior=`False` |
 
 状态图例：**NEGATIVE**（实测证否，范围内有效）· **BLOCKED**（外部或源码约束）· **POSITIVE**（measured support，范围内有效）· **完成**。
 

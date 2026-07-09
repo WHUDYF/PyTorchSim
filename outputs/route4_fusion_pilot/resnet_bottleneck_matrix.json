@@ -1,0 +1,2648 @@
+{
+  "base_tile_order": [
+    "tile_A",
+    "tile_A2",
+    "tile_B",
+    "tile_B2",
+    "tile_C",
+    "tile_C2",
+    "tile_C3",
+    "tile_D"
+  ],
+  "cuda_visible_devices": "1",
+  "densification_matrix": {
+    "HW-A": {
+      "tile_A_a": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.059576078728236184,
+          "cycles_in_order": [
+            13077,
+            13827,
+            13210,
+            13519,
+            13040
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.00701904296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 58880
+          },
+          "median": 13210.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0015547651234064856,
+          "cycles_in_order": [
+            625818,
+            626371,
+            625398,
+            626166,
+            625517
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.00701904296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 58880
+          },
+          "median": 625818.0
+        }
+      },
+      "tile_A_b": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.064676987198571,
+          "cycles_in_order": [
+            13436,
+            13908,
+            13761,
+            13039,
+            13383
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0081024169921875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 67968
+          },
+          "median": 13436.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0010439715966678131,
+          "cycles_in_order": [
+            657334,
+            657106,
+            656896,
+            657582,
+            656952
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0081024169921875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 67968
+          },
+          "median": 657106.0
+        }
+      },
+      "tile_A_c": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.09334544628662275,
+          "cycles_in_order": [
+            13102,
+            13883,
+            12966,
+            14199,
+            13209
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.009185791015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 77056
+          },
+          "median": 13209.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0024463054619004564,
+          "cycles_in_order": [
+            616630,
+            615123,
+            616031,
+            615662,
+            616126
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.009185791015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 77056
+          },
+          "median": 616031.0
+        }
+      }
+    },
+    "HW-B": {
+      "tile_A_a": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.005899371637810225,
+          "cycles_in_order": [
+            44491,
+            44230,
+            44435,
+            44242,
+            44237
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.00701904296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 58880
+          },
+          "median": 44242.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.006770778168751643,
+          "cycles_in_order": [
+            766197,
+            766278,
+            761100,
+            764692,
+            764757
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.00701904296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 58880
+          },
+          "median": 764757.0
+        }
+      },
+      "tile_A_b": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.006360806604411964,
+          "cycles_in_order": [
+            44334,
+            44193,
+            44274,
+            44475,
+            44420
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0081024169921875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 67968
+          },
+          "median": 44334.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.002124803582902329,
+          "cycles_in_order": [
+            784744,
+            785955,
+            784456,
+            786091,
+            786126
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0081024169921875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 67968
+          },
+          "median": 785955.0
+        }
+      },
+      "tile_A_c": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.004962891109657335,
+          "cycles_in_order": [
+            44418,
+            44198,
+            44350,
+            44219,
+            44329
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.009185791015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 77056
+          },
+          "median": 44329.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.007154081660299656,
+          "cycles_in_order": [
+            739685,
+            739442,
+            738180,
+            737656,
+            734404
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.009185791015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 77056
+          },
+          "median": 738180.0
+        }
+      }
+    },
+    "HW-C": {
+      "tile_A_a": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.04900021973192705,
+          "cycles_in_order": [
+            13309,
+            13160,
+            13653,
+            13829,
+            13774
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.028076171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 58880
+          },
+          "median": 13653.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0017541729505891977,
+          "cycles_in_order": [
+            626453,
+            625357,
+            625936,
+            625947,
+            625355
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.028076171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 58880
+          },
+          "median": 625936.0
+        }
+      },
+      "tile_A_b": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.06424409690279055,
+          "cycles_in_order": [
+            13044,
+            13689,
+            13389,
+            12851,
+            12976
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.03240966796875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 67968
+          },
+          "median": 13044.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0017700272346974,
+          "cycles_in_order": [
+            656674,
+            657838,
+            657765,
+            656735,
+            657617
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.03240966796875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 67968
+          },
+          "median": 657617.0
+        }
+      },
+      "tile_A_c": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.04019542527204086,
+          "cycles_in_order": [
+            13452,
+            13390,
+            13509,
+            13933,
+            13711
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0367431640625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 77056
+          },
+          "median": 13509.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.002084060346856461,
+          "cycles_in_order": [
+            615451,
+            616735,
+            616105,
+            616307,
+            615963
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0367431640625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 77056
+          },
+          "median": 616105.0
+        }
+      }
+    },
+    "HW-D": {
+      "tile_A_a": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.004268678290721836,
+          "cycles_in_order": [
+            44292,
+            44258,
+            44247,
+            44276,
+            44436
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.028076171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 58880
+          },
+          "median": 44276.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.007171597602245839,
+          "cycles_in_order": [
+            761072,
+            766542,
+            766217,
+            766567,
+            763986
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.028076171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 58880
+          },
+          "median": 766217.0
+        }
+      },
+      "tile_A_b": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.0008584272708789843,
+          "cycles_in_order": [
+            44271,
+            44242,
+            44267,
+            44233,
+            44268
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.03240966796875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 67968
+          },
+          "median": 44267.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.004081398973288974,
+          "cycles_in_order": [
+            786055,
+            783686,
+            786005,
+            786894,
+            783904
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.03240966796875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 67968
+          },
+          "median": 786005.0
+        }
+      },
+      "tile_A_c": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.0057390754213927425,
+          "cycles_in_order": [
+            44231,
+            44225,
+            44479,
+            44258,
+            44324
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0367431640625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 77056
+          },
+          "median": 44258.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.003201023462000863,
+          "cycles_in_order": [
+            737327,
+            739469,
+            739694,
+            737485,
+            739451
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0367431640625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 77056
+          },
+          "median": 739451.0
+        }
+      }
+    }
+  },
+  "densification_tile_order": [
+    "tile_A_a",
+    "tile_A_b",
+    "tile_A_c"
+  ],
+  "fusion_variants": [
+    "none",
+    "all"
+  ],
+  "gate0_smoke": {
+    "checks": {
+      "compiled_tog_togsim_without_error": true,
+      "core_shape_key_present": true,
+      "override_tile_applied_to_core": true,
+      "total_cycles_positive": true
+    },
+    "command_returncode": 0,
+    "core_mapping": {
+      "TILE_K": 64,
+      "TILE_K_H": 3,
+      "TILE_K_W": 3,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 28,
+      "TILE_O_W": 7
+    },
+    "core_shape_key": "conv2d_1_128_128_3_3_28_28",
+    "expected_core_tile": {
+      "TILE_K": 64,
+      "TILE_K_H": 3,
+      "TILE_K_W": 3,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 28,
+      "TILE_O_W": 7
+    },
+    "external_mapping_path": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00/external_mapping.json",
+    "fusion": "all",
+    "hw": "HW-A",
+    "passed": true,
+    "result": {
+      "allclose_passed": false,
+      "artifact_message": "",
+      "core_tile_applied": true,
+      "description": "ResNet-50 conv3_x bottleneck: 1x1 reduce + 3x3 core + 1x1 expand + residual ReLU",
+      "fusion_variant": "all",
+      "log_paths": [
+        "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00/torchsim_logs/20260709_124050_6e91d612.log",
+        "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00/torchsim_logs/20260709_124051_69523421.log",
+        "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00/torchsim_logs/20260709_124051_93c60f34.log",
+        "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00/torchsim_logs/20260709_124051_a42119e5.log",
+        "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00/torchsim_logs/20260709_124052_54bd888e.log"
+      ],
+      "mapping_keys": [
+        "conv2d_1_128_128_3_3_28_28",
+        "conv2d_1_128_512_1_1_28_28",
+        "conv2d_1_512_128_1_1_28_28"
+      ],
+      "max_abs_diff": 4.4890055656433105,
+      "max_rel_diff": 1.0,
+      "ok": true,
+      "shape_key": "conv2d_1_128_128_3_3_28_28",
+      "tile": {
+        "TILE_K": 64,
+        "TILE_K_H": 3,
+        "TILE_K_W": 3,
+        "TILE_M": 1,
+        "TILE_N": 128,
+        "TILE_O_H": 28,
+        "TILE_O_W": 7
+      },
+      "total_cycles": 13897,
+      "workload": "resnet50_bottleneck_c3"
+    },
+    "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00",
+    "tile": "tile_B2",
+    "workload": "resnet50_bottleneck_c3"
+  },
+  "hw_config_set": "codesign_v1_2x2",
+  "matrix": {
+    "HW-A": {
+      "tile_A": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.06260069044879171,
+          "cycles_in_order": [
+            12955,
+            13770,
+            13035,
+            12954,
+            13144
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0059356689453125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 49792
+          },
+          "median": 13035.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.00286998488340396,
+          "cycles_in_order": [
+            645648,
+            645791,
+            644409,
+            644822,
+            646262
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0059356689453125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 49792
+          },
+          "median": 645648.0
+        }
+      },
+      "tile_A2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.06920968478757424,
+          "cycles_in_order": [
+            13908,
+            13029,
+            12999,
+            13172,
+            13134
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0123291015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 103424
+          },
+          "median": 13134.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.004795821597714865,
+          "cycles_in_order": [
+            352558,
+            350874,
+            351139,
+            351916,
+            350979
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0123291015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 103424
+          },
+          "median": 351139.0
+        }
+      },
+      "tile_A_a": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.059576078728236184,
+          "cycles_in_order": [
+            13077,
+            13827,
+            13210,
+            13519,
+            13040
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.00701904296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 58880
+          },
+          "median": 13210.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0015547651234064856,
+          "cycles_in_order": [
+            625818,
+            626371,
+            625398,
+            626166,
+            625517
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.00701904296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 58880
+          },
+          "median": 625818.0
+        }
+      },
+      "tile_A_b": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.064676987198571,
+          "cycles_in_order": [
+            13436,
+            13908,
+            13761,
+            13039,
+            13383
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0081024169921875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 67968
+          },
+          "median": 13436.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0010439715966678131,
+          "cycles_in_order": [
+            657334,
+            657106,
+            656896,
+            657582,
+            656952
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0081024169921875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 67968
+          },
+          "median": 657106.0
+        }
+      },
+      "tile_A_c": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.09334544628662275,
+          "cycles_in_order": [
+            13102,
+            13883,
+            12966,
+            14199,
+            13209
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.009185791015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 77056
+          },
+          "median": 13209.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0024463054619004564,
+          "cycles_in_order": [
+            616630,
+            615123,
+            616031,
+            615662,
+            616126
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.009185791015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 77056
+          },
+          "median": 616031.0
+        }
+      },
+      "tile_B": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.05651977060066405,
+          "cycles_in_order": [
+            13768,
+            13252,
+            13019,
+            13294,
+            13169
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.02716064453125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 227840
+          },
+          "median": 13252.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.006577088943711042,
+          "cycles_in_order": [
+            213431,
+            212195,
+            212805,
+            212404,
+            212034
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.02716064453125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 227840
+          },
+          "median": 212404.0
+        }
+      },
+      "tile_B2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.06496106785317018,
+          "cycles_in_order": [
+            13132,
+            13591,
+            13969,
+            13485,
+            13093
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.05535888671875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 464384
+          },
+          "median": 13485.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.010918992877168037,
+          "cycles_in_order": [
+            149157,
+            149098,
+            149770,
+            148142,
+            148306
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.05535888671875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 464384
+          },
+          "median": 149098.0
+        }
+      },
+      "tile_C": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.09639101157600061,
+          "cycles_in_order": [
+            13217,
+            14220,
+            13047,
+            14251,
+            12977
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.07373046875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 618496
+          },
+          "median": 13217.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.004517800132522137,
+          "cycles_in_order": [
+            149716,
+            149418,
+            149409,
+            149344,
+            149041
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.07373046875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 618496
+          },
+          "median": 149409.0
+        }
+      },
+      "tile_C2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.015674935321868817,
+          "cycles_in_order": [
+            13228,
+            13324,
+            13142,
+            13118,
+            13138
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.12353515625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1036288
+          },
+          "median": 13142.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.007057617929985786,
+          "cycles_in_order": [
+            121158,
+            121572,
+            121004,
+            120825,
+            120718
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.12353515625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1036288
+          },
+          "median": 121004.0
+        }
+      },
+      "tile_C3": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.09194706994328923,
+          "cycles_in_order": [
+            13109,
+            13940,
+            13225,
+            13184,
+            14325
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.1483154296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1244160
+          },
+          "median": 13225.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.006376381490995373,
+          "cycles_in_order": [
+            143421,
+            142510,
+            142687,
+            143383,
+            142871
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.1483154296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1244160
+          },
+          "median": 142871.0
+        }
+      },
+      "tile_D": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.06637975052884966,
+          "cycles_in_order": [
+            13771,
+            13938,
+            13709,
+            13028,
+            13458
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.173095703125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1452032
+          },
+          "median": 13709.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0029269252527240083,
+          "cycles_in_order": [
+            122022,
+            121944,
+            122040,
+            121971,
+            121683
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.173095703125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1452032
+          },
+          "median": 121971.0
+        }
+      }
+    },
+    "HW-B": {
+      "tile_A": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.006144948490872944,
+          "cycles_in_order": [
+            44264,
+            44163,
+            44435,
+            44220,
+            44296
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0059356689453125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 49792
+          },
+          "median": 44264.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0009259455424383399,
+          "cycles_in_order": [
+            802389,
+            802417,
+            802666,
+            803132,
+            802423
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0059356689453125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 49792
+          },
+          "median": 802423.0
+        }
+      },
+      "tile_A2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.006449576041854591,
+          "cycles_in_order": [
+            44214,
+            44211,
+            44440,
+            44344,
+            44497
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0123291015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 103424
+          },
+          "median": 44344.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.001837278810588857,
+          "cycles_in_order": [
+            496677,
+            495838,
+            495842,
+            495766,
+            496049
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0123291015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 103424
+          },
+          "median": 495842.0
+        }
+      },
+      "tile_A_a": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.005899371637810225,
+          "cycles_in_order": [
+            44491,
+            44230,
+            44435,
+            44242,
+            44237
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.00701904296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 58880
+          },
+          "median": 44242.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.006770778168751643,
+          "cycles_in_order": [
+            766197,
+            766278,
+            761100,
+            764692,
+            764757
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.00701904296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 58880
+          },
+          "median": 764757.0
+        }
+      },
+      "tile_A_b": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.006360806604411964,
+          "cycles_in_order": [
+            44334,
+            44193,
+            44274,
+            44475,
+            44420
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0081024169921875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 67968
+          },
+          "median": 44334.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.002124803582902329,
+          "cycles_in_order": [
+            784744,
+            785955,
+            784456,
+            786091,
+            786126
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0081024169921875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 67968
+          },
+          "median": 785955.0
+        }
+      },
+      "tile_A_c": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.004962891109657335,
+          "cycles_in_order": [
+            44418,
+            44198,
+            44350,
+            44219,
+            44329
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.009185791015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 77056
+          },
+          "median": 44329.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.007154081660299656,
+          "cycles_in_order": [
+            739685,
+            739442,
+            738180,
+            737656,
+            734404
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.009185791015625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 77056
+          },
+          "median": 738180.0
+        }
+      },
+      "tile_B": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.004242260131780847,
+          "cycles_in_order": [
+            44229,
+            44359,
+            44417,
+            44263,
+            44316
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.02716064453125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 227840
+          },
+          "median": 44316.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.013191488128530071,
+          "cycles_in_order": [
+            341688,
+            345071,
+            343306,
+            346240,
+            345145
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.02716064453125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 227840
+          },
+          "median": 345071.0
+        }
+      },
+      "tile_B2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.006417063967282012,
+          "cycles_in_order": [
+            44257,
+            44227,
+            44279,
+            44511,
+            44252
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.05535888671875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 464384
+          },
+          "median": 44257.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.024262781904266277,
+          "cycles_in_order": [
+            270596,
+            277263,
+            274587,
+            277104,
+            274783
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.05535888671875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 464384
+          },
+          "median": 274783.0
+        }
+      },
+      "tile_C": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.005084593232541397,
+          "cycles_in_order": [
+            44251,
+            44321,
+            44477,
+            44455,
+            44448
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.07373046875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 618496
+          },
+          "median": 44448.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.010504008447356706,
+          "cycles_in_order": [
+            270610,
+            273465,
+            272974,
+            271497,
+            271801
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.07373046875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 618496
+          },
+          "median": 271801.0
+        }
+      },
+      "tile_C2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.007401574803149606,
+          "cycles_in_order": [
+            44458,
+            44450,
+            44467,
+            44138,
+            44234
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.12353515625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1036288
+          },
+          "median": 44450.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.025764732525598927,
+          "cycles_in_order": [
+            249651,
+            243280,
+            247276,
+            247083,
+            247333
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.12353515625,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1036288
+          },
+          "median": 247276.0
+        }
+      },
+      "tile_C3": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.005900171805769057,
+          "cycles_in_order": [
+            44178,
+            44246,
+            44236,
+            44229,
+            44439
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.1483154296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1244160
+          },
+          "median": 44236.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.002525486647555544,
+          "cycles_in_order": [
+            269651,
+            270299,
+            269618,
+            269987,
+            269620
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.1483154296875,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1244160
+          },
+          "median": 269651.0
+        }
+      },
+      "tile_D": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.0056962737813801645,
+          "cycles_in_order": [
+            44415,
+            44465,
+            44212,
+            44270,
+            44440
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.173095703125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1452032
+          },
+          "median": 44415.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0058996932478629065,
+          "cycles_in_order": [
+            250691,
+            249613,
+            251092,
+            250747,
+            250046
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.173095703125,
+            "fits": true,
+            "usable_spad_bytes": 8388608,
+            "working_set_bytes": 1452032
+          },
+          "median": 250691.0
+        }
+      }
+    },
+    "HW-C": {
+      "tile_A": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.02838925155609534,
+          "cycles_in_order": [
+            13350,
+            13174,
+            12976,
+            13095,
+            13321
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.02374267578125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 49792
+          },
+          "median": 13174.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0022225801755141363,
+          "cycles_in_order": [
+            644527,
+            645962,
+            645646,
+            645821,
+            645633
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.02374267578125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 49792
+          },
+          "median": 645646.0
+        }
+      },
+      "tile_A2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.12487686595438358,
+          "cycles_in_order": [
+            14704,
+            13056,
+            13616,
+            13129,
+            13197
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.04931640625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 103424
+          },
+          "median": 13197.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.004222010711292316,
+          "cycles_in_order": [
+            352026,
+            352229,
+            351149,
+            350743,
+            351965
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.04931640625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 103424
+          },
+          "median": 351965.0
+        }
+      },
+      "tile_A_a": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.04900021973192705,
+          "cycles_in_order": [
+            13309,
+            13160,
+            13653,
+            13829,
+            13774
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.028076171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 58880
+          },
+          "median": 13653.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0017541729505891977,
+          "cycles_in_order": [
+            626453,
+            625357,
+            625936,
+            625947,
+            625355
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.028076171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 58880
+          },
+          "median": 625936.0
+        }
+      },
+      "tile_A_b": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.06424409690279055,
+          "cycles_in_order": [
+            13044,
+            13689,
+            13389,
+            12851,
+            12976
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.03240966796875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 67968
+          },
+          "median": 13044.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0017700272346974,
+          "cycles_in_order": [
+            656674,
+            657838,
+            657765,
+            656735,
+            657617
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.03240966796875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 67968
+          },
+          "median": 657617.0
+        }
+      },
+      "tile_A_c": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.04019542527204086,
+          "cycles_in_order": [
+            13452,
+            13390,
+            13509,
+            13933,
+            13711
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0367431640625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 77056
+          },
+          "median": 13509.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.002084060346856461,
+          "cycles_in_order": [
+            615451,
+            616735,
+            616105,
+            616307,
+            615963
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0367431640625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 77056
+          },
+          "median": 616105.0
+        }
+      },
+      "tile_B": {
+        "all": {
+          "class": "blocked",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "failures": [
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 0,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B/all/run_00",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 1,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B/all/run_01",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 2,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B/all/run_02",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 3,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B/all/run_03",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 4,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B/all/run_04",
+              "total_cycles": 0
+            }
+          ],
+          "fit_info": {
+            "fit_fraction": 0.108642578125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 227840
+          },
+          "median": 0.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.00310717889746779,
+          "cycles_in_order": [
+            213182,
+            212602,
+            212981,
+            213055,
+            213264
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.108642578125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 227840
+          },
+          "median": 213055.0
+        }
+      },
+      "tile_B2": {
+        "all": {
+          "class": "blocked",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "failures": [
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 0,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B2/all/run_00",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 1,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B2/all/run_01",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 2,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B2/all/run_02",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 3,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B2/all/run_03",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 4,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B2/all/run_04",
+              "total_cycles": 0
+            }
+          ],
+          "fit_info": {
+            "fit_fraction": 0.221435546875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 464384
+          },
+          "median": 0.0
+        },
+        "none": {
+          "class": "blocked",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "failures": [
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 0,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B2/none/run_00",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 1,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B2/none/run_01",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 2,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B2/none/run_02",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 3,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B2/none/run_03",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 4,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_B2/none/run_04",
+              "total_cycles": 0
+            }
+          ],
+          "fit_info": {
+            "fit_fraction": 0.221435546875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 464384
+          },
+          "median": 0.0
+        }
+      },
+      "tile_C": {
+        "all": {
+          "class": "blocked",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "failures": [
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 0,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C/all/run_00",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 1,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C/all/run_01",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 2,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C/all/run_02",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 3,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C/all/run_03",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 4,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C/all/run_04",
+              "total_cycles": 0
+            }
+          ],
+          "fit_info": {
+            "fit_fraction": 0.294921875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 618496
+          },
+          "median": 0.0
+        },
+        "none": {
+          "class": "blocked",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "failures": [
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 0,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C/none/run_00",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 1,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C/none/run_01",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 2,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C/none/run_02",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 3,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C/none/run_03",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 4,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C/none/run_04",
+              "total_cycles": 0
+            }
+          ],
+          "fit_info": {
+            "fit_fraction": 0.294921875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 618496
+          },
+          "median": 0.0
+        }
+      },
+      "tile_C2": {
+        "all": {
+          "class": "blocked",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "failures": [
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 0,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C2/all/run_00",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 1,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C2/all/run_01",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 2,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C2/all/run_02",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 3,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C2/all/run_03",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 4,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C2/all/run_04",
+              "total_cycles": 0
+            }
+          ],
+          "fit_info": {
+            "fit_fraction": 0.494140625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1036288
+          },
+          "median": 0.0
+        },
+        "none": {
+          "class": "blocked",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "failures": [
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 0,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C2/none/run_00",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 1,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C2/none/run_01",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 2,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C2/none/run_02",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 3,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C2/none/run_03",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 4,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C2/none/run_04",
+              "total_cycles": 0
+            }
+          ],
+          "fit_info": {
+            "fit_fraction": 0.494140625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1036288
+          },
+          "median": 0.0
+        }
+      },
+      "tile_C3": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.06547978273989137,
+          "cycles_in_order": [
+            13013,
+            13256,
+            12887,
+            13755,
+            13389
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.59326171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1244160
+          },
+          "median": 13256.0
+        },
+        "none": {
+          "class": "blocked",
+          "cycle_delta": 0.0,
+          "cycles_in_order": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "failures": [
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 0,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C3/none/run_00",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 1,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C3/none/run_01",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 2,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C3/none/run_02",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 3,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C3/none/run_03",
+              "total_cycles": 0
+            },
+            {
+              "error": "backend='inductor' raised:\nRuntimeError: CUDA error: out of memory\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n",
+              "repeat": 4,
+              "returncode": 2,
+              "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_runs/HW-C/tile_C3/none/run_04",
+              "total_cycles": 0
+            }
+          ],
+          "fit_info": {
+            "fit_fraction": 0.59326171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1244160
+          },
+          "median": 0.0
+        }
+      },
+      "tile_D": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.04418429003021148,
+          "cycles_in_order": [
+            13562,
+            13240,
+            13225,
+            13029,
+            13614
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.6923828125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1452032
+          },
+          "median": 13240.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.007918691565730074,
+          "cycles_in_order": [
+            122159,
+            121449,
+            121611,
+            121265,
+            122228
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.6923828125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1452032
+          },
+          "median": 121611.0
+        }
+      }
+    },
+    "HW-D": {
+      "tile_A": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.00875372258821406,
+          "cycles_in_order": [
+            44024,
+            44284,
+            44412,
+            44324,
+            44349
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.02374267578125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 49792
+          },
+          "median": 44324.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.007088990005870103,
+          "cycles_in_order": [
+            797363,
+            802386,
+            802371,
+            803051,
+            802348
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.02374267578125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 49792
+          },
+          "median": 802371.0
+        }
+      },
+      "tile_A2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.005291720146817087,
+          "cycles_in_order": [
+            44210,
+            44409,
+            44347,
+            44445,
+            44420
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.04931640625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 103424
+          },
+          "median": 44409.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.013271751653681607,
+          "cycles_in_order": [
+            495855,
+            490190,
+            496779,
+            496584,
+            496468
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.04931640625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 103424
+          },
+          "median": 496468.0
+        }
+      },
+      "tile_A_a": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.004268678290721836,
+          "cycles_in_order": [
+            44292,
+            44258,
+            44247,
+            44276,
+            44436
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.028076171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 58880
+          },
+          "median": 44276.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.007171597602245839,
+          "cycles_in_order": [
+            761072,
+            766542,
+            766217,
+            766567,
+            763986
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.028076171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 58880
+          },
+          "median": 766217.0
+        }
+      },
+      "tile_A_b": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.0008584272708789843,
+          "cycles_in_order": [
+            44271,
+            44242,
+            44267,
+            44233,
+            44268
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.03240966796875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 67968
+          },
+          "median": 44267.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.004081398973288974,
+          "cycles_in_order": [
+            786055,
+            783686,
+            786005,
+            786894,
+            783904
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.03240966796875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 67968
+          },
+          "median": 786005.0
+        }
+      },
+      "tile_A_c": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.0057390754213927425,
+          "cycles_in_order": [
+            44231,
+            44225,
+            44479,
+            44258,
+            44324
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0367431640625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 77056
+          },
+          "median": 44258.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.003201023462000863,
+          "cycles_in_order": [
+            737327,
+            739469,
+            739694,
+            737485,
+            739451
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.0367431640625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 77056
+          },
+          "median": 739451.0
+        }
+      },
+      "tile_B": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.0054471380016656535,
+          "cycles_in_order": [
+            44457,
+            44427,
+            44215,
+            44436,
+            44252
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.108642578125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 227840
+          },
+          "median": 44427.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.007843159970921224,
+          "cycles_in_order": [
+            345830,
+            343368,
+            344840,
+            345269,
+            346076
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.108642578125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 227840
+          },
+          "median": 345269.0
+        }
+      },
+      "tile_B2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.009735492760497844,
+          "cycles_in_order": [
+            44271,
+            44221,
+            44498,
+            44342,
+            44067
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.221435546875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 464384
+          },
+          "median": 44271.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.0005472085118102817,
+          "cycles_in_order": [
+            275951,
+            275951,
+            275946,
+            275800,
+            275938
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.221435546875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 464384
+          },
+          "median": 275946.0
+        }
+      },
+      "tile_C": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.005156496284620581,
+          "cycles_in_order": [
+            44410,
+            44416,
+            44418,
+            44321,
+            44189
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.294921875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 618496
+          },
+          "median": 44410.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.00971136874638387,
+          "cycles_in_order": [
+            271379,
+            273082,
+            271112,
+            273764,
+            273707
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.294921875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 618496
+          },
+          "median": 273082.0
+        }
+      },
+      "tile_C2": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.004408473311780797,
+          "cycles_in_order": [
+            44233,
+            44414,
+            44284,
+            44219,
+            44231
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.494140625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1036288
+          },
+          "median": 44233.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.009876323155886296,
+          "cycles_in_order": [
+            248511,
+            246853,
+            246073,
+            246332,
+            246866
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.494140625,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1036288
+          },
+          "median": 246853.0
+        }
+      },
+      "tile_C3": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.006266907123534716,
+          "cycles_in_order": [
+            44441,
+            44247,
+            44163,
+            44363,
+            44360
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.59326171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1244160
+          },
+          "median": 44360.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.00842723540986506,
+          "cycles_in_order": [
+            272191,
+            270114,
+            272353,
+            271382,
+            270066
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.59326171875,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1244160
+          },
+          "median": 271382.0
+        }
+      },
+      "tile_D": {
+        "all": {
+          "class": "measured",
+          "cycle_delta": 0.006911456809023166,
+          "cycles_in_order": [
+            44274,
+            44157,
+            44433,
+            44419,
+            44464
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.6923828125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1452032
+          },
+          "median": 44419.0
+        },
+        "none": {
+          "class": "measured",
+          "cycle_delta": 0.01187979872902592,
+          "cycles_in_order": [
+            249415,
+            251540,
+            248577,
+            250934,
+            248676
+          ],
+          "failures": [],
+          "fit_info": {
+            "fit_fraction": 0.6923828125,
+            "fits": true,
+            "usable_spad_bytes": 2097152,
+            "working_set_bytes": 1452032
+          },
+          "median": 249415.0
+        }
+      }
+    }
+  },
+  "pytorchsim_functional_mode": 0,
+  "repeats_per_cell": 5,
+  "run_accounting": {
+    "blocked": 8,
+    "measured": 80
+  },
+  "timeboxed": false,
+  "workload": "resnet50_bottleneck_c3"
+}

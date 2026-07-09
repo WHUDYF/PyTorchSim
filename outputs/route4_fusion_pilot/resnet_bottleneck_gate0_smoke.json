@@ -1,0 +1,69 @@
+{
+  "checks": {
+    "compiled_tog_togsim_without_error": true,
+    "core_shape_key_present": true,
+    "override_tile_applied_to_core": true,
+    "total_cycles_positive": true
+  },
+  "command_returncode": 0,
+  "core_mapping": {
+    "TILE_K": 64,
+    "TILE_K_H": 3,
+    "TILE_K_W": 3,
+    "TILE_M": 1,
+    "TILE_N": 128,
+    "TILE_O_H": 28,
+    "TILE_O_W": 7
+  },
+  "core_shape_key": "conv2d_1_128_128_3_3_28_28",
+  "expected_core_tile": {
+    "TILE_K": 64,
+    "TILE_K_H": 3,
+    "TILE_K_W": 3,
+    "TILE_M": 1,
+    "TILE_N": 128,
+    "TILE_O_H": 28,
+    "TILE_O_W": 7
+  },
+  "external_mapping_path": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00/external_mapping.json",
+  "fusion": "all",
+  "hw": "HW-A",
+  "passed": true,
+  "result": {
+    "allclose_passed": false,
+    "artifact_message": "",
+    "core_tile_applied": true,
+    "description": "ResNet-50 conv3_x bottleneck: 1x1 reduce + 3x3 core + 1x1 expand + residual ReLU",
+    "fusion_variant": "all",
+    "log_paths": [
+      "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00/torchsim_logs/20260709_124050_6e91d612.log",
+      "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00/torchsim_logs/20260709_124051_69523421.log",
+      "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00/torchsim_logs/20260709_124051_93c60f34.log",
+      "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00/torchsim_logs/20260709_124051_a42119e5.log",
+      "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00/torchsim_logs/20260709_124052_54bd888e.log"
+    ],
+    "mapping_keys": [
+      "conv2d_1_128_128_3_3_28_28",
+      "conv2d_1_128_512_1_1_28_28",
+      "conv2d_1_512_128_1_1_28_28"
+    ],
+    "max_abs_diff": 4.4890055656433105,
+    "max_rel_diff": 1.0,
+    "ok": true,
+    "shape_key": "conv2d_1_128_128_3_3_28_28",
+    "tile": {
+      "TILE_K": 64,
+      "TILE_K_H": 3,
+      "TILE_K_W": 3,
+      "TILE_M": 1,
+      "TILE_N": 128,
+      "TILE_O_H": 28,
+      "TILE_O_W": 7
+    },
+    "total_cycles": 13897,
+    "workload": "resnet50_bottleneck_c3"
+  },
+  "run_dir": "/home/dyf/PyTorchSim/outputs/route4_fusion_pilot/resnet_bottleneck_smoke/HW-A/tile_B2/all/run_00",
+  "tile": "tile_B2",
+  "workload": "resnet50_bottleneck_c3"
+}

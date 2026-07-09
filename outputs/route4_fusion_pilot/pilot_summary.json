@@ -329,6 +329,19 @@
     "workload": "conv3x3_probe"
   },
   "phase_b_hw_fusion_matrix": null,
+  "resnet50_bottleneck_interior_probe": {
+    "analysis": "outputs/route4_fusion_pilot/resnet_bottleneck_interior_analysis.json",
+    "champion_migration": true,
+    "global_min_cell": {
+      "fusion": "all",
+      "hw": "HW-A",
+      "median": 13035.0,
+      "tile": "tile_A"
+    },
+    "matrix": "outputs/route4_fusion_pilot/resnet_bottleneck_matrix.json",
+    "tile_interior_evidence": false,
+    "verdict": "PARTIAL_RESNET_BOTTLENECK_INTERIOR"
+  },
   "root_cause_classification": "structural_active",
   "root_cause_explanation": "`mlir_op_count` delta is 0.0782 and keyword sets are none=['epilogue', 'maximumf'], all=['epilogue', 'maximumf']; `fusion=all` changes the generated structure, so the weak GPT-2 timing result is more likely critical-path limited.",
   "spike_varch_diagnostic": "outputs/route4_fusion_pilot/spike_varch_diagnostic.md",

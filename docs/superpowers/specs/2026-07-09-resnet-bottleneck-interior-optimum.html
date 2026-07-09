@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset='utf-8'><title>ResNet bottleneck interior optimum</title><style>body{font-family:Arial,sans-serif;line-height:1.55;max-width:1180px;margin:32px auto;padding:0 20px}code{background:#f3f3f3;padding:1px 4px}pre{background:#fafafa;border:1px solid #ddd;padding:6px}</style></head><body>
+<h1>ResNet-50 bottleneck interior-optimum probe</h1>
+<p>Date: 2026-07-09</p>
+<h2>1. 目标</h2>
+<p>本实验把 isolated Conv kernel 的 tile interior-optimum 结论推进到 ResNet-50 `conv3_x` bottleneck。只 sweep bottleneck 中 3x3 core 的 tile，1x1 reduce / expand 保持固定默认 tile。</p>
+<h2>2. Workload</h2>
+<p>- Input: `x[1,512,28,28]`</p>
+<p>- Block: `1x1 reduce 512-&gt;128` + `3x3 core 128-&gt;128` + `1x1 expand 128-&gt;512` + residual add + ReLU</p>
+<p>- 3x3 core shape key: `conv2d_1_128_128_3_3_28_28`</p>
+<p>- HW: `HW-A/B/C/D` from `codesign_v1_2x2`</p>
+<p>- Fusion: `none/all`</p>
+<p>- Repeats: 5 per measured cell, `pytorchsim_functional_mode=0`, `CUDA_VISIBLE_DEVICES=1`</p>
+<h2>3. Gate 0</h2>
+<p>- Smoke passed: `True`</p>
+<p>- Smoke total cycles: `13897`</p>
+<p>- Core tile override applied: `True`</p>
+<h2>4. Sweep accounting</h2>
+<p>- Base tiles: `tile_A, tile_A2, tile_B, tile_B2, tile_C, tile_C2, tile_C3, tile_D`</p>
+<p>- Densification applied: `True`</p>
+<p>- Matrix accounting: `{&quot;blocked&quot;: 8, &quot;measured&quot;: 80}`</p>
+<p>- Timeboxed: `False`</p>
+<h2>5. Champion per HW</h2>
+<pre>| HW | Champion tile | Fusion | Median cycles |</pre>
+<pre>|---|---|---|---:|</pre>
+<pre>| HW-A | `tile_A` | `all` | 13,035 |</pre>
+<pre>| HW-B | `tile_C3` | `all` | 44,236 |</pre>
+<pre>| HW-C | `tile_A_b` | `all` | 13,044 |</pre>
+<pre>| HW-D | `tile_C2` | `all` | 44,233 |</pre>
+<h2>6. Verdict</h2>
+<p>- `champion_migration`: `True`</p>
+<p>- `tile_interior_evidence`: `False`</p>
+<p>- `global_min_tile_is_extreme_for_hw`: `True`</p>
+<p>- `global_min_cell`: `{&quot;fusion&quot;: &quot;all&quot;, &quot;hw&quot;: &quot;HW-A&quot;, &quot;median&quot;: 13035.0, &quot;tile&quot;: &quot;tile_A&quot;}`</p>
+<p>- `verdict`: `PARTIAL_RESNET_BOTTLENECK_INTERIOR`</p>
+<h2>7. 结果解读（与孤立 kernel 对比）</h2>
+<p>本次是一个 scope-clarifying 的 PARTIAL，核心信息分两半：</p>
+<h3>泛化成立的部分：协同交互（champion migration）</h3>
+<p>4 个硬件各自的冠军 tile 互不相同：</p>
+<pre>HW-A -&gt; tile_A      HW-B -&gt; tile_C3
+HW-C -&gt; tile_A_b    HW-D -&gt; tile_C2</pre>
+<p>换硬件就会改变最优软件选择——这说明「最优 tile 由硬件决定、软硬件存在真实交互」这一 co-design 核心信号，从孤立 conv kernel 泛化到了真实 ResNet-50 bottleneck（前后 1x1 + 残差 + 整块 fusion 的真实上下文）。</p>
+<h3>泛化不成立的部分：严格内部最优（interior optimum）</h3>
+<p>全局最优落在 <code>HW-A / tile_A</code>，而 <code>tile_A</code> 是最小 tile、位于 fit 边界。即使 runner 在 <code>tile_A</code> 与 <code>tile_A2</code> 之间自动加密补扫（densification），HW-A 的冠军仍停在 <code>tile_A</code>，没有出现更优的内部点。</p>
+<p><strong>关键对比</strong>：在孤立的 <code>conv3x3_large</code> 上，同样的加密把冠军从边界 <code>tile_A</code> 推进到了内部 <code>tile_A_a</code>（内部最优成立）。但把同一个 3x3 core 嵌进完整 bottleneck 后，前后 1x1 层与残差改变了整块的 compute/memory 平衡，把最优点压到了最小 tile 边界，加密也没能找回内部甜点。</p>
+<p><strong>科学含义</strong>：co-design 的必要性（软硬件交互）能泛化到真实网络 block；但「最优点落在搜索空间内部」这个更强性质是 workload-context 依赖的——孤立 kernel 的 interior 结论不能直接外推到复合 block。这是一个诚实的边界划定，符合 evidence-first 方法论。</p>
+<h2>8. Scope</h2>
+<p>- 该结论是 mode=0 timing evidence，不是 correctness claim。</p>
+<p>- 只 sweep 3x3 core tile；1x1 reduce / expand 固定 tile。</p>
+<p>- 不包含 MobileNetV2/depthwise/grouped-conv。</p>
+<p>- 未增加 HW interior points，也未 sweep dataflow / SPAD partition / DMA schedule。</p>
+</body></html>
