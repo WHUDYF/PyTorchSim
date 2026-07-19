@@ -12,6 +12,14 @@ The ACM DOI page lists the paper, but direct PDF download from `dl.acm.org` retu
 
 ## Downloaded PDFs
 
+### Hardware/software co-design and compiler search
+
+| File | Paper | Relevance | Source |
+|---|---|---|---|
+| [hasco-arxiv2021.pdf](hasco-arxiv2021.pdf) | HASCO: Towards Agile HArdware and Software CO-design for Tensor Computation | Joint hardware architecture and tensor-program mapping search | <https://arxiv.org/abs/2105.01585> |
+| [tlm-osdi2024.pdf](tlm-osdi2024.pdf) | Enabling Tensor Language Model to Assist in Generating High-Performance Tensor Programs for Deep Learning | Learned tensor-program schedule generation for fixed hardware | <https://www.usenix.org/conference/osdi24/presentation/zhai> |
+| [autocomp-arxiv2025.pdf](autocomp-arxiv2025.pdf) | Autocomp: A Powerful and Portable Code Optimizer for Tensor Accelerators | LLM-guided low-level accelerator-code optimization with correctness and hardware feedback | <https://arxiv.org/abs/2505.18574> |
+
 | File | Paper | Relevance | Source |
 |---|---|---|---|
 | [accel-sim-isca2020.pdf](accel-sim-isca2020.pdf) | Accel-Sim: An Extensible Simulation Framework for Validated GPU Modeling | GPU simulator baseline referenced by PyTorchSim | <https://people.ece.ubc.ca/aamodt/publications/papers/accelsim.isca2020.pdf> |
