@@ -14,11 +14,23 @@ The ACM DOI page lists the paper, but direct PDF download from `dl.acm.org` retu
 
 ### Hardware/software co-design and compiler search
 
+The files below are publicly accessible author-hosted or arXiv versions. A venue
+name describes the published or accepted work; it does not imply that the local
+copy is the publisher's version of record. Helios is a 2026 preprint.
+
 | File | Paper | Relevance | Source |
 |---|---|---|---|
 | [hasco-arxiv2021.pdf](hasco-arxiv2021.pdf) | HASCO: Towards Agile HArdware and Software CO-design for Tensor Computation | Joint hardware architecture and tensor-program mapping search | <https://arxiv.org/abs/2105.01585> |
 | [tlm-osdi2024.pdf](tlm-osdi2024.pdf) | Enabling Tensor Language Model to Assist in Generating High-Performance Tensor Programs for Deep Learning | Learned tensor-program schedule generation for fixed hardware | <https://www.usenix.org/conference/osdi24/presentation/zhai> |
 | [autocomp-arxiv2025.pdf](autocomp-arxiv2025.pdf) | Autocomp: A Powerful and Portable Code Optimizer for Tensor Accelerators | LLM-guided low-level accelerator-code optimization with correctness and hardware feedback | <https://arxiv.org/abs/2505.18574> |
+| [senna-tecs2025.pdf](senna-tecs2025.pdf) | SENNA: Unified Hardware/Software Space Exploration for Parametrizable Neural Network Accelerators | Joint network-wide search over accelerator configurations and software execution plans | <https://csap.snu.ac.kr/sites/default/files/papers/2025.TECS.Kwon.SENNA.Unified%20Hardware-Software%20Space%20Exploration%20for%20Parametrizable%20Neural%20Network%20Accelerators.pdf> |
+| [looptree-tcasai2024.pdf](looptree-tcasai2024.pdf) | LoopTree: Exploring the Fused-Layer Dataflow Accelerator Design Space | Fused-layer tiling, scheduling, retention, recomputation, and buffer-capacity exploration | <https://people.csail.mit.edu/emer/media/papers/2024.09.tcas-ai.looptree.pdf> |
+| [mas-attention-mlsys2025.pdf](mas-attention-mlsys2025.pdf) | MAS-Attention: Memory-Aware Stream Processing for Attention Acceleration on Resource-Constrained Edge Devices | MAC/VEC pipelining, multi-tier tiling, and on-chip memory management | <https://arxiv.org/abs/2411.17720> |
+| [fusemax-micro2024.pdf](fusemax-micro2024.pdf) | FuseMax: Leveraging Extended Einsums to Optimize Attention Accelerator Design | Deep attention fusion and fine-grained binding across 1D and 2D PE arrays | <https://people.csail.mit.edu/emer/media/papers/2024.10.micro.fusemax.pdf> |
+| [softex-jetcas2025.pdf](softex-jetcas2025.pdf) | A Flexible Template for Edge Generative AI with High-Accuracy Accelerated Softmax & GELU | Co-design of nonlinear approximations, systolic MatMul, and dedicated Softmax/GELU hardware | <https://arxiv.org/abs/2412.06321> |
+| [edgellm-tcasi2025.pdf](edgellm-tcasi2025.pdf) | EdgeLLM: A Highly Efficient CPU-FPGA Heterogeneous Edge Accelerator for Large Language Models | Mixed-precision and structured-sparsity hardware paired with end-to-end compiler mapping | <https://arxiv.org/abs/2407.21325> |
+| [facil-hpca2025.pdf](facil-hpca2025.pdf) | FACIL: Flexible DRAM Address Mapping for SoC-PIM Cooperative On-device LLM Inference | Memory-controller address mappings paired with software allocation and tensor layout | <https://99dhl.github.io/assets/pdf/hpca25_facil.pdf> |
+| [helios-arxiv2026.pdf](helios-arxiv2026.pdf) | Hardware-Software Co-design for 3D-DRAM-based LLM Serving Accelerator (Helios) | Distributed NMP execution and communication paired with spatially aware KV-cache allocation | <https://arxiv.org/abs/2603.04797> |
 
 | File | Paper | Relevance | Source |
 |---|---|---|---|
