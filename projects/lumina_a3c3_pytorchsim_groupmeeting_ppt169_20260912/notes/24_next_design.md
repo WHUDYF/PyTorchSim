@@ -1,0 +1,1 @@
+第一阶段选 GEMM、attention、conv，暴露最小映射旋钮。随后比较 H-only 与 I 加 H，并解释每个结果。

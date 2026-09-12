@@ -1,0 +1,1 @@
+短片段适合预筛，完整 workload 才能确认跨 kernel 影响。microbenchmark 不能直接当最终答案。

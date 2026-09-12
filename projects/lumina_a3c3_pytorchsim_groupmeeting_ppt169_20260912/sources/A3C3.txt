@@ -1,0 +1,1445 @@
+               A3C3: AI Algorithm and Accelerator Co-design,
+                           Co-search, and Co-generation
+
+                                       Selin Yildirim1      Yingbing Huang2
+                                       Deming Chen22026                                   1Siebel School of Computing and Data Science
+Jun                      2DepartmentUniversityof Electricalof IllinoisandUrbana-ChampaignComputer Engineering
+24                           {seliny2, yh21, dchen}@illinois.edu
+
+                                             February 2026
+
+
+               1  Abstract[cs.AR]
+                  We present a holistic methodology for artificial intelligence algorithm and accel-
+                            erator co-design, co-search, and co-generation (A3C3), which jointly optimizes
+                           neural network architectures and their hardware implementations to address the
+                                inefficiencies of traditional top-down AI system design flows. Conventional AI
+                         deployment often treats model design and hardware mapping as separate stages:
+                       an algorithm is first developed for accuracy, and only afterward adapted to meet
+                              latency, throughput, energy, or resource constraints. This separation can lead
+                            to suboptimal systems, particularly as modern AI workloads become increas-
+                             ingly heterogeneous, memory-intensive, and platform-dependent. A3C3 instead
+                           parameterizes both algorithmic and accelerator design spaces and searches them
+                                 jointly, enabling the automatic generation of model–accelerator pairs that better
+                          balance accuracy, latency, throughput, energy efficiency, and hardware utiliza-
+                               tion.
+                  A key component of this methodology is differentiable architecture and im-arXiv:2606.20869v2                          plementation co-search, which formulates design decisions as continuous, opti-
+                          mizable variables rather than relying solely on discrete manual exploration. In
+                              this setting, neural architecture choices, hardware mapping strategies, and im-
+                          plementation parameters can be optimized using gradient-based methods under
+                         hardware-aware objectives. For example, the efficient differentiable deep neu-
+                                ral network architecture and implementation co-search framework [15] demon-
+                              strates how model structures and deployment configurations can be jointly op-
+                           timized across graphics processing units (GPUs) and field-programmable gate
+                            arrays (FPGAs). By incorporating hardware cost models directly into the search
+
+
+
+                                                           1
+process, differentiable co-search enables more systematic exploration of large de-
+sign spaces and produces implementations that are not only accurate but also
+efficient on the target platform.
+   Beyond conventional neural network acceleration, this chapter also exam-
+ines how A3C3 principles extend to large language models (LLMs), where infer-
+ence efficiency is increasingly limited by autoregressive decoding and memory
+movement. Speculative decoding [14, 4] accelerates LLM generation by using
+a lightweight and auxiliary prediction mechanism (i.e, draft model) to propose
+multiple future tokens, which are then verified by the larger target model in
+parallel. This approach increases decoding speed while preserving the output
+distribution of the target model via rejection sampling, where draft tokens are
+accepted only when they are statistically consistent with the target model and
+otherwise resampled from the target distribution. Medusa [3] further advances
+this direction by attaching multiple decoding heads to the target model, allowing
+it to generate and verify candidate sequences more efficiently without requiring
+a separate draft model. These speculative decoding architectures illustrate how
+algorithmic restructuring and hardware-conscious execution can jointly reduce
+latency and improve throughput for large-scale generative AI inference.
+   The chapter demonstrates A3C3 through multiple representative systems,
+including SkyNet [32] for real-time edge vision, differentiable architecture and
+implementation co-search [15] for GPU and FPGA deployment, speculative de-
+coding methods for LLM acceleration [14, 4, 3], and dynamic Key-Value (KV)
+cache compression through SnapKV [16]. Across diverse platforms and applica-
+tion domains, these systems show substantial gains in performance, efficiency,
+and scalability. Collectively, this body of work establishes A3C3 as an effective
+and extensible foundation for future adaptive, heterogeneous, and large-scale
+AI systems, positioning co-design as a central paradigm for next-generation AI
+and hardware innovation.
+
+2  Introduction
+
+The success of deep learning over the past decade has fundamentally reshaped
+modern computing systems. Convolutional neural networks (CNNs) [20], recur-
+rent neural networks (RNNs) [23] and Transformer [26] models have achieved
+unprecedented accuracy across vision, speech, natural language processing and
+decision-making tasks. However, these algorithmic advances have been accom-
+panied by dramatic increases in computational complexity, memory footprint,
+and energy consumption. As a result, deploying state-of-the-art models on real
+hardware, particularly under tight latency, power, and cost constraints, has
+become increasingly challenging.
+   Traditional AI system development largely follows a top-down design paradigm.
+In this workflow, neural network architectures are first designed and trained
+with minimal consideration of hardware constraints, often prioritizing accuracy
+on standardized datasets. Only after the model has been finalized is it mapped
+onto a target hardware platform, such as a GPU, FPGA, or Application-Specific
+
+
+
+                                  2
+Integrated Circuit (ASIC) accelerator. While this separation of concerns sim-
+plifies early-stage algorithm development,  it frequently leads to sub-optimal
+system-level outcomes, especially in resource-constrained or real-time settings.
+   Several fundamental limitations characterize this top-down approach. First,
+software-level metrics (accuracy, robustness, generalization) and hardware-level
+metrics (latency, throughput, energy, silicon area) are optimized independently,
+making it difficult to reason about trade-offs across domains. Second, the choice
+of a reference neural architecture at the outset is often guided by empirical ex-
+perience or benchmark popularity rather than by hardware efficiency. Third,
+deployment typically requires long and iterative cycles of manual tuning, in-
+volving quantization [13], pruning, tiling, and scheduling, which are both time-
+consuming and error-prone. These issues are particularly pronounced for em-
+bedded and edge platforms, where performance margins are narrow and design
+errors are costly.
+   To address these challenges, AI Algorithm and Accelerator Co-design, Co-
+search, and Co-generation is proposed as a fundamentally different methodol-
+ogy. Instead of treating neural architectures and hardware implementations as
+separate artifacts, A3C3 views them as a coupled design problem. As shown
+in Figure 1, the central idea is to jointly parameterize, explore, and optimize
+both the algorithmic and hardware design spaces, and to automatically generate
+matched model–accelerator pairs that meet application-specific requirements.
+   This chapter consolidates a series of research efforts that progressively de-
+velop, refine, and extend the A3C3 methodology. Beginning with early co-design
+concepts for FPGA-based CNN accelerators [9], the work evolves into scalable
+frameworks such as SkyNet [32] and EDD [15], and ultimately expand to address
+the emerging challenges of large language model (LLM) inference.  Together,
+these systems illustrate how co-design can serve as a unifying principle across
+diverse AI workloads and hardware platforms.
+
+3  The A3C3 Methodology
+
+A central challenge in deploying neural networks on resource-constrained hard-
+ware is the sheer complexity of the hardware design process itself. Tools such
+as high-level synthesis (HLS) [5, 21, 6, 29] compilers have attempted to bridge
+this gap by automatically translating algorithmic descriptions into hardware
+implementations. For instance, the hierarchical dataflow compiler for high-level
+synthesis (HIDA) [30] demonstrates that even the relatively narrow problem
+of dataflow optimization on FPGAs harbors a combinatorially explosive, inter-
+task-coupled design space, one where decisions around loop tiling, spatial par-
+allelization factors, on-chip buffer partitioning, and streaming channel sizing
+are tightly co-dependent. HIDA addresses this through a two-tier intermediate
+representation operating at both functional and structural abstraction layers,
+combined with a pattern-driven task fusion and intensity-aware parallelization
+optimizer, achieving up to 8.54x higher throughput over prior HLS tools while
+reducing design time from hundreds of engineering hours to under 10 minutes.
+
+
+
+                                  3
+            Figure 1: Proposed A3C3 Method in ICSICT 2018 [8]
+
+
+Yet HIDA, like all HLS-centric approaches, optimizes hardware implementation
+in isolation. It accepts a fixed neural architecture as input and asks only: how
+do we best map this to silicon? This framing, while powerful, leaves a deeper
+question unaddressed: what if the architecture itself is wrong for the hardware?
+This is precisely the gap that the A3C3 methodology is designed to close. A3C3
+is built on the premise that optimal AI systems cannot be obtained by optimiz-
+ing algorithms or hardware in isolation.
+
+3.1  Design Philosophy and Scope
+
+A3C3 is built on the premise that optimal AI systems cannot be obtained by
+optimizing algorithms or hardware in isolation. Instead, system-level optimal-
+ity emerges only when the interactions between neural architectures, dataflows,
+memory hierarchies, and compute resources are explicitly modeled and opti-
+mized together. Accordingly, A3C3 defines a joint design space that spans:
+
+   • Algorithmic parameters: This includes layer types (e.g., 3 × 3 con-
+      volutions, 1 × 1 pointwise convolutions, depth-wise convolutions), kernel
+       sizes, channel widths, network depth, and quantization levels (e.g., 8-bit
+      weight/16-bit activation or 8-bit/8-bit configurations).
+
+   • Hardware parameters: This involves degrees of parallelism, loop tiling
+      factors, data reuse strategies, and memory partitioning.
+
+   • System-level objectives: Objectives go beyond accuracy to include la-
+      tency, throughput such as Giga Operations per Second (GOPS), energy
+     consumption, and utilization of FPGA resources such as Block Random
+
+
+
+                                  4
+     Access Memory (BRAM), Dedicated Silicon Blocks (DSB), Look-Up Ta-
+      bles (LUT). Accordingly, optimizations are guided by hard thresholds such
+      as speed (> 20 frames per second), power consumption (< 5 Watt), and
+     throughput (> 20 GOPS).
+
+The goal of A3C3 is to avoid the sub-optimality of traditional top-down AI sys-
+tem design, where a model is first developed for algorithmic accuracy and only
+later forced onto a hardware platform through compression, pruning, quanti-
+zation, or manual mapping. Such a sequential flow often produces hardware-
+unfriendly models whose computation patterns, memory access behavior, and
+resource requirements are poorly matched to the target accelerator. A3C3 in-
+stead treats the deep neural network (DNN) model and hardware accelerator
+as a coupled design pair. As shown in Figure 2, the model architecture and
+accelerator implementation are iteratively searched together, with each design
+iteration improving the overall solution quality. The dashed curve illustrates the
+progressive improvement obtained through co-search, while each icon represents
+a candidate model-accelerator pair evaluated under application-level quality-of-
+service (QoS) and quality-of-result (QoR) constraints. Rather than optimizing
+the model or hardware in isolation, A3C3 seeks a co-design solution in which the
+algorithm is hardware-friendly by construction and the accelerator is specialized
+to the model’s computational structure.
+
+
+
+
+
+Figure 2: Iterative co-search of DNN models and hardware accelerators in A3C3
+design. Each iteration evaluates a candidate model-accelerator pair, progres-
+sively improving solution quality under QoS and QoR constraints.
+
+
+3.2  Bundles as Unified Building Blocks
+
+The foundational abstraction within the A3C3 methodology is the bundle. Un-
+like traditional design paradigms that treat neural network layers and hardware
+kernels as disparate entities, a bundle serves as a unified building block that en-
+capsulates both a sequence of mathematical operations and their physical hard-
+ware implementation.  Structurally, a bundle defines a specific computational
+subgraph, as shown in Figure 3a. For instance, a 3 × 3 convolution followed by
+a 1 × 1 pointwise convolution and a depthwise activation, coupled with a set of
+
+
+                                  5
+                                                       (b) Stackable bundles in A3C3
+       (a) Role of a Bundle in A3C3 design           design
+
+           Figure 3: Illustration of bundle usage in A3C3 design.
+
+
+deterministic hardware parameters; such as loop tiling factors, parallelism de-
+grees, and bit-widths. This dual-representation ensures that every algorithmic
+choice is grounded in physical reality. The utility of the bundle abstraction is
+three-fold:
+
+   1. Joint Space Dimensionality Reduction: By grouping frequently co-
+      occurring operations (e.g., Conv 3 × 3 →Depth-Wise Conv 3 × 3 →Conv
+     1 × 1 →Activation) into a single manageable unit, bundles prune the
+      search space.  This prevents the combinatorial explosion that typically
+     occurs when exploring neural architectures and hardware configurations
+      independently.
+
+   2. Hardware-Software Co-binding: Bundles enforce a strict mapping be-
+     tween software layers and hardware intellectual property (IP) instances.
+     This ensures that architectural decisions, such as a change in quantiza-
+      tion level, are immediately and accurately reflected in hardware metrics
+       like logic utilization and memory bandwidth. This tight coupling elim-
+      inates the risk of generating high-accuracy models that are functionally
+     undeployable due to hardware bottlenecks.
+
+   3. Modular Scalability: Bundles enable a ”lego-like” composition of AI
+     systems, as demonstrated in Figure 3b. Complex, high-performance net-
+     works such as SkyNet [32] can be rapidly constructed by stacking and
+      configuring these pre-evaluated, hardware-verified components. This mod-
+      ularity facilitates the reuse of optimized Intellectual Property (IP) cores
+      across different network topologies, significantly accelerating the design
+      cycle from concept to deployment.
+
+
+
+
+                                  6
+3.3  Co-search and Co-generation Flow
+
+The A3C3 workflow is designed to overcome the limitations of sequential design
+by treating the neural architecture and the hardware accelerator as a single,
+coupled entity. This process moves beyond simple heuristic tuning, employing a
+structured three-stage pipeline that automates the transition from abstract algo-
+rithmic requirements to physical hardware implementation. The A3C3 workflow
+proceeds in the following three stages.
+
+
+3.3.1  Stage 1: Multi-Objective Bundle Evaluation
+
+The flow begins with the population of a bundle library.  Unlike traditional
+libraries that only list software kernels, A3C3 bundles are pre-characterized for
+specific target hardware (e.g., FPGAs, GPUs, or ASICs). During this stage,
+each bundle is evaluated across multiple dimensions:
+
+   • Algorithmic Efficacy: Measured via accuracy (e.g, Intersection over
+     Union (IoU)) on a validation subset for image object detection.
+
+   • Hardware Efficiency: Measured via cycles per iteration, GOPS, power
+     consumption etc.
+
+   • Resource Footprint: Quantifying the utilization of physical units such
+      as DSPs, BRAMs, and LUTs.
+
+By plotting these metrics, the system generates a Pareto-optimal frontier, allow-
+ing the co-search engine to discard sub-optimal ”hardware-unfriendly” blocks
+before the global search begins.
+
+
+3.3.2  Stage 2: Joint Search Space Exploration
+
+Once the library is established, the methodology enters the joint exploration
+phase.  This stage utilizes a search engine, often based on evolutionary al-
+gorithms, reinforcement learning, or gradient-based methods, to navigate a
+high-dimensional design space.  The search is governed by a joint objective
+function, which mathematically represents the trade-offs between competing re-
+quirements. Specifically, it navigates a high-dimensional design space where the
+algorithm (A) and the implementation (I) are interdependent variables and are
+explored simultaneously. For example, the search might decide to increase the
+depth of the network on the algorithm side while simultaneously increasing the
+loop-unrolling factor, parallelism level, or tiling configuration on the accelerator
+side to ensure that the latency constraint is still satisfied.
+  A representative example of this process is the efficient differentiable DNN
+architecture and implementation co-search framework (EDD) [15], which for-
+mulates the joint search problem over a fused design space {A, I}. In EDD, the
+architecture space includes candidate neural operations within each DNN block,
+while the implementation space includes hardware-dependent choices such as
+quantization precision and platform-specific mapping parameters. Rather than
+
+
+                                  7
+selecting an architecture first and optimizing its hardware implementation after-
+ward, EDD relaxes both types of discrete decisions into differentiable variables
+and optimizes them jointly with a hardware-aware loss. The objective accounts
+for task accuracy, performance metrics such as latency, throughput, energy, or
+model size, and resource constraints imposed by the target platform. This il-
+lustrates the central idea of Stage 2: the search engine does not merely find the
+most accurate model or the fastest accelerator in isolation, but instead identifies
+a feasible algorithm-implementation pair whose combined behavior satisfies the
+target QoS and QoR requirements.
+
+
+3.3.3  Stage 3: Automated Co-generation and Synthesis
+
+The final stage of the flow is the automated translation of the optimal design
+pair into deployable artifacts. This involves a bifurcated generation process:
+
+   1. Software Generation: The flow generates the final model topology and
+      trained weights. It often includes hardware-aware refinement steps, such
+      as fine-grained quantization or channel shuffling and expansion, to maxi-
+     mize the efficiency of the underlying hardware dataflow.
+
+   2. Hardware Synthesis: The flow generates synthesizable hardware de-
+      scription code (e.g., Verilog or High-Level-Synthesis-based C++).  This
+      includes the configuration of memory hierarchies, communication, and
+      processing elements (PEs) specifically tailored to the data reuse patterns
+      of the selected neural architecture.
+
+By automating this co-generation, A3C3 ensures that the final AI system is not
+just a software model running on generic hardware, but a bespoke, co-designed
+pair where the hardware is specialized for the algorithm, and the algorithm is
+tuned for the hardware’s physical constraints. Thus, the output of A3C3 process
+is a fully specified AI system which includes both the trained model and the
+hardware configuration required to execute it efficiently.
+   The following sections instantiate the A3C3 paradigm across progressively
+broader AI system settings, beginning with edge vision and extending toward
+differentiable co-search and large-scale language-model inference. SkyNet first
+demonstrates how algorithm-accelerator co-design can produce compact, hardware-
+friendly convolutional networks for real-time UAV object detection, where small-
+object detection accuracy must be preserved under strict power, latency, and
+resource constraints. EDD then generalizes this idea by replacing coarse heuris-
+tic exploration with differentiable architecture and implementation co-search,
+allowing neural operations, quantization choices, and hardware mapping pa-
+rameters to be optimized within a unified design space. The chapter then shifts
+to large language models, where the dominant bottlenecks are no longer only
+convolutional compute or embedded resource usage, but autoregressive decod-
+ing latency, memory bandwidth, and KV-cache growth. Medusa addresses this
+regime by co-designing speculative decoding structures with GPU execution
+characteristics, while SnapKV targets long-context inference by dynamically
+
+
+                                  8
+compressing the KV cache based on input-dependent attention behavior. To-
+gether, these case studies show that A3C3 is not tied to a single model family or
+accelerator type; rather, it provides a general methodology for identifying the
+dominant system bottleneck and jointly adapting the algorithm, memory be-
+havior, and hardware implementation to satisfy application-level QoS and QoR
+requirements.
+
+4  SkyNet: Co-designed Edge Vision Systems
+
+
+
+
+
+Figure 4: The A3C3 workflow proposed by SkyNet [32], a hardware-efficient
+method for object detection and tracking on embedded systems.
+
+
+4.1  Application Context
+
+SkyNet [32] is developed as a concrete instantiation of the A3C3 methodology
+for real-time object detection on unmanned aerial vehicle (UAV) platforms. This
+domain is characterized by stringent constraints on power, latency, and weight,
+often requiring high-frame-rate processing on embedded FPGAs or GPUs. The
+target application, motivated by a system design competition [28], involves de-
+tecting objects across 95 categories. A significant challenge is the scale of the
+targets: many objects (31% of the targets) occupy less than 1% of the total
+image area, while 91% of the targets occupy only 9% of the area. This neces-
+sitating a network that maintains high spatial resolution without incurring the
+computational cost of traditional heavy backbones.
+
+4.2  Architecture and Accelerator Co-design
+
+The SkyNet neural architecture consists of 13 convolutional layers with approx-
+imately 0.4 million parameters. Rather than starting from an existing backbone
+like MobileNet [12] or ResNet [10], the network structure is generated through a
+multi-stage A3C3-based co-search. Figure 4 illustrates the three-stage SkyNet
+design flow, which applies A3C3 to jointly construct a compact DNN and a
+hardware-efficient accelerator for edge vision. In Stage 1, a library of candidate
+
+
+                                  9
+DNN building blocks, or bundles,  is constructed from convolutional, depth-
+wise convolutional, pointwise convolutional, batch-normalization, and activation
+components. These bundles are evaluated directly on the target devices, such
+as the TX2 GPU and Ultra96 FPGA, to characterize their accuracy-latency
+trade-offs and identify Pareto-efficient candidates. In Stage 2, the selected bun-
+dle is stacked to form the backbone network, and Particle Swarm Optimization
+(PSO) is used to explore the architecture in two dimensions: channel expansion
+in convolution layers and pooling-layer placement. This search is critical be-
+cause channel expansion controls representational capacity and hardware cost,
+while pooling placement determines how much spatial resolution is preserved for
+small-object detection. In Stage 3, additional hardware-aware DNN features,
+including feature-map bypass, channel shuffle, and hardware-efficient activation
+functions, are introduced to improve information flow and reduce implementa-
+tion overhead. Overall, the figure shows how SkyNet avoids choosing a model
+architecture independently from the deployment platform; instead, it evaluates
+candidate neural components on real hardware, searches the network structure
+under device constraints, and then adds accelerator-friendly architectural fea-
+tures to produce a model-hardware pair optimized for both detection quality
+and edge inference efficiency.
+
+
+4.2.1  Two-Dimension Joint Exploration
+
+The architecture search is conducted using Particle Swarm Optimization (PSO),
+exploring two critical dimensions of the design space:
+
+   • Channel Expansion: The search engine determines the optimal number
+      of filters for each layer, balancing the richness of feature extraction against
+     the memory bandwidth required for feature maps.
+
+   • Pooling Positions: To preserve spatial information for small object de-
+      tection [22], the placement of pooling layers is optimized. The resulting
+      architecture utilizes only three pooling layers, maintaining a relatively
+      high-resolution feature map (40 × 24) deep into the network.
+
+
+4.2.2  Hardware-Software Features
+
+To maximize throughput on FPGA and GPU platforms, SkyNet incorporates
+several specialized features:
+
+   • Bundle-based Layers: The design utilizes a combination of bundles
+      (3 × 3 Depthwise Convolutions followed by 1 × 1 Pointwise Convolutions)
+      to reduce floating point operations (FLOPs) while maintaining a large
+      receptive field.
+
+   • Feature Map (FM) Bypass and Channel Shuffle: Inspired by Shuf-
+      fleNet [31], these features allow for better information flow across chan-
+      nels without increasing the number of MAC (Multiply-Accumulate) oper-
+      ations.
+
+
+                                  10
+   • Re-organized Activation: SkyNet employs hardware-efficient activa-
+      tion functions that avoid complex transcendental computations, facilitat-
+      ing faster implementation in fixed-point FPGA logic.
+
+
+4.2.3 FPGA Accelerator Implementation
+
+On the hardware side, the SkyNet accelerator on the Ultra96 FPGA utilizes a
+highly optimized dataflow. Key strategies include:
+
+   • Tiling and Data Reuse: Large feature maps are partitioned into tiles
+      to fit within local BRAM, maximizing on-chip data reuse and minimizing
+      energy-intensive off-chip DDR accesses.
+
+   • Pipelined PEs: Processing Elements (PEs) are configured with specific
+      parallelism factors (e.g., searching for optimal factors like 16 or 32) to
+     match the throughput of the depthwise and pointwise layers.
+
+   • Quantization: The system employs an 8-bit weight and 16-bit activa-
+      tion (or 8-bit/8-bit) scheme, which provides a 4× reduction in memory
+      footprint compared to single-precision floating point with negligible loss
+      in Intersection over Union accuracy.
+
+4.3  Experimental Results
+
+Evaluated on the DAC-SDC hidden test set, SkyNet achieved the highest overall
+score in each of the GPU and FPGA tracks. On the Ultra96 FPGA, SkyNet
+reached 0.716 IoU and 25.05 FPS at 7.26 Watt, improving IoU by 0.101 absolute
+points over the next-best 2019 FPGA entry while achieving the highest total
+score. On the TX2 embedded GPU, SkyNet delivered 0.731 IoU and 67.33
+FPS, outperforming other GPU-track competitors in accuracy, throughput, and
+total score.  Beyond object detection, SkyNet is evaluated on the GOT-10k
+object tracking benchmark by replacing ResNet-50 backbones in SiamRPN++
+and SiamMask. With SkyNet, SiamRPN++ achieved nearly identical tracking
+quality to ResNet-50 while running 1.6x faster, and SiamMask achieved better
+tracking metrics with a 1.7x speedup, indicating that the co-designed backbone
+can generalize beyond detection to tracking workloads.
+
+4.4  Future Directions
+
+Despite its success, the original SkyNet design relies on a relatively coarse-
+grained co-search strategy, where bundle selection and architecture search are
+somewhat decoupled. This observation highlights the potential for unified and
+differentiable co-design, where hardware implementation parameters and neural
+architecture are optimized in a single gradient-based pass. This evolution from
+heuristic-based search (e.g., Particle Swarm Optimization) to differentiable AI
+model and hardware co-search forms the basis for subsequent methodologies like
+efficient differentiable deep neural networks (EDD).
+
+
+
+                                  11
+5  EDD: Efficient Differentiable Architecture and
+   Implementation Co-search
+
+5.1  Motivation: Moving Beyond Greedy Search
+
+While initial co-design efforts like SkyNet successfully demonstrated the value of
+joint optimization, they relied on a coarse-grained, three-stage process involv-
+ing heuristic bundle selection and Particle Swarm Optimization (PSO). Such
+approaches are often ”greedy”, exploring only a limited portion of the combina-
+torial design space. The EDD framework is introduced to solve this by forming
+a merged and holistic design space where both the neural architecture and the
+physical hardware implementation are formulated as differentiable variables,
+solvable via gradient descent.
+
+5.2  Merged Differentiable Design Space
+
+The core innovation of EDD is the unification of the Neural Architecture Search
+Space {A} and the Implementation Search Space {I}.
+
+   1. The Co-design Objective Function: In traditional neural architec-
+      ture search (NAS) [35, 2, 25, 12], the implementation I0 is fixed, and the
+     optimizer only seeks to minimize accuracy loss:
+
+                 min : L = Accloss(A) + α · Perfloss(I0)                (1)
+
+   EDD reformulates this into a joint optimization problem where implemen-
+      tation I is also a variable:
+
+          min : L = Accloss(A, I) · Perfloss(I) + β · CRES(I)−RESub       (2)
+               A,I
+
+     Where,
+
+       • Accloss(A, I): Captures accuracy degradation as a function of both
+          the model topology (A) and hardware-related effects (I), such as
+          quantization bit-widths,
+       • Perfloss(I): Models hardware performance metrics (latency or through-
+           put),
+       • β · CRES(I)−RESub: A penalty term that enforces hardware resource
+          budgets (e.g., BRAM, DSP, LUTs) by penalizing designs that exceed
+          the device’s physical upper bound RESub.
+
+   2. Differentiable Parameterization: EDD employs a three-stage differ-
+      entiable flow to navigate this space:
+
+       • Architectural Parameters (θ): Each block in the deep neural net-
+         work (DNN) is represented as a weighted combination of candidate
+          operations (e.g., 3 × 3 or 5 × 5 depthwise convolutions, 1 × 1 convo-
+            lutions). The sampling parameters θ are optimized to select the best
+           operation.
+
+
+                                  12
+       • Implementation Parameters (ϕ): These variables govern hardware-
+            specific configurations. For FPGAs, these include parallel factors and
+          loop tiling factors; for GPUs, these include parameters like batch size.
+       • Quantization variables (q): EDD treats the selection of quanti-
+           zation levels (e.g., 8-bit vs. 16-bit) as a sampling process within the
+            differentiable flow, allowing the system to learn the optimal precision
+            for each layer.
+
+
+
+
+
+Figure 5: EDD [15], a four-staged differentiable NAS and Implementation
+Search flow.
+
+Figure 5 illustrates EDD’s joint differentiable search space for neural archi-
+tecture search and hardware implementation search. On the left, the NAS
+component selects, for each DNN block, one candidate operation from a set of
+MBConv-style choices using learnable architecture parameters θ; each candi-
+date operation specifies architectural features such as kernel size and channel
+expansion/shrink ratio. On the right, the implementation-search component
+assigns hardware-dependent variables to each operation, especially quantization
+precision through learnable parameters ϕ, together with platform-specific vari-
+ables such as FPGA parallelism and loop tiling or GPU batch size. The bottom
+row shows how EDD propagates these choices through a four-stage formulation:
+first estimating performance and resource cost for each operation under each
+quantization (q) setting, then aggregating over quantization choices, then ag-
+gregating over candidate operations within each block, and finally deriving the
+full DNN-level performance loss and resource usage. These differentiable esti-
+mates are inserted into the EDD objective, allowing architecture variables and
+implementation variables to be optimized simultaneously rather than treating
+hardware cost as a fixed post-search constraint.
+
+5.3  System Evaluation and Results
+
+The effectiveness of EDD is demonstrated across heterogeneous platforms, show-
+ing its ability to produce ”friendly pairs” that outperform manually tuned or
+
+
+                                  13
+decoupled designs.
+
+   • GPU Results (EDD-Net-1): Targeting GPU platforms, EDD-Net-1 is
+     searched to minimize latency while maintaining accuracy. It consistently
+     outperforms state-of-the-art NAS works, achieving latency reductions of
+     1.4× to 2.0×.
+
+   • Recursive FPGA Results (EDD-Net-2): Evaluated using the CHaiDNN
+      [27] framework, this configuration achieves the shortest latency recorded
+     on FPGA, with speedups ranging from 1.1× to 1.53×.
+
+   • Pipelined FPGA Results (EDD-Net-3): When compared against
+     DNNBuilder [33], EDD-Net-3 achieves 1.45× higher throughput while si-
+     multaneously delivering higher accuracy.
+
+5.4  Conclusion of the EDD Framework
+
+The EDD methodology proves that systematic, differentiable co-design is su-
+perior to iterative, top-down approaches. By solving {A, I} simultaneously us-
+ing gradient descent, it eliminates the tedious engineering effort of balancing
+software and hardware metrics manually, providing a scalable path for future
+adaptive and evolvable AI systems.
+
+6  Hardware-Aware Co-design for Large Language
+   Models
+
+6.1  Challenges in LLM Inference
+
+The rapid scaling of large language models (LLMs) has fundamentally shifted
+the bottlenecks of AI system design. As model sizes grow exponentially, often
+increasing by an order of magnitude each year, both the number of parameters
+and the size of intermediate states have outpaced the improvements offered
+by traditional hardware scaling.  Contemporary large language models, such
+as OpenAI’s GPT-5 [24], comprise hundreds of billions to several trillions of
+parameters, placing unprecedented pressure on memory systems.
+   Beyond model size, the auto-regressive decoding paradigm proposed in Trans-
+former architecture further exacerbates inference inefficiency. During inference,
+each token generation requires a full pass of the model weights from High-
+Bandwidth Memory (HBM) to the compute units (SRAM/ALUs). The atten-
+tion [26] mechanism used by Transformer models cause per-token latency and
+memory footprint to quadratically increase with respect to the sequence length.
+As a remedy to this problem, Key-Value (KV) cache was proposed to store past
+token KV states, which grow linearly with respect to the sequence length. Al-
+though caching helps avoid redundant computations, as sequence lengths and
+
+
+
+
+
+                                  14
+batch sizes grow, exhausted HBM severely degrades the throughput of the sys-
+tem. Consequently, LLM inference becomes predominantly memory-bandwidth-
+bound rather than compute-bound, leading to severe under-utilization of mod-
+ern accelerators’ arithmetic units.
+   These characteristics make LLM inference difficult to parallelize and  ill-
+suited to conventional acceleration techniques that focus primarily on increasing
+raw compute throughput. Applications requiring low-latency responses, such as
+interactive assistants and real-time decision systems, are particularly impacted.
+Addressing these challenges therefore requires hardware-aware algorithmic in-
+novations that rethink the decoding process itself, rather than incremental op-
+timizations to existing execution pipelines.
+
+6.2  Medusa: Fast Decoding via A3C3-Inspired Co-design
+
+Medusa addresses these inefficiencies by applying the A3C3 philosophy:  co-
+designing the algorithmic decoding structure to match the parallel processing
+capabilities of modern accelerators. Instead of generating a single next token
+(t + 1) per forward pass, Medusa predicts multiple future tokens (t + 1, t + 2,
+..., t + k −1, t + k) simultaneously, where k is the number of decoding heads,
+as shown in Figure 6a.
+
+
+
+
+
+(a) Medusa’s parallel speculative de-
+coding heads. Each head predicts a to-        (b) Tree-based  attention mask  pro-
+ken at its corresponding future position        posed in Medusa for ensuring each to-
+given the base model’s hidden states.        ken only attends its predecessors.
+
+            Figure 6: Illustration of Medusa [3] in A3C3 design.
+
+
+
+6.2.1  Parallel Speculative Decoding Heads and Medusa Tree Atten-
+       tion
+
+Medusa augments the original LLM backbone with multiple Medusa heads.
+Each head is a simple Feed-Forward Network (FFN) with a single residual con-
+nection, predicting the distribution of the k-th future token. To handle the
+
+
+
+                                  15
+inherent uncertainty of predicting multiple steps ahead, Medusa adopts a tree-
+based speculative decoding strategy:
+
+   • Candidate Token Generation: Each Medusa head proposes the top-
+   K most likely tokens for its respective position.  These candidates are
+     combined to form a set of speculative paths represented on a tree structure.
+
+   • Efficient Tree Attention: To verify these paths in a single forward
+      pass, Medusa uses a specialized attention mask. This mask ensures that a
+     candidate token at position t + 2 only attends to its valid predecessors in
+     the tree (the tokens at t and t + 1) within the set of continuations (paths)
+       it belongs to. This is illustrated in Figure 6b.
+
+   • Token Acceptance Criteria: To determine the validity of candidate
+      sequences, a typical acceptance criterion based on the model’s predictive
+      distribution is employed.  This approach uses the original model’s (p)
+      probability as a natural gauge for token quality, establishing a dynamic
+      threshold for acceptance.
+      Specifically, given a context x = (x1, x2, . . . , xn) and a candidate contin-
+     uation (xn+1, xn+2, . . . , xn+k), the candidate token xn+j is accepted if its
+     target-model probability exceeds an entropy-adaptive threshold:
+
+       p(xn+j | x1, . . . , xn+j−1) > min (ϵ, δ exp (−H (p(· | x1, . . . , xn+j−1)))) ,
+                                                                              (3)
+
+     where:
+
+      – 1 ≤j ≤k.
+      – p(· | x1, . . . , xn+j−1) denotes the target model’s next-token distribu-
+           tion over the vocabulary V.
+      – p(xn+j  | x1, . . . , xn+j−1) denotes the target-model probability as-
+          signed to the candidate token xn+j.
+      – H(·) denotes the Shannon entropy of the target next-token distribu-
+            tion, defined as
+
+         H(P) = − X pi log pi,      pi = P(vi) = p(vi | x1, . . . , xn+j−1),
+                        vi∈V
+                                                                              (4)
+
+         where vi is the i-th vocabulary token and pi is its probability under
+          the target distribution P.
+      – ϵ denotes the hard cap on the acceptance threshold, preventing the
+          threshold from exceeding a fixed maximum value.
+      – δ is a scaling factor for the entropy-dependent threshold.
+      – δ exp(−H(P)) defines the entropy-adaptive component of the thresh-
+            old: low-entropy distributions yield a stricter threshold, while high-
+          entropy distributions yield a lower threshold and allow more diverse
+          candidate tokens to be accepted.
+
+
+                                  16
+    The final sequence for the current decoding step is determined by selecting
+     the longest accepted prefix across all evaluated continuations.
+
+
+6.2.2  Training Methodology: Medusa-1 and Medusa-2
+
+The co-search for the optimal Medusa configuration involves two distinct train-
+ing regimes:
+
+   1. Medusa-1 (Parameter-Efficient): Only the Medusa heads are trained
+     while the backbone remains frozen. This uses a self-distillation [11] loss,
+     where the Medusa heads are trained to predict the original model’s out-
+     put distribution. This allows the system to gain speedups with minimal
+      training overhead.
+
+   2. Medusa-2 (Joint Co-optimization): Both the backbone and the heads
+      are fine-tuned together. This enhances the ”predictability” of the back-
+     bone for the heads, yielding higher acceptance rates of speculative tokens
+     and, consequently, higher effective parallelism.
+
+The training objective uses a cross-entropy loss summed across all k heads:
+L = PKk=1 λkLk, where λk is a weighting factor for the k-th future position.
+
+6.2.3  Experimental Results and Performance Analysis
+
+Medusa is evaluated across a range of model sizes and deployment settings to
+assess its effectiveness and scalability. Experiments were conducted using two
+training strategies: Medusa-1, which fine-tunes only the speculative decoding
+heads, and Medusa-2, which jointly fine-tunes both the Medusa heads and the
+LLM backbone.  Across benchmarks, Medusa-2 consistently achieved higher
+speedups, demonstrating the benefits of end-to-end co-optimization.
+  On Vicuna-7B and Vicuna-13B [17] models, Medusa achieved substantial
+reductions in decoding latency compared to baseline auto-regressive inference.
+Medusa delivered up to 3.6× speedup while maintaining output quality compa-
+rable to the baseline. With Vicuna-7B, Medusa-1 performed 2.2x acceleration
+while Medusa-2 performed 2.8x. Further evaluations across multiple LLM archi-
+tectures show that Medusa’s performance gains scale with model size, as larger
+models suffer more acutely from memory-bound decoding and therefore benefit
+more from speculative parallelism.
+   Hardware-level analysis revealed that Medusa significantly improves oper-
+ational intensity during inference. By verifying multiple candidate tokens per
+forward pass, Medusa increases the ratio of useful floating-point operations to
+memory accesses, leading to better utilization of accelerator compute resources.
+In standard decoding, the GPU is underutilized because it waits for data trans-
+fer from memory. In Medusa, the target model verifies a tree-structured set of
+candidate tokens using parallel tree attention. Although the tree may contain
+many candidate nodes, e.g., 64 total candidates, its sequential verification cost is
+primarily determined by the tree depth, i.e., the number of token levels, rather
+
+
+
+                                  17
+than the tree width, i.e., the number of alternatives per level. Thus, a wide
+candidate tree can be processed in roughly the time required to process only
+a few sequential token positions, corresponding to the number of tree levels.
+Since the memory access cost for the backbone weights is the same, the ”useful
+work” per byte transferred increases significantly. On an NVIDIA A100 GPU,
+this shift moves LLM inference closer to a compute-bound regime, addressing a
+fundamental inefficiency of conventional decoding pipelines.
+  By co-designing the speculative decoding algorithm with hardware execution
+characteristics, Medusa substantially increases effective parallelism while pre-
+serving the correctness guarantees of auto-regressive generation. Importantly,
+this approach mitigates memory bandwidth pressure by amortizing the cost
+of model weight and KV cache accesses across multiple verified tokens.  As
+a result, Medusa improves both compute utilization and end-to-end inference
+latency without decreasing the generation quality.
+
+
+6.2.4  Broader Impact and Framework Adoption
+
+Medusa has been integrated into NVIDIA’s production inference stack through
+TensorRT-LLM [19], demonstrating its practical viability on modern accelerator
+platforms. NVIDIA highlights Medusa as a low-latency speculative decoding
+method for Llama 3.1 serving on HGX H200 [18] systems, where eight H200
+GPUs are connected through NVLink Switch to provide high-bandwidth multi-
+GPU execution, as reported in [7]. Instead of relying on a separate draft model,
+Medusa augments the original model with additional decoding heads that pre-
+dict multiple future-token candidates, which are then validated in parallel by
+the base model using tree-based attention. This design reduces autoregressive
+bottlenecks while avoiding the deployment complexity and distribution mis-
+match of a separate drafter. In the reported TensorRT-LLM setup by NVIDIA,
+Medusa improves Llama 3.1 70B throughput from 184 to 268 tokens/s/user and
+Llama 3.1 405B throughput from 56 to 108 tokens/s/user, corresponding to over
+1.5× and over 1.9× speedups, respectively, with bitwise-identical accuracy to
+the base model under their evaluation setting. These results show that Medusa
+is not only an algorithmic acceleration technique, but also a hardware-aware in-
+ference optimization that can exploit high-bandwidth GPU systems and mature
+serving frameworks to deliver meaningful latency reductions in large-scale LLM
+deployment.
+
+6.3  SnapKV: KV Cache Compression via A3C3 Co-design
+
+As large language models are increasingly deployed on long-context tasks, infer-
+ence efficiency is further constrained by the rapid growth of the key–value (KV)
+cache. During auto-regressive decoding, KV pairs for all past tokens must be
+stored and repeatedly accessed by the attention mechanism. For long prompts
+and extended generations, this cache can consume tens of gigabytes of memory,
+significantly increasing hardware requirements and limiting scalability.
+
+
+
+
+                                  18
+   More critically, per-token decoding latency typically increases with prompt
+length, because each new token attends over all previously cached keys and val-
+ues. As the KV cache grows, inference becomes increasingly memory-bandwidth
+bound, especially for long-document question answering (QA), multi-turn con-
+versations [34], and retrieval-augmented workloads with large effective context.
+While prior KV cache compression methods reduce memory usage, they of-
+ten rely on static heuristics or fixed retention policies that do not adapt to
+input-specific attention dynamics, leading to accuracy degradation or limited
+effectiveness.
+   These challenges highlight the need for a dynamic, context-aware KV com-
+pression mechanism that can significantly reduce memory footprint and decod-
+ing latency without compromising model quality.
+
+
+6.3.1  SnapKV: Observation-Driven KV Cache Compression
+
+SnapKV [16] introduces a hardware-aware and fine-tuning-free KV cache com-
+pression framework based on a key empirical observation: during generation,
+the attention allocation patterns learned early in the prefill stage remain con-
+sistent across subsequent tokens. Specifically, SnapKV identifies an observation
+window, typically the most recent segment of the prompt, from which attention
+patterns can reliably predict the subset of prompt tokens that are most critical
+for generation.
+   The SnapKV workflow has two stages. First, it designates a short observa-
+tion window at the end of the prompt and computes attention from the tokens
+in this window to all earlier prompt tokens. Formally, let the prompt be x1:N,
+with an observation window of length W,
+
+       O = {N −W + 1, . . . , N},   P = {1, . . . , N −W}.
+
+For layer ℓand head h, let qℓ,ht  denote the query vector of observation token t,
+and let kℓ,hi  denote the key vector of prompt token i, where d is the per-head
+hidden dimension. SnapKV computes the attention from each observation token
+t ∈O to earlier prompt tokens i ∈P as
+
+                     D qℓ,ht   , kℓ,hi E 
+                        aℓ,ht,i = softmaxi∈P   √    .                                         d
+
+
+It then aggregates these attention weights across the observation window tokens
+to obtain an importance score for the prompt token:
+
+                               sℓ,hi = X aℓ,ht,i ,      i ∈P.
+                              t∈O
+
+The top-ranked prompt tokens are selected as critical, and only their correspond-
+ing key and value states are retained in the compressed KV cache. Although
+the final selection is still made over individual prompt positions i ∈P, SnapKV
+
+
+                                  19
+can optionally apply local pooling to the attention scores before the Top-K
+selection. This pooling step smooths the importance scores across nearby posi-
+tions, allowing neighboring tokens to influence a token’s final importance score.
+Therefore, neighboring tokens may affect which positions enter the Top-K set,
+but SnapKV does not automatically retain all neighbors;  it retains only the
+key/value states of the final selected Top-K tokens.
+
+                       ˜sℓ,hi =   max     sℓ,hj    (or average pooling),
+                           j∈[i−r, i+r]∩P
+
+and selects critical tokens under a budget K:
+
+                           Iℓ,h = TopK ˜sℓ,h, K ⊆P.
+
+This process yields an attention allocation pattern that captures the most infor-
+mative tokens for the downstream generation process, which can be expressed
+as a binary mask
+                      mℓ,hi = 1{i ∈Iℓ,h},      i ∈P.
+
+   Second, SnapKV applies concatenation to compress the KV cache. Selected
+critical tokens are pooled and concatenated with the observation window tokens
+to form a compact representation of the original prompt. Specifically, for each
+layer ℓand head h, SnapKV forms the compressed KV cache by
+
+            Kℓ,hkeep = Kℓ,hIℓ,h; Kℓ,hO   ,     Vℓ,hkeep = Vℓ,hIℓ,h; Vℓ,hO   .
+
+During decoding, attention is computed only over this compressed KV cache,
+substantially reducing memory access and computation costs.  Importantly,
+because SnapKV derives compression decisions from model-internal attention
+patterns computed for each input prompt, it dynamically adapts to different
+prompts and instructions, avoiding the limitations of static compression strate-
+gies.
+
+
+6.3.2  Experimental Results and Scalability
+
+SnapKV is evaluated on a diverse set of long-context benchmarks to assess
+both efficiency gains and quality preservation. In experiments using the LWM-
+Text-Chat-1M long-context chat model, SnapKV reports up to a 3.6× decoding
+speedup at a 16K-token sequence length with batch size two. At the same time,
+KV-cache memory consumption is reduced by up to 8.2×, significantly lowering
+the GPU memory required for long-context inference.
+   Further experiments demonstrate SnapKV’s robustness across a range of
+prompt lengths and datasets. On LongBench [1], SnapKV maintains accuracy
+close to the baseline while operating with a substantially compressed KV cache.
+In extreme long-context demonstrations, the authors show SnapKV enabling
+inference with up to 380K context tokens on a single A100-80GB GPU under
+their experimental setup, an input length that would typically be infeasible with
+an uncompressed KV cache under the same memory budget.
+
+
+
+                                  20
+  SnapKV is also evaluated on a needle-in-a-haystack task, which measures a
+model’s ability to retrieve fine-grained information embedded deep within long
+documents. Even when the KV cache is compressed to as few as 1024 retained
+tokens—in configurations supporting contexts up to 380,000 tokens, SnapKV
+achieves negligible degradation in retrieval performance, indicating that the
+observation-driven compression mechanism preserves the critical context needed
+for accurate retrieval.
+    Collectively, these results support SnapKV as a practical, hardware-oriented
+approach for long-context LLM inference. By deriving input-dependent KV re-
+tention decisions from attention behavior, SnapKV reduces KV-cache memory
+footprint and per-token decoding cost while maintaining generation quality, en-
+abling more scalable deployment on memory-constrained and latency-sensitive
+platforms.
+
+7  Discussion and Future Directions
+
+The A3C3 methodology demonstrates that co-design is not a niche optimiza-
+tion technique, but a general paradigm for building efficient AI systems across
+model families, application domains, and hardware platforms. The systems dis-
+cussed in this chapter show that the dominant bottleneck changes significantly
+across deployment regimes: edge vision is constrained by power, latency, spatial
+resolution, and embedded resource budgets; differentiable architecture search is
+constrained by the combinatorial explosion of algorithmic and implementation
+choices; large language model inference is constrained by autoregressive decod-
+ing, memory bandwidth, and KV-cache growth. Despite these differences, the
+same principle recurs across all cases:  substantial gains arise when the algo-
+rithm, memory behavior, and accelerator implementation are optimized as a
+coupled system rather than as independent layers.
+   SkyNet illustrates the importance of co-design in resource-constrained edge
+vision. In UAV-based object detection, the challenge is not merely to reduce
+the number of parameters, but to preserve detection accuracy for small objects
+while satisfying strict power and latency constraints on embedded FPGA and
+GPU platforms. SkyNet addresses this by jointly considering neural building
+blocks, pooling positions, channel expansion and shuffling, feature-map bypass-
+ing, quantization, and accelerator-level dataflow. This demonstrates that a com-
+pact model is not necessarily hardware-efficient by default; the network struc-
+ture must expose the right computation patterns and memory-access behavior
+for the target device. The broader lesson from SkyNet is that edge AI requires
+architectures that are hardware-friendly by construction, especially when the
+application imposes simultaneous constraints on accuracy, throughput, power
+and form factor.
+  EDD extends this idea by replacing coarse, heuristic search with differen-
+tiable architecture and implementation co-search. While SkyNet uses a staged
+exploration process with Particle Swarm Optimization, EDD formulates the
+neural architecture and hardware implementation as a merged search space.
+
+
+
+                                  21
+This transition is important because the design space of modern AI systems is
+too large to explore effectively through manual tuning or greedy heuristic search
+alone. By relaxing architecture choices, quantization decisions, and hardware
+mapping parameters into differentiable variables, EDD enables gradient-based
+optimization over a unified objective that accounts for accuracy loss, perfor-
+mance loss, and resource constraints. This provides a more scalable foundation
+for A3C3 because it allows the search process to reason directly about the in-
+teraction between model topology and hardware execution cost.
+   The LLM case studies show that A3C3 remains relevant even when the bot-
+tleneck shifts from compute-bound to memory-bound autoregressive inference.
+In large language models, the dominant inefficiency is not simply insufficient
+compute throughput, but poor utilization of available compute due to sequential
+decoding and repeated data movement. Medusa addresses this issue by mod-
+ifying the decoding algorithm itself: multiple speculative heads generate can-
+didate future tokens, and tree-based attention verifies several candidate paths
+in a single forward pass. This increases the amount of useful computation per-
+formed per model-weight access and improves accelerator utilization. From the
+A3C3 perspective, Medusa is important because it shows that hardware-aware
+co-design can occur at the inference-algorithm level, not only at the model-
+architecture or accelerator-dataflow level.
+  SnapKV further broadens the scope of A3C3 by focusing on the memory
+footprint and access cost of long-context inference. As context lengths grow,
+the KV cache becomes a central system bottleneck, limiting batch size, in-
+creasing memory traffic, and raising per-token latency. SnapKV addresses this
+problem through an observation-driven compression mechanism that uses at-
+tention behavior from a short prompt window to identify the most important
+cached tokens. Unlike static compression policies, this method adapts to each
+input prompt and preserves the context most relevant to downstream genera-
+tion. Its importance lies in showing that co-design must include memory budget
+and data retention policies, not only arithmetic acceleration. For future long-
+context models, deciding what information to store, move, compress, or discard
+will be as important as optimizing the neural computation itself.
+    Collectively, these systems suggest that future AI accelerators should not be
+designed around fixed assumptions about model structure.  Instead, accelera-
+tors and models should be developed through adaptive co-search processes that
+expose tunable parameters at multiple levels: network topology, operator selec-
+tion, precision, scheduling, memory layout, cache retention, decoding strategy,
+and interconnect communication. A mature A3C3 framework should therefore
+support hierarchical optimization, where local operator-level decisions are coor-
+dinated with global system-level objectives such as end-to-end latency, through-
+put, energy efficiency, memory capacity, and quality-of-result. This is particu-
+larly important as AI workloads become increasingly heterogeneous, combining
+dense computation, sparse attention, retrieval, multimodal processing, and long-
+context reasoning within a single serving pipeline.
+   One important future direction is distributed accelerator co-design. Current
+co-design methods often focus on a single device or a tightly coupled accelerator
+
+
+                                  22
+platform, but frontier AI systems increasingly operate across multiple GPUs,
+nodes, memory tiers, and storage systems. In this regime, the design problem ex-
+pands beyond selecting efficient operators or model blocks. It must also consider
+tensor parallelism, pipeline parallelism, expert parallelism, KV-cache placement,
+interconnect bandwidth, communication overlap, and scheduling across hetero-
+geneous memory and accelerator devices. Extending A3C3 to distributed in-
+ference would allow the search process to jointly optimize model partitioning,
+communication patterns, memory placement, and decoding algorithms. This is
+especially relevant for large language models and mixture-of-experts systems,
+where communication and memory movement can dominate execution time.
+  A second direction is heterogeneous accelerator co-design. Future AI plat-
+forms are unlikely to rely on a single type of processor.  Instead, they may
+combine GPUs, FPGAs, ASICs, CPUs, near-memory accelerators, and domain-
+specific inference engines. Each device type offers different strengths: GPUs pro-
+vide high-throughput dense computation, FPGAs offer reconfigurable dataflow
+and low-latency execution, ASICs provide energy efficiency for fixed workloads,
+and CPUs remain useful for orchestration and irregular control flow. A3C3
+can provide a principled framework for mapping different parts of the AI work-
+load to the most appropriate hardware substrate. For example, dense matrix
+operations may remain on GPUs, while KV-cache compression, token routing,
+retrieval, or sparsity-aware scheduling may be offloaded to specialized units.
+This type of heterogeneous co-design requires the search objective to incorpo-
+rate not only per-device performance, but also data movement, synchronization,
+programmability, and runtime adaptability.
+  A third direction is memory-centric co-design. The SkyNet, Medusa, and
+SnapKV case studies all point to the same broader trend: memory movement
+is increasingly the limiting factor in practical AI deployment. In edge vision,
+memory bandwidth and on-chip buffer size constrain the feasible feature-map
+resolution and layer structure. In LLM decoding, repeated weight loading and
+KV-cache access limit arithmetic utilization.  In long-context inference, the
+KV cache itself becomes a dominant memory object.  Future A3C3 method-
+ologies should therefore treat memory as a first-class design dimension. This
+includes co-optimizing model structure with cache hierarchy, compression policy,
+prefetching strategy, memory placement, and data reuse. Rather than design-
+ing accelerators only around peak compute throughput, future systems should
+optimize the full data lifecycle of AI inference.
+  A fourth direction is dynamic and input-adaptive co-design. Many current
+co-design methods produce a static model-accelerator pair that is optimized for
+an average workload or benchmark distribution. However, real-world AI work-
+loads are highly variable. Images may differ in object density and resolution;
+prompts may differ in length, entropy, and retrieval requirements; LLM outputs
+may vary in predictability across decoding steps. Methods such as Medusa and
+SnapKV already suggest that runtime behavior can be exploited to improve ef-
+ficiency: speculative decoding benefits when future tokens are predictable, and
+KV compression benefits when attention patterns reveal a small set of critical
+tokens. Future A3C3 systems should extend this idea by dynamically adapt-
+
+
+                                  23
+ing precision, sparsity, cache size, decoding depth, parallelism, and accelerator
+scheduling based on input difficulty and inference-time signals, such as predic-
+tion entropy, token acceptance rate, model uncertainty or predictive confidence.
+  A fifth direction is quality-aware co-design for generative AI. Traditional
+hardware optimization often focuses on latency, throughput, energy, and re-
+source utilization, while treating model quality as a fixed constraint. Gener-
+ative AI complicates this view because quality is multidimensional and some-
+times difficult to measure. For LLMs, preserving generation quality may involve
+factuality, instruction following, reasoning consistency, diversity, and user pref-
+erence alignment. For image and video generation, quality may involve visual
+fidelity, semantic alignment, temporal consistency, and distributional realism.
+Future A3C3 frameworks must therefore incorporate richer QoR metrics into
+the search objective. This is particularly important for approximate inference
+techniques such as speculative decoding, KV compression, sparsity, quantiza-
+tion, and early exiting, where small algorithmic changes can have subtle effects
+on output quality.
+  A sixth direction is the integration of A3C3 with emerging computing tech-
+nologies. Near-memory computing, processing-in-memory, chiplet-based accel-
+erators, optical interconnects, analog computing, and non-volatile memory sys-
+tems all create new design opportunities, but also introduce new constraints.
+These technologies often require models and algorithms to be restructured around
+their physical characteristics, such as limited precision, restricted data move-
+ment, analog noise, memory endurance, or communication topology. A3C3 is
+well suited to this setting because it does not assume that the algorithm is fixed
+before hardware design begins. Instead, it can search for algorithmic structures
+that naturally exploit the strengths and tolerate the limitations of emerging
+hardware.
+    Finally, future A3C3 research should address automation, transferability,
+and usability. A key promise of co-design is to reduce manual engineering ef-
+fort, but practical deployment still requires accurate cost models, reliable search
+spaces, compiler support, and integration with production inference frameworks.
+Search results must transfer across datasets, hardware generations, batch sizes,
+and deployment conditions. They must also be interpretable enough for system
+designers to trust and maintain. Building reusable co-design libraries, standard-
+ized hardware-aware benchmarks, and end-to-end toolchains will therefore be
+essential for making A3C3 practical beyond isolated case studies.
+   In summary, the systems discussed in this chapter show a clear progression
+in the scope of co-design. SkyNet demonstrates co-design for compact edge vi-
+sion; EDD formalizes differentiable architecture and implementation co-search;
+Medusa applies hardware-aware algorithmic restructuring to LLM decoding;
+and SnapKV extends co-design to memory retention and long-context infer-
+ence. Together, they indicate that future efficient AI systems will not emerge
+from optimizing models or accelerators independently. They will require cross-
+layer methodologies that jointly reason about algorithmic structure, hardware
+execution, memory movement, runtime adaptivity, and application-level quality
+constraints. A3C3 provides a foundation for this direction and offers a path
+
+
+                                  24
+toward sustainable, scalable, and hardware-aware AI deployment.
+
+8  Conclusion
+
+This chapter has presented A3C3 paradigm as a comprehensive methodology for
+AI algorithm and accelerator co-design, co-search, and co-generation. Through
+systems such as SkyNet, EDD, Medusa, and SnapKV, A3C3 has been shown to
+deliver substantial improvements in deep learning performance, efficiency, and
+scalability. As AI models and hardware platforms continue to evolve, co-design
+will remain a central principle for achieving sustainable and efficient AI systems.
+
+9  Acknowledgements
+
+The authors gratefully acknowledge the researchers whose foundational work
+forms the intellectual basis of this book chapter. We extend our sincere appre-
+ciation to the authors of SkyNet, EDD, Medusa, and SnapKV for their pioneer-
+ing contributions to algorithm-accelerator co-design, differentiable architecture
+search, and efficient large language model inference. This work builds directly
+on the collective insights of these research teams. Additionally, this work was
+supported by the AMD Center of Excellence and the IBM-Illinois Discovery
+Accelerator Institute. The authors gratefully acknowledge their support and
+collaboration in advancing research on hardware-aware AI systems.
+
+References
+
+ [1] Yushi Bai, Xin Lv, Jiajie Zhang, Hongchang Lyu, Jiankai Tang, Zhidian
+    Huang, Zhengxiao Du, Xiao Liu, Aohan Zeng, Lei Hou, et al. Longbench:
+   A bilingual, multitask benchmark for long context understanding. In Pro-
+     ceedings of the 62nd annual meeting of the association for computational
+     linguistics (volume 1: Long papers), pages 3119–3137, 2024.
+
+ [2] Han Cai, Ligeng Zhu, and Song Han. Proxylessnas: Direct neural architec-
+     ture search on target task and hardware. arXiv preprint arXiv:1812.00332,
+     2018.
+
+ [3] Tianle Cai, Yuhong Li, Zhengyang Geng, Hongwu Peng, Jason D Lee,
+    Deming Chen, and Tri Dao. Medusa: Simple llm inference acceleration
+    framework with multiple decoding heads. arXiv preprint arXiv:2401.10774,
+     2024.
+
+ [4] Charlie Chen, Sebastian Borgeaud, Geoffrey Irving, Jean-Baptiste Lespiau,
+    Laurent Sifre, and John Jumper. Accelerating large language model decod-
+     ing with speculative sampling. arXiv preprint arXiv:2302.01318, 2023.
+
+
+
+
+
+                                  25
+ [5] Deming Chen, Jason Cong, Yiping Fan, Guoling Han, Wei Jiang, and Zhiru
+    Zhang. xpilot: A platform-based behavioral synthesis system. SRC Tech-
+    Con, 5:54, 2005.
+
+ [6] Jason Cong, Jason Lau, Gai Liu, Stephen Neuendorffer, Peichen Pan, Kees
+     Vissers, and Zhiru Zhang. Fpga hls today: successes, challenges, and op-
+     portunities. ACM Transactions on Reconfigurable Technology and Systems
+    (TRETS), 15(4):1–42, 2022.
+
+ [7] Ashraf Eassa, Brian Slechta, Brian Pharris, and Nick Comly. Low La-
+    tency Inference Chapter 1: Up to 1.9x Higher Llama 3.1 Performance with
+    Medusa on NVIDIA HGX H200 with NVLink Switch. NVIDIA Technical
+     Blog, September 2024. NVIDIA Technical Blog. Accessed: May 25, 2026.
+
+ [8] Cong Hao and Deming Chen. Deep neural network model and fpga ac-
+     celerator co-design: Opportunities and challenges. In 2018 14th IEEE In-
+     ternational Conference on Solid-State and Integrated Circuit Technology
+    (ICSICT), pages 1–4. IEEE, 2018.
+
+ [9] Cong Hao, Xiaofan Zhang, Yuhong Li, Sitao Huang, Jinjun Xiong, Kyle
+    Rupnow, Wen-mei Hwu, and Deming Chen. Fpga/dnn co-design: An effi-
+     cient design methodology for iot intelligence on the edge. In Proceedings of
+     the 56th Annual Design Automation Conference 2019, pages 1–6, 2019.
+
+[10] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual
+     learning for image recognition. In Proceedings of the IEEE conference on
+    computer vision and pattern recognition, pages 770–778, 2016.
+
+[11] Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. Distilling the knowledge in
+    a neural network. arXiv preprint arXiv:1503.02531, 2015.
+
+[12] Andrew Howard, Mark Sandler, Grace Chu, Liang-Chieh Chen, Bo Chen,
+    Mingxing Tan, Weijun Wang, Yukun Zhu, Ruoming Pang, Vijay Vasude-
+     van, et al. Searching for mobilenetv3. In Proceedings of the IEEE/CVF
+     international conference on computer vision, pages 1314–1324, 2019.
+
+[13] Benoit Jacob, Skirmantas Kligys, Bo Chen, Menglong Zhu, Matthew Tang,
+    Andrew Howard, Hartwig Adam, and Dmitry Kalenichenko. Quantization
+    and training of neural networks for efficient integer-arithmetic-only infer-
+     ence. In Proceedings of the IEEE conference on computer vision and pattern
+     recognition, pages 2704–2713, 2018.
+
+[14] Yaniv Leviathan, Matan Kalman, and Yossi Matias. Fast inference from
+    transformers via speculative decoding. In International Conference on Ma-
+    chine Learning, pages 19274–19286. PMLR, 2023.
+
+[15] Yuhong Li, Cong Hao, Xiaofan Zhang, Xinheng Liu, Yao Chen, Jinjun
+    Xiong, Wen-mei Hwu, and Deming Chen. Edd: Efficient differentiable dnn
+     architecture and implementation co-search for embedded ai solutions. In
+
+
+                                  26
+    2020 57th ACM/IEEE Design Automation Conference (DAC), pages 1–6.
+    IEEE, 2020.
+
+[16] Yuhong Li, Yingbing Huang, Bowen Yang, Bharat Venkitesh, Acyr Lo-
+      catelli, Hanchen Ye, Tianle Cai, Patrick Lewis, and Deming Chen. Snapkv:
+    Llm knows what you are looking for before generation. Advances in Neural
+    Information Processing Systems, 37:22947–22970, 2024.
+
+[17] LMSYS.  Vicuna: An open-source chatbot impressing gpt-4 with 90%*
+    chatgpt quality.  https://vicuna.lmsys.org/, 2023.  Online; accessed
+     2026-03-02.
+
+[18] NVIDIA.  NVIDIA HGX Platform.  https://www.nvidia.com/en-us/
+    data-center/hgx/. Accessed: May 25, 2026.
+
+[19] NVIDIA.      Speculative  Sampling.     https://nvidia.github.io/
+    TensorRT-LLM/advanced/speculative-decoding.html#medusa.
+    TensorRT-LLM documentation.  Last updated:  September  15,  2025.
+    Accessed: May 25, 2026.
+
+[20] Keiron O’shea and Ryan Nash. An introduction to convolutional neural
+    networks. arXiv preprint arXiv:1511.08458, 2015.
+
+[21] Alexandros Papakonstantinou, Karthik Gururaj, John A Stratton, Dem-
+     ing Chen, Jason Cong, and Wen-Mei W Hwu. Fcuda: Enabling efficient
+    compilation of cuda kernels onto fpgas. In 2009 IEEE 7th Symposium on
+     Application Specific Processors, pages 35–42. IEEE, 2009.
+
+[22] Joseph Redmon, Santosh Divvala, Ross Girshick, and Ali Farhadi. You
+    only look once: Unified, real-time object detection. In Proceedings of the
+   IEEE conference on computer vision and pattern recognition, pages 779–
+     788, 2016.
+
+[23] Robin M Schmidt. Recurrent neural networks (rnns): A gentle introduction
+    and overview. arXiv preprint arXiv:1912.05911, 2019.
+
+[24] Aaditya Singh, Adam Fry, Adam Perelman, Adam Tart, Adi Ganesh,
+   Ahmed El-Kishky, Aidan McLaughlin, Aiden Low, AJ Ostrow, Akhila
+    Ananthram, Akshay Nathan, Alan Luo, Alec Helyar, Aleksander Madry,
+    Aleksandr Efremov, Aleksandra Spyra, Alex Baker-Whitcomb, Alex Beu-
+      tel, Alex Karpenko, Alex Makelov, Alex Neitz, Alex Wei, Alexandra Barr,
+    Alexandre Kirchmeyer, Alexey Ivanov, Alexi Christakis, Alistair Gillespie,
+     Allison Tam, Ally Bennett, Alvin Wan, Alyssa Huang, Amy McDonald
+    Sandjideh, Amy Yang, Ananya Kumar, Andre Saraiva, Andrea Vallone,
+    Andrei Gheorghe, Andres Garcia Garcia, Andrew Braunstein, Andrew Liu,
+    Andrew Schmidt, Andrey Mereskin, Andrey Mishchenko, Andy Apple-
+    baum, Andy Rogerson, Ann Rajan, Annie Wei, Anoop Kotha, Anubha Sri-
+     vastava, Anushree Agrawal, Arun Vijayvergiya, Ashley Tyra, Ashvin Nair,
+    Avi Nayak, Ben Eggers, Bessie Ji, Beth Hoover, Bill Chen, Blair Chen,
+
+
+                                  27
+Boaz Barak, Borys Minaiev, Botao Hao, Bowen Baker, Brad Lightcap,
+Brandon McKinzie, Brandon Wang, Brendan Quinn, Brian Fioca, Brian
+Hsu, Brian Yang, Brian Yu, Brian Zhang, Brittany Brenner, Callie Riggins
+Zetino, Cameron Raymond, Camillo Lugaresi, Carolina Paz, Cary Hudson,
+Cedric Whitney, Chak Li, Charles Chen, Charlotte Cole, Chelsea Voss,
+Chen Ding, Chen Shen, Chengdu Huang, Chris Colby, Chris Hallacy, Chris
+Koch, Chris Lu, Christina Kaplan, Christina Kim, CJ Minott-Henriques,
+Cliff Frey, Cody Yu, Coley Czarnecki, Colin Reid, Colin Wei, Cory De-
+careaux, Cristina Scheau, Cyril Zhang, Cyrus Forbes, Da Tang, Dakota
+Goldberg, Dan Roberts, Dana Palmie, Daniel Kappler, Daniel Levine,
+Daniel Wright, Dave Leo, David Lin, David Robinson, Declan Grabb,
+Derek Chen, Derek Lim, Derek Salama, Dibya Bhattacharjee, Dimitris
+Tsipras, Dinghua Li, Dingli Yu, DJ Strouse, Drew Williams, Dylan Hunn,
+Ed Bayes, Edwin Arbus, Ekin Akyurek, Elaine Ya Le, Elana Widmann,
+Eli Yani, Elizabeth Proehl, Enis Sert, Enoch Cheung, Eri Schwartz, Eric
+Han, Eric Jiang, Eric Mitchell, Eric Sigler, Eric Wallace, Erik Ritter, Erin
+Kavanaugh, Evan Mays, Evgenii Nikishin, Fangyuan Li, Felipe Petroski
+Such, Filipe de Avila Belbute Peres, Filippo Raso, Florent Bekerman,
+Foivos Tsimpourlas, Fotis Chantzis, Francis Song, Francis Zhang, Gaby
+Raila, Garrett McGrath, Gary Briggs, Gary Yang, Giambattista Parascan-
+dolo, Gildas Chabot, Grace Kim, Grace Zhao, Gregory Valiant, Guillaume
+Leclerc, Hadi Salman, Hanson Wang, Hao Sheng, Haoming Jiang, Haoyu
+Wang, Haozhun Jin, Harshit Sikchi, Heather Schmidt, Henry Aspegren,
+Honglin Chen, Huida Qiu, Hunter Lightman, Ian Covert, Ian Kivlichan, Ian
+Silber, Ian Sohl, Ibrahim Hammoud, Ignasi Clavera, Ikai Lan, Ilge Akkaya,
+Ilya Kostrikov, Irina Kofman, Isak Etinger, Ishaan Singal, Jackie Hehir,
+Jacob Huh, Jacqueline Pan, Jake Wilczynski, Jakub Pachocki, James Lee,
+James Quinn, Jamie Kiros, Janvi Kalra, Jasmyn Samaroo, Jason Wang,
+Jason Wolfe, Jay Chen, Jay Wang, Jean Harb, Jeffrey Han, Jeffrey Wang,
+Jennifer Zhao, Jeremy Chen, Jerene Yang, Jerry Tworek, Jesse Chand, Jes-
+sica Landon, Jessica Liang, Ji Lin, Jiancheng Liu, Jianfeng Wang, Jie Tang,
+Jihan Yin, Joanne Jang, Joel Morris, Joey Flynn, Johannes Ferstad, Jo-
+hannes Heidecke, John Fishbein, John Hallman, Jonah Grant, Jonathan
+Chien, Jonathan Gordon, Jongsoo Park, Jordan Liss, Jos Kraaijeveld,
+Joseph Guay, Joseph Mo, Josh Lawson, Josh McGrath, Joshua Vendrow,
+Joy Jiao, Julian Lee, Julie Steele, Julie Wang, Junhua Mao, Kai Chen,
+Kai Hayashi, Kai Xiao, Kamyar Salahi, Kan Wu, Karan Sekhri, Karan
+Sharma, Karan Singhal, Karen Li, Kenny Nguyen, Keren Gu-Lemberg,
+Kevin King, Kevin Liu, Kevin Stone, Kevin Yu, Kristen Ying, Kristian
+Georgiev, Kristie Lim, Kushal Tirumala, Kyle Miller, Lama Ahmad, Larry
+Lv, Laura Clare, Laurance Fauconnet, Lauren Itow, Lauren Yang, Lauren-
+tia Romaniuk, Leah Anise, Lee Byron, Leher Pathak, Leon Maksin, Leyan
+Lo, Leyton Ho, Li Jing, Liang Wu, Liang Xiong, Lien Mamitsuka, Lin
+Yang, Lindsay McCallum, Lindsey Held, Liz Bourgeois, Logan Engstrom,
+Lorenz Kuhn, Louis Feuvrier, Lu Zhang, Lucas Switzer, Lukas Kondraciuk,
+Lukasz Kaiser, Manas Joglekar, Mandeep Singh, Mandip Shah, Manuka
+
+
+                             28
+     Stratta, Marcus Williams, Mark Chen, Mark Sun, Marselus Cayton, Mar-
+     tin Li, Marvin Zhang, Marwan Aljubeh, Matt Nichols, Matthew Haines,
+   Max Schwarzer, Mayank Gupta, Meghan Shah, Melody Y. Guan, Melody
+    Huang, Meng Dong, Mengqing Wang, Mia Glaese, Micah Carroll, Michael
+    Lampe, Michael Malek, Michael Sharman, Michael Zhang, Michele Wang,
+     Michelle Pokrass, Mihai Florian, Mikhail Pavlov, Miles Wang, Ming Chen,
+    Mingxuan Wang, Minnia Feng, Mo Bavarian, Molly Lin, Moose Abdool,
+    Mostafa Rohaninejad, Nacho Soto, Natalie Staudacher, Natan LaFontaine,
+    Nathan Marwell, Nelson Liu, Nick Preston, Nick Turley, Nicklas Ansman,
+     Nicole Blades, Nikil Pancha, Nikita Mikhaylin, Niko Felix, Nikunj Handa,
+    Nishant Rai, Nitish Keskar, Noam Brown, Ofir Nachum, Oleg Boiko, Oleg
+    Murk, Olivia Watkins, Oona Gleeson, Pamela Mishkin, Patryk Lesiewicz,
+    Paul Baltescu, Pavel Belov, Peter Zhokhov, Philip Pronin, Phillip Guo,
+    Phoebe Thacker, Qi Liu, Qiming Yuan, Qinghua Liu, Rachel Dias, Rachel
+     Puckett, Rahul Arora, Ravi Teja Mullapudi, Raz Gaon, Reah Miyara, Ren-
+     nie Song, Rishabh Aggarwal, RJ Marsan, Robel Yemiru, Robert Xiong, Ro-
+    han Kshirsagar, Rohan Nuttall, Roman Tsiupa, Ronen Eldan, Rose Wang,
+    Roshan James, Roy Ziv, Rui Shu, Ruslan Nigmatullin, Saachi Jain, Saam
+     Talaie, Sam Altman, Sam Arnesen, Sam Toizer, Sam Toyer, Samuel Mis-
+     erendino, Sandhini Agarwal, Sarah Yoo, Savannah Heon, Scott Ethersmith,
+    Sean Grove, Sean Taylor, Sebastien Bubeck, Sever Banesiu, Shaokyi Amdo,
+    Shengjia Zhao, Sherwin Wu, Shibani Santurkar, Shiyu Zhao, Shraman Ray
+    Chaudhuri, Shreyas Krishnaswamy, Shuaiqi, Xia, Shuyang Cheng, Shyamal
+    Anadkat, Sim´on Posada Fishman, Simon Tobin, Siyuan Fu, Somay Jain,
+    Song Mei, Sonya Egoian, Spencer Kim, Spug Golden, SQ Mah, Steph Lin,
+    Stephen Imm, Steve Sharpe, Steve Yadlowsky, Sulman Choudhry, Sung-
+    won Eum, Suvansh Sanjeev, Tabarak Khan, Tal Stramer, Tao Wang, Tao
+    Xin, Tarun Gogineni, Taya Christianson, Ted Sanders, Tejal Patward-
+    han, Thomas Degry, Thomas Shadwell, Tianfu Fu, Tianshi Gao, Timur
+    Garipov, Tina Sriskandarajah, Toki Sherbakov, Tomek Korbak, Tomer
+    Kaftan, Tomo Hiratsuka, Tongzhou Wang, Tony Song, Tony Zhao, Troy Pe-
+     terson, Val Kharitonov, Victoria Chernova, Vineet Kosaraju, Vishal Kuo,
+    Vitchyr Pong, Vivek Verma, Vlad Petrov, Wanning Jiang, Weixing Zhang,
+   Wenda Zhou, Wenlei Xie, Wenting Zhan, Wes McCabe, Will DePue, Will
+     Ellsworth, Wulfie Bain, Wyatt Thompson, Xiangning Chen, Xiangyu Qi,
+    Xin Xiang, Xinwei Shi, Yann Dubois, Yaodong Yu, Yara Khakbaz, Yifan
+   Wu, Yilei Qian, Yin Tat Lee, Yinbo Chen, Yizhen Zhang, Yizhong Xiong,
+    Yonglong Tian, Young Cha, Yu Bai, Yu Yang, Yuan Yuan, Yuanzhi Li,
+    Yufeng Zhang, Yuguang Yang, Yujia Jin, Yun Jiang, Yunyun Wang, Yushi
+    Wang, Yutian Liu, Zach Stubenvoll, Zehao Dou, Zheng Wu, and Zhigang
+    Wang. Openai gpt-5 system card, 2026.
+
+[25] Mingxing Tan, Bo Chen, Ruoming Pang, Vijay Vasudevan, Mark Sandler,
+    Andrew Howard, and Quoc V Le. Mnasnet: Platform-aware neural archi-
+     tecture search for mobile. In Proceedings of the IEEE/CVF conference on
+    computer vision and pattern recognition, pages 2820–2828, 2019.
+
+
+                                  29
+[26] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones,
+    Aidan N Gomez, Lukasz Kaiser, and Illia Polosukhin. Attention is all you
+     need. Advances in neural information processing systems, 30, 2017.
+
+[27] Xilinx Inc. CHaiDNN. https://github.com/Xilinx/chaidnn, 2018. Re-
+     trieved August 23, 2018.
+
+[28] Xiaowei Xu, Xinyi Zhang, Bei Yu, Xiaobo Sharon Hu, Christopher Rowen,
+    Jingtong Hu, and Yiyu Shi. Dac-sdc low power object detection challenge
+     for uav applications. IEEE transactions on pattern analysis and machine
+     intelligence, 43(2):392–403, 2019.
+
+[29] Hanchen Ye, Cong Hao, Jianyi Cheng, Hyunmin Jeong, Jack Huang,
+    Stephen Neuendorffer, and Deming Chen. Scalehls: A new scalable high-
+     level synthesis framework on multi-level intermediate representation.  In
+    2022 IEEE international symposium on high-performance computer archi-
+     tecture (HPCA), pages 741–755. IEEE, 2022.
+
+[30] Hanchen Ye, Hyegang Jun, and Deming Chen.  Hida: A hierarchical
+    dataflow compiler for high-level synthesis. In Proceedings of the 29th ACM
+     International Conference on Architectural Support for Programming Lan-
+    guages and Operating Systems, Volume 1, pages 215–230, 2024.
+
+[31] Xiangyu Zhang, Xinyu Zhou, Mengxiao Lin, and Jian Sun. Shufflenet: An
+    extremely efficient convolutional neural network for mobile devices. In Pro-
+     ceedings of the IEEE conference on computer vision and pattern recognition,
+    pages 6848–6856, 2018.
+
+[32] Xiaofan Zhang, Haoming Lu, Cong Hao, Jiachen Li, Bowen Cheng, Yuhong
+     Li, Kyle Rupnow, Jinjun Xiong, Thomas Huang, Honghui Shi, et  al.
+    Skynet: a hardware-efficient method for object detection and tracking on
+    embedded systems. Proceedings of Machine Learning and Systems, 2:216–
+     229, 2020.
+
+[33] Xiaofan Zhang, Junsong Wang, Chao Zhu, Yonghua Lin, Jinjun Xiong,
+    Wen-mei Hwu, and Deming Chen.  Dnnbuilder: An automated tool for
+     building high-performance dnn hardware accelerators for fpgas.  In Pro-
+     ceedings of the International Conference on Computer-Aided Design, pages
+     1–8, 2018.
+
+[34] Lianmin Zheng, Wei-Lin Chiang, Ying Sheng, Siyuan Zhuang, Zhanghao
+   Wu, Yonghao Zhuang, Zi Lin, Zhuohan Li, Dacheng Li, Eric Xing, et al.
+    Judging llm-as-a-judge with mt-bench and chatbot arena.  Advances in
+     neural information processing systems, 36:46595–46623, 2023.
+
+[35] Barret Zoph and Quoc V Le. Neural architecture search with reinforcement
+     learning. arXiv preprint arXiv:1611.01578, 2016.
+
+
+
+
+                                  30

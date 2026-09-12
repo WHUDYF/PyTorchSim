@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#0B1220" />
+<text x="56" y="72" fill="#36D6B5" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2">02 · LUMINA</text>
+<text x="56" y="116" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="38" font-weight="700">Lumina：用瓶颈分析决定下一次模拟</text>
+<text x="56" y="158" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">它的核心不是发明一个新的硬件，而是让每一次昂贵的 simulation 都带来下一步的方向。</text>
+<circle cx="640" cy="392" r="112" fill="#162235" stroke="#4DA3FF" stroke-width="2" />
+
+  <g transform="translate(602.0, 350.0) scale(2.75)" fill="#36D6B5">
+    <path d="M8 9C8.55229 9 9 8.55229 9 8C9 7.44772 8.55229 7 8 7C7.44772 7 7 7.44772 7 8C7 8.55229 7.44772 9 8 9Z" />
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M16 8C16 12.4183 12.4183 16 8 16C3.58172 16 0 12.4183 0 8C0 3.58172 3.58172 0 8 0C12.4183 0 16 3.58172 16 8ZM6 6L4 11L5 12L10 10L12 5L11 4L6 6Z" />
+  </g>
+<text x="640" y="432" text-anchor="middle" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="24" font-weight="700">Simulator</text>
+<text x="640" y="462" text-anchor="middle" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">PPA · critical path · trace</text>
+<path fill="#162235" stroke="#2A3A52" d="M132,226 H338 A12,12 0 0 1 350,238 V318 A12,12 0 0 1 338,330 H132 A12,12 0 0 1 120,318 V238 A12,12 0 0 1 132,226 Z" />
+
+  <g transform="translate(145.0, 250.0) scale(1.875)" fill="#4DA3FF">
+    <path d="M8.01005 0.858582L6.01005 14.8586L7.98995 15.1414L9.98995 1.14142L8.01005 0.858582Z" />
+    <path d="M12.5 11.5L11.0858 10.0858L13.1716 8L11.0858 5.91422L12.5 4.5L16 8L12.5 11.5Z" />
+    <path d="M2.82843 8L4.91421 10.0858L3.5 11.5L0 8L3.5 4.5L4.91421 5.91422L2.82843 8Z" />
+  </g>
+<text x="190" y="276" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">QualE</text><text x="145" y="307" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">源码 → 结构因果图</text>
+<path fill="#162235" stroke="#2A3A52" d="M942,226 H1148 A12,12 0 0 1 1160,238 V318 A12,12 0 0 1 1148,330 H942 A12,12 0 0 1 930,318 V238 A12,12 0 0 1 942,226 Z" />
+
+  <g transform="translate(955.0, 250.0) scale(1.875)" fill="#A78BFA">
+    <path d="M1 1V15H15V13H3V1H1Z" />
+    <path d="M5 7L7 5L10 8L15 3V11H5V7Z" />
+  </g>
+<text x="1000" y="276" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">QuanE</text><text x="955" y="307" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">微扰 → 影响强度</text>
+<path fill="#162235" stroke="#2A3A52" d="M122,504 H340 A12,12 0 0 1 352,516 V596 A12,12 0 0 1 340,608 H122 A12,12 0 0 1 110,596 V516 A12,12 0 0 1 122,504 Z" />
+
+  <g transform="translate(136.0, 528.0) scale(1.875)" fill="#FFB454">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M8 4C5.79086 4 4 5.79086 4 8C4 10.2091 5.79086 12 8 12C10.2091 12 12 10.2091 12 8C12 5.79086 10.2091 4 8 4ZM6 8C6 6.89543 6.89543 6 8 6C9.10457 6 10 6.89543 10 8C10 9.10457 9.10457 10 8 10C6.89543 10 6 9.10457 6 8Z" />
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58172 0 0 3.58172 0 8C0 12.4183 3.58172 16 8 16C12.4183 16 16 12.4183 16 8C16 3.58172 12.4183 0 8 0ZM2 8C2 4.68629 4.68629 2 8 2C11.3137 2 14 4.68629 14 8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8Z" />
+  </g>
+<text x="180" y="554" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">SE</text><text x="136" y="585" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">瓶颈 → 受限策略</text>
+<path fill="#162235" stroke="#2A3A52" d="M940,504 H1158 A12,12 0 0 1 1170,516 V596 A12,12 0 0 1 1158,608 H940 A12,12 0 0 1 928,596 V516 A12,12 0 0 1 940,504 Z" />
+
+  <g transform="translate(954.0, 528.0) scale(1.875)" fill="#36D6B5">
+    <path d="M8 6L8 2L10 2L16 8L10 14L8 14L8 10L-1.74845e-07 10L-3.01991e-07 6L8 6Z" />
+  </g>
+<text x="998" y="554" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">EE</text><text x="954" y="585" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">候选 → 执行 → 记录</text>
+<path d="M350 278 L528 350" fill="none" stroke="#4DA3FF" stroke-width="2" /><path d="M930 278 L752 350" fill="none" stroke="#A78BFA" stroke-width="2" /><path d="M352 555 L528 438" fill="none" stroke="#FFB454" stroke-width="2" /><path d="M928 555 L752 438" fill="none" stroke="#36D6B5" stroke-width="2" />
+<path d="M640 504 C440 650 250 610 210 330" fill="none" stroke="#2A3A52" stroke-width="2" stroke-dasharray="8 8" />
+<text x="440" y="653" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="14">Trajectory Memory → refine the next move</text>
+<text x="1168" y="672" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="12">03 / 16</text>
+</svg>

@@ -1,0 +1,1 @@
+QuanE 不一开始做大规模搜索，而是先做小的 sensitivity benchmark。只改变一个参数，观察 cycle、area 或 bandwidth 如何变化，就可以得到局部影响方向和强度。这种局部先验非常适合 PyTorchSim，因为完整 TOGSim 很贵，而小算子和短序列可以承担初筛任务。

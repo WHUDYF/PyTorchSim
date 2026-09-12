@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#0B1220"/>
+<text x="56" y="72" fill="#A78BFA" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2">03.5 · SNAPKV</text>
+<text x="56" y="116" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="38" font-weight="700">SnapKV：把内存保留策略也纳入协同设计</text>
+<text x="56" y="158" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">它不改主干网络，而是根据 attention 行为决定哪些 KV 继续留在内存中。</text>
+<text x="84" y="244" fill="#F26D85" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="20" font-weight="700">Full KV cache</text>
+<rect x="84" y="270" width="470" height="188" rx="14" fill="#162235" stroke="#F26D85"/><text x="112" y="316" fill="#AAB8CC" font-family="Consolas, 'Courier New', monospace" font-size="15">prompt tokens</text>
+<g fill="#F26D85" fill-opacity="0.35"><rect x="112" y="350" width="22" height="52"/><rect x="144" y="338" width="22" height="64"/><rect x="176" y="326" width="22" height="76"/><rect x="208" y="344" width="22" height="58"/><rect x="240" y="318" width="22" height="84"/><rect x="272" y="334" width="22" height="68"/><rect x="304" y="320" width="22" height="82"/><rect x="336" y="340" width="22" height="62"/><rect x="368" y="326" width="22" height="76"/><rect x="400" y="345" width="22" height="57"/><rect x="432" y="316" width="22" height="86"/><rect x="464" y="338" width="22" height="64"/></g><text x="112" y="438" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">memory footprint grows with context</text>
+<path d="M580 365 L684 365" stroke="#36D6B5" stroke-width="3"/><polygon points="684,365 668,356 668,374" fill="#36D6B5"/>
+<text x="614" y="332" text-anchor="middle" fill="#36D6B5" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16">attention observation</text>
+<text x="726" y="244" fill="#36D6B5" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="20" font-weight="700">Selected and compressed KV</text>
+<rect x="726" y="270" width="470" height="188" rx="14" fill="#162235" stroke="#36D6B5"/><text x="754" y="316" fill="#AAB8CC" font-family="Consolas, 'Courier New', monospace" font-size="15">important positions + observation window</text>
+<g fill="#36D6B5" fill-opacity="0.45"><rect x="754" y="350" width="22" height="52"/><rect x="818" y="326" width="22" height="76"/><rect x="914" y="318" width="22" height="84"/><rect x="1010" y="340" width="22" height="62"/><rect x="1106" y="316" width="22" height="86"/></g><text x="754" y="438" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">less memory traffic, similar quality</text>
+<rect x="84" y="548" width="1112" height="64" rx="12" fill="#1B2B40"/><text x="110" y="587" fill="#FFB454" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="19" font-weight="700">对 PyTorchSim 的启发：</text><text x="360" y="587" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">workload 还应描述 KV / DRAM / SPAD 行为，而不只是模型名和 shape。</text>
+<text x="1168" y="672" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="12">13 / 16</text>
+</svg>

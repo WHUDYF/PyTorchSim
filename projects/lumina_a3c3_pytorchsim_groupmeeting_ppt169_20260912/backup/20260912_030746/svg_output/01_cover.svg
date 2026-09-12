@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<defs><linearGradient id="heroGradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4DA3FF" stop-opacity="0.9"/><stop offset="100%" stop-color="#A78BFA" stop-opacity="0.75"/></linearGradient></defs>
+<rect width="1280" height="720" fill="#0B1220"/>
+<circle cx="1110" cy="112" r="150" fill="#4DA3FF" fill-opacity="0.08"/><circle cx="1040" cy="560" r="220" fill="#A78BFA" fill-opacity="0.08"/>
+<path d="M820 150 C930 90 1070 130 1145 220 S1170 420 1040 470 S850 410 890 300" fill="none" stroke="url(#heroGradient)" stroke-width="3" stroke-opacity="0.8"/>
+<path d="M820 150 L890 300 L1040 470 L1145 220" fill="none" stroke="#2A3A52" stroke-width="2"/>
+<circle cx="820" cy="150" r="12" fill="#36D6B5"/><circle cx="890" cy="300" r="12" fill="#4DA3FF"/><circle cx="1040" cy="470" r="12" fill="#A78BFA"/><circle cx="1145" cy="220" r="12" fill="#FFB454"/>
+<use data-icon="chunk-filled/compass-drafting" x="70" y="76" width="34" height="34" fill="#36D6B5"/>
+<text x="120" y="101" fill="#AAB8CC" font-family="Consolas, 'Courier New', monospace" font-size="16" letter-spacing="2">GROUP MEETING · SYSTEMS RESEARCH</text>
+<text x="70" y="245" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="72" font-weight="700">从 Lumina 到</text>
+<text x="70" y="330" fill="#4DA3FF" font-family="Georgia, 'Microsoft YaHei', serif" font-size="78" font-weight="700">PyTorchSim</text>
+<text x="74" y="390" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="26">如何把昂贵的硬件 DSE 推进为</text>
+<text x="74" y="430" fill="#36D6B5" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="30" font-weight="700">可验证的 compiler–accelerator co-design</text>
+<line x1="74" y1="505" x2="580" y2="505" stroke="#2A3A52" stroke-width="2"/>
+<text x="74" y="548" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">Lumina · A3C3 · 固定拓扑 · TOGSim · 下一步实验设计</text>
+<text x="74" y="610" fill="#718096" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">2026-09-12  /  PyTorchSim research discussion</text>
+</svg>

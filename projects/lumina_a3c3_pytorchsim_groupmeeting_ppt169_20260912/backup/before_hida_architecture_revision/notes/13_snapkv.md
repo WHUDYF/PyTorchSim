@@ -1,0 +1,1 @@
+SnapKV 进一步把数据生命周期纳入协同设计。它根据 attention pattern 选择重要 KV 位置，减少 cache 容量和访问成本。对于 PyTorchSim，这提醒我们 workload 不能只有模型名和 tensor shape，还要描述 sequence phase、KV、DRAM 和 SPAD 行为。

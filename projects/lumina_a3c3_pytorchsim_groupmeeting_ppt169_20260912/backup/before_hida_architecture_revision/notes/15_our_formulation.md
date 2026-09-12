@@ -1,0 +1,1 @@
+我们的第一阶段可以明确写成固定拓扑问题。令算法结构为 A 等于 A 零，软件实现变量包括 tiling、mapping、fusion、dataflow 和 DMA，硬件变量包括 SPAD、DRAM、NoC 和 PE。我们要测的不是单纯硬件排名，而是换硬件后最优 mapping 是否迁移，以及 mapping 排名是否重排。

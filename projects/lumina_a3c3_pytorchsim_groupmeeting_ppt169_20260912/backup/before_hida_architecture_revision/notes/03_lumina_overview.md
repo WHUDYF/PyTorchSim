@@ -1,0 +1,1 @@
+Lumina 的核心贡献是把硬件探索变成瓶颈驱动的闭环。QualE 从代码提取结构关系，QuanE 用微扰实验估计影响强度，SE 根据 critical path 选择策略，EE 执行候选，Trajectory Memory 再把结果反馈回来。每次模拟都应该改变下一次选择。

@@ -1,0 +1,1 @@
+HIDA 先保证多生产者等并发合法，再平衡路径。buffer 复制、soft FIFO 和 token flow 支持弹性流水。

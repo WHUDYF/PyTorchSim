@@ -1,0 +1,1 @@
+TOGSim 每周期推进 Scheduler、Core、DMA、NoC 和 DRAM，输出 cycles、利用率、流量和 stall。

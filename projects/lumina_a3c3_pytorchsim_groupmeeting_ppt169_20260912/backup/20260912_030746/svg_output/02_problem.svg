@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#0B1220"/>
+<text x="56" y="72" fill="#36D6B5" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2">01 · WHY THIS QUESTION</text>
+<text x="56" y="116" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="36" font-weight="700">我们真正缺的不是更多配置，而是更聪明的实验闭环</text>
+<text x="56" y="158" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">PyTorchSim 已经能把 PyTorch 模型送进 MLIR、TOG 与周期级模拟器，但全量探索的代价很高。</text>
+<rect x="56" y="210" width="330" height="310" rx="14" fill="#162235" stroke="#2A3A52"/>
+<use data-icon="chunk-filled/layers" x="82" y="238" width="38" height="38" fill="#4DA3FF"/>
+<text x="82" y="318" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="24" font-weight="700">设计空间爆炸</text>
+<text x="82" y="360" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="17"><tspan x="82" dy="0">硬件参数、tile、fusion、</tspan><tspan x="82" dy="28">dataflow、DMA 彼此耦合。</tspan></text>
+<text x="82" y="450" fill="#FFB454" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16">不是一个平坦的网格。</text>
+<rect x="415" y="210" width="330" height="310" rx="14" fill="#162235" stroke="#2A3A52"/>
+<use data-icon="chunk-filled/bolt" x="441" y="238" width="38" height="38" fill="#FFB454"/>
+<text x="441" y="318" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="24" font-weight="700">模拟成本很高</text>
+<text x="441" y="360" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="17"><tspan x="441" dy="0">每个候选都可能触发编译、</tspan><tspan x="441" dy="28">TOG 生成和 TOGSim。</tspan></text>
+<text x="441" y="450" fill="#FFB454" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16">不能把 simulator 当作黑盒网格搜索。</text>
+<rect x="774" y="210" width="450" height="310" rx="14" fill="#162235" stroke="#2A3A52"/>
+<use data-icon="chunk-filled/git-branch" x="802" y="238" width="38" height="38" fill="#A78BFA"/>
+<text x="802" y="318" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="24" font-weight="700">真正要解释的是交互</text>
+<text x="802" y="360" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="17"><tspan x="802" dy="0">相同硬件下，mapping 是否不同？</tspan><tspan x="802" dy="28">相同 mapping 下，硬件是否改变？</tspan></text>
+<text x="802" y="450" fill="#36D6B5" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16">我们需要的是可测量的 HW × SW 关系。</text>
+<line x1="56" y1="590" x2="1224" y2="590" stroke="#2A3A52"/>
+<text x="56" y="630" fill="#4DA3FF" font-family="Georgia, 'Microsoft YaHei', serif" font-size="24">问题转化</text>
+<text x="232" y="630" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22">如何用少量 measured runs，找出最值得继续模拟的组合？</text>
+<text x="1168" y="672" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="12">02 / 16</text>
+</svg>

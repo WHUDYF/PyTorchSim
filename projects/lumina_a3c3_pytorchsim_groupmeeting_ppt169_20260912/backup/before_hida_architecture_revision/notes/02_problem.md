@@ -1,0 +1,1 @@
+PyTorchSim 已经把 PyTorch、MLIR、TOG 和周期级模拟器接起来了，但这也意味着每一个候选点可能触发完整的编译和模拟流程。硬件参数、tile、fusion、dataflow 和 DMA 之间还存在耦合，所以问题不是简单地增加 sweep 数量。我们真正需要的是一种能识别交互、控制模拟预算的实验方法。

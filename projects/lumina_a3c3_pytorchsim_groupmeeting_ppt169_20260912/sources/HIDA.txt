@@ -1,0 +1,1060 @@
+       HIDA: A Hierarchical Dataflow Compiler for
+                   High-Level Synthesis
+
+                Hanchen Ye                Hyegang Jun               Deming Chen
+                     University of Illinois                   University of Illinois                   University of Illinois
+                  Urbana-Champaign                 Urbana-Champaign                 Urbana-Champaign
+                       United States                        United States                        United States
+                   hanchen8@illinois.edu                  hgjun2@illinois.edu                   dchen@illinois.edu
+
+        Abstract                                           which enables the parallel temporal execution of multiple
+         Dataflow architectures are growing in popularity due to their     coarse-grained tasks [50, 59, 78]. Unlike the Von Neumann
+          potential to mitigate the challenges posed by the memory      architecture that constantly grapples with the memory wall,
+          wall inherent to the Von Neumann architecture. At the same      dataflow architecture can exploit the on-chip communication2023           time, high-level synthesis (HLS) has demonstrated its efficacy     between tasks to avoid frequent external memory access. As
+          as a design methodology for generating efficient dataflow     long as an application is dataflow feasible, a well-designed
+          architectures within a short development cycle. However,     dataflow architecture can efficiently execute the application
+                                                                  with reduced power and bandwidth utilization [27, 65, 67].Nov    existing HLS tools rely on developers to explore the vast
+2    dataflow design space, ultimately leading to suboptimal de-       Existing Dataflow Approaches. Commercial HLS tools
+           signs. This phenomenon is especially concerning as the size      typically provide programming interfaces for users to im-
+           of the HLS design grows. To tackle these challenges, we intro-     plement dataflow structures, such as the AMD Vitis HLS
+         duce HIDA1, a new scalable and hierarchical HLS framework     dataflow directive [34], Intel HLS system of tasks [35], and
+          that can systematically convert an algorithmic description    LegUp thread APIs [36]. However, it is still difficult to im-
+          into a dataflow implementation on hardware. We first pro-     plement a dataflow-oriented HLS design with sequential lan-
+                                                                        guages, such as C/C++. Therefore, academic HLS tools have[cs.AR]   pose a collection of efficient and versatile dataflow repre-
+          sentations for modeling the hierarchical dataflow structure.     pushed for approaches that decouple algorithm specification
+          Capitalizing on these representations, we develop an auto-     from hardware customizations in compute, data types, and
+         mated optimizer that decomposes the dataflow optimization    memory [4, 33, 43, 68], or introduce specialized HLS primi-
+         problem into multiple levels based on the inherent dataflow      tives [10, 29, 42, 49]. These approaches have effectively im-
+           hierarchy. Using FPGAs as an evaluation platform, working     proved productivity and quality compared to industrial HLS
+         with a set of neural networks modeled in PyTorch, HIDA      tools. Note that there also exist recent frameworks [26, 70]
+          achieves up to 8.54× higher throughput compared to the      that can automatically generate dataflow design without
+           state-of-the-art (SOTA) HLS optimization tool. Furthermore,     manual code rewriting. However, these automated tools can-
+           despite being fully automated and able to handle various ap-     not systematically model dataflow architectures, limiting
+            plications, HIDA achieves 1.29× higher throughput over the     them to the generation of suboptimal simple designs.
+       SOTA RTL-based neural network accelerators on an FPGA.      Unexplored Opportunities. Although existing HLS tools
+                                                                can enable dataflow designs, they still heavily rely on the
+                                                                     user to make the hard design decisions, including but not
+       1  Introduction
+                                                                             limited to parallelization strategy, tiling strategy, memory hi-
+        With the decline of Moore’s law, it is no longer possible to ex-      erarchy, data layout, etc. More importantly, the design spacesarXiv:2311.03379v1
+          pect the price of computation to decrease year over year. As      of different tasks in the dataflow are tightly coupled with
+          a result, customized and domain-specific accelerators are be-     each other due to two reasons: (1) an efficient dataflow archi-
+         coming well accepted in combating the physical limitations      tecture demands the latency to be balanced across different
+           of silicon, including those implemented on ASICs [24, 28, 40]      tasks as the critical task determines the overall achievable
+        and reconfigurable platforms, such as FPGAs [72, 75, 84].     performance; (2) the inter-task communications are often
+           Historically, the cost of developing hardware accelerators      established through streaming channels or on-chip buffers in-
+         has always remained astronomically high. In this context,      stead of hierarchical shared memory. Meanwhile, large-scale
+          high-level synthesis (HLS) is a promising solution that can      dataflow often gravitates towards a hierarchical structure, as
+           synthesize high-level algorithmic description to a hardware     dataflow tasks are naturally represented by nested graphs,
+          description language (HDL) implementation [12].               further complicating the design space.
+          Dataflow Architecture. An important computation ar-      As a result, the vast design space can prohibit program-
+           chitecture for customized hardware accelerators is dataflow,     mers from reasoning about various design choices and find-
+                                                                     ing the optimized design point. This can eventually lead
+           1https://github.com/UIUC-ChenLab/ScaleHLS-HIDA
+to non-ideal performance and efficiency, thereby thwarting       1. We rewrote the LeNet model in C++ as the baseline design,
+the promise of existing dataflow approaches. We observed       which is also used for the testbench and simulation in all
+that many HLS-augmentation tools have proposed DSE en-       subsequent steps. (2 hours)
+gines using different algorithms, including polyhedral tech-       2. We applied layer fusion and parallelization to the baseline
+niques [1, 80, 86, 87], graph analysis [32, 71, 79, 83], and        design following the strategy summarized in Table 1. The
+machine learning [26, 41, 64, 73]. These tools can effectively          listed parallel factors are selected with heuristics [76] and
+explore the local design space of a single task or kernel.       implemented with manual loop tiling and loop unroll
+However, they cannot handle the dataflow-oriented explo-        directive insertion. (10 hours)
+ration of multiple tasks due to the inter-task coupling and       3. We rewrote the design to enable coarse-grained dataflow
+the complicated dataflow hierarchy.                         and loop pipeline. Specifically, we outlined all tasks, im-
+  HIDA Approach. With the discussion above, we con-       plemented off-chip memory interfaces, and partitioned
+cluded that the challenges presented in the design and opti-        inter-task on-chip buffers with heuristics [66]. (8 hours)
+mization of dataflow architecture cannot be fully addressed       4. We iterated on different settings of parallel factors and
+by existing HLS approaches, which rely on programmers to         directive configurations by rewriting and evaluating the
+explore the vast design space manually. We argue that com-        design in AMD Vitis HLS until we were satisfied with the
+pilers will and should play an important role in the design         quality of the results. (20 hours)
+process - the hierarchical characteristics of dataflow archi-
+tecture should be systematically represented and modeled,      Overall, we spent around 40 hours designing and fine-tuning
+on which an optimization pipeline should be built to handle     the HLS-based LeNet accelerator. Then, we parameterized
+the inter- and intra-task optimizations comprehensively.           all six parallel factors listed in Table 1 and developed a TCL
+  Under this mantra, we propose HIDA, an HLS framework      script exhaustively traversing each configuration under both
+with hierarchical dataflow intermediate representations (IR)     dataflow and non-dataflow settings. This took another 170
+and optimizations, enabling the automated transformation      hours. Finally, as a comparison, we automatically generated
+of algorithmic hardware descriptions to efficient dataflow     an HIDA-based design, which took 0.4 minutes to compile
+architectures. The main contributions of HIDA are as follows:     and 9.5 minutes for AMD Vitis HLS to generate RTL.
+                                                         Results and Analysis. Figure 1 shows the exhaustive• We propose a new dataflow IR called HIDA-IR that models
+                                                           search results of the LeNet accelerator in the throughput-  dataflow at two different levels of abstraction, Functional
+                                                            resource space. Table 2 summarizes the evaluation results  and Structural, to capture the dataflow characteristics and
+                                                      and development cycles of the expert design, the best design  multi-level hierarchy, enabling effective optimizations.
+                                                     from the exhaustive search, and the HIDA design. The key• We propose a new dataflow optimizer called HIDA-OPT,
+                                                             observations are summarized as follows:  featuring a pattern-driven task fusion algorithm and an
+  intensity- and connection-aware dataflow parallelization
+                                                     • Dataflow designs are Pareto-dominating. We can clearly ob-  algorithm geared toward maximum efficiency.
+                                                                 serve a large throughput/resource gap between the Pareto• We enable an end-to-end and extensible compilation stack
+                                                                     frontiers with and without dataflow. The best dataflow  supporting PyTorch and C++ inputs, empowering the user
+                                                             design achieves 3.13× higher throughput than the non-  to rapidly experiment with various design parameters and
+                                                                dataflow counterpart under the same resource constraints.  prototype new dataflow architectures.
+                                                     • Dataflow cannot guarantee a good trade-off. We can ob-• We perform comprehensive FPGA evaluations of HIDA.
+                                                                 serve tons of dataflow designs dominated by non-dataflow On a set of neural networks, HIDA achieves 8.54× and
+                                                                  designs. Under the same resource constraints, the best  1.29× higher throughputs over the SOTA HLS optimization
+                                                           non-dataflow design achieves 3.83× higher throughput  framework and RTL-based neural network accelerator.
+                                                           than the dataflow design with the worst quality.
+                                                     • Dataflow design space is vast. In the layer fusion, spatial
+2  Motivation                                                    parallelization, and array partition steps, we have pruned
+Due to the inherent disjoint between the Von Neumann-       a large amount of design points based on heuristics. How-
+centric programming model and the dataflow programming        ever, the resulting design space still contains more than
+model, it is easy for HLS designs to leave a large portion       2.4×104 points and costs hundreds of CPU hours to search
+of the achievable performance on the table. To better un-        exhaustively, owing to the fact that each design point takes
+derstand the challenges presented in existing HLS tools, we        2-10 minutes for Vitis HLS to evaluate.
+implemented an HLS-based LeNet [47] accelerator on an     • Dataflow design space is difficult to comprehend. In Table 2,
+AMD PYNQ-Z2 FPGA as a case study.                    we can observe that the exhaustive design achieves 1.20×
+  Design Process. Table 1 shows the structure of the LeNet        higher throughput than the hand-tuned expert design. We
+model, which consists of 6 layers in total. We followed the         attribute this to the inter-task design space coupling. The
+steps below to design the HLS-based accelerator:                 complicated dataflow design space makes it substantially
+
+                                                                             2
+Table 1. LeNet accelerator design. CPF and KPF
+                                                  60k
+denote the channel and kernel parallel factor.                                                                   design w/ df
+                                                                   design w/o df
+    Layer    Task   Factor     Range           50k        pareto w/ df
+   (All Layers)      -   𝐵𝐴𝑇𝐶𝐻    {1, 5, 10, 15, 20}                     pareto w/o df
+                                                  40k        worst w/ df
+  Conv+ReLU                                                       expert design              Task1  𝐾𝑃𝐹𝑡𝑎𝑠𝑘1       {1, 2, 3, 6}                                         (Images/s)            hida design                                      3.13x
+     Pool                                          30k
+  Conv+ReLU         𝐾𝑃𝐹𝑡𝑎𝑠𝑘2    {1, 2, 4, 8, 16}              Task2
+     Pool            𝐶𝑃𝐹𝑡𝑎𝑠𝑘2       {1, 2, 3, 6}          20k                                                                                                                                                                                                                                                             Throughput
+                     𝐾𝑃𝐹𝑡𝑎𝑠𝑘3    {1, 2, 3, 4, 6, 8}  Conv+ReLU  Task3
+                      𝐶𝑃𝐹𝑡𝑎𝑠𝑘3     {1, 2, 4, 8, 16}         10k                                                        3.83x
+
+     Linear    Task4        -                -
+                                                    0k
+                                             20%       40%       60%       80%       100%
+     Table 2. Evaluation results of LeNet.                           Resource Utilization: max(BRAM%, DSP%, LUT%)
+
+                 Expert  Exhaustive  HIDA    Figure 1. Exhaustive design space search of the LeNet accelerator. w/ df
+                                          and w/o df indicate whether dataflow is enabled. Worst w/ df is the dataflow  Resource Util.   95.5%      99.2%      95.0%
+                                                design with the worst quality. Expert design is hand-tuned by HLS experts. Throu. (Imgs/s)   41.6k       49.9k      53.2k
+  Develop Cycle  40 hours   210 hours   9.9 mins   HIDA design is automatically generated from HIDA.
+
+
+   difficult to find the optimized design point by reasoning        func @foo(%A, %B) {                        func @foo(%A, %B) {
+  about the trade-offempirically.                                         affine.for%0 = affine.load%i = 0 to%A[%i]16 step 1 {         ^bb0(%A,%c0 = constant%B):    0
+• Automated tool outperforms exhaustive search. HIDA fur-            affine.store %0, %B[%i]                  %c16 = constant 16
+                                                                                 }                                          %c1 = constant 1
+  ther improves the throughput of the exhaustive design by          return                                     br ^bb1(%c0)                                                                               }                                                   (i) Affine        Standard
+  1.06×. After comparing the two designs, we found HIDA                                              to  ^bb1(%0):
+  to have automatically explored additional parallelizable                     Pi➔ii: lower Affine to SCF              %1 = cmpi slt, %0, %c16                                                                                                                                                                              SCF    cond_br %1, ^bb2, ^bb3
+  dimensions apart from the six in the Factor column of        func @foo(%A, %B) {
+                                                                                 %c0 = constant 0                         ^bb2:                                                                                                                                                                                                                                                                                                 lower    %2 = memref.load %A[%0]  Table 1, such as the feature map width and height dimen-          %c16 = constant 16
+                                                                                                                                         %2,                                                                                                                                             %B[%0]                                                                                     =                                                                                       constant                                                                                                1  sions,        presenting                  a path                           that                           can                                  increase                                         the design                                                                      effi-          %c1                                                                                                                            %3                                                                                                                               =                                                                                                                                 addi %0,                                                                                                                                          %c1                                                                                 scf.for                                                                                         %i = %c0                                                                                                  to                                                                                                     %c16 step %c1 {                                                                                                                                                                                                                                                                                                                                                                                                    Pii➔iii:    memref.store                                                                                                                            br                                                                                                                               ^bb1(%3)                                                                                   %0                                                                                      =                                                                                        memref.load                                                                                                    %A[%i]  ciency          further. This                       indicates                                that                                 using                                            heuristics                                                      suitable
+                                                                                   memref.store %0, %B[%i]
+  for single-task or non-dataflow designs may accidentally          }                                        ^bb3:
+                                                                                 return                                     return
+  prune away valuable design points for dataflow designs.         }                                                     (ii) SCF      }                    (iii) unstructured
+  Need for Scalable Automation Tools. For the LeNet
+                                                       Figure 2. An IR example. affine and scf dialect are struc-case study, while the expert design took tens of hours to
+                                                            tured control flow IRs that can be lowered to unstructureddevelop and ended up with a sub-optimal design, HIDA only
+                                                                        IR. All types are omitted for simplicity.took minutes to generate the design and achieved the best
+quality of results. One should expect that as the complexity
+and size of the target design increase, the development time
+                                                       programs in MLIR. MLIR includes a single static assignmentwill grow dramatically, while the manual design quality will
+                                                          (SSA) style IR [23] where an Operation is the minimal unitdecrease due to the vast and complicated dataflow design
+                                                                  of code. Each operation accepts a set of typed Operands andspace. In summary, productivity, performance, and scalabil-
+ity problems of dataflow architecture are the three strong     produces a set of typed Results. Connections between the re-
+                                                                        sults of one operation and the operands of another operationmotivators for a scalable HLS optimization tool.
+                                                                describe the SSA-style flow of data. For instance, %3 = addi
+                                                     %0, %c1 in Figure 2(iii) is an operation with operands %0 and
+3  Background
+                                                     %c1 and result %3. Each operation can also be parameterized
+3.1  MLIR Framework                               by a set of Attributes indicating important characteristics
+MLIR [20, 46] is a compilation framework supporting multi-     of the operation. Unlike operands, which typically model
+ple levels of functional and representational hierarchy. In the      values produced by other operations when a program is ex-
+remainder of this paper, we use MLIR to refer to the MLIR      ecuted, attributes have values that are known and fixed at
+framework and IR for the intermediate representation of     compile time. A sequential list of operations without control
+
+                                                                             3
+           Inputs                Outputs                                  Table 3. HIDA-IR key operations. Region is a sequential
+                                                      Schedule0         HIDA
+    PyTorch     HLS C++            Vitis HLS,                                                    list of operations to be executed.
+                                             etc.               Node0
+                                                  Add             Node1 Conv.
+
+                                                                                                                       0                                                                                                                           1                                                                                                                              2                                                                                                                                  3                                                                                                                                     4                                                                                                                   …
+                                  Optimized                                                                Operation              Description     Torch-                                                                                                                       5                                                                                                                           6                                                                                                                              7                                                                                                                                  8                                                                                                                                     9                                                                                                                   …                   Polygeist                            HLS C++                                              …                                                                                                       …                                                                                                          …                                                                                                             …                                                                                                                …                                                                                                                   …     MLIR
+                                                       Node1                                 Functional Dataflow
+                                                                                                         .         Conv.
+          Dispatch0             HLS C++                              Node2 Conv.         task   Own a transparent region, can contain nested
+                                       Emitter
+           Task0                                     Token   Node2            05  16  27  38  49  ……                   dispatch operations with sub-tasks.
+           Add                                                                  Conv.          …  …  …  …  …  …       dispatch Launch multiple tasks in its region.                                         External
+                Task1           Memory
+                                                                                       Structural Dataflow
+                .         Conv.                          AXI     Node3
+                                                                   Node6 Conv.
+                Task2                               Add                          node   Own an isolated region, can contain nested
+                  Conv.                                                      Schedule6-0                  schedule operations with sub-nodes. Carry
+                             Task6 Conv.                                  Node6-0
+           Task3                              Node4                           Tile Load                       explicit I/O memory effect information.
+           Add               Dispatch6-0           Conv.                            schedule An isolated region with multiple nodes. Carry
+                                Task6-0
+     Task4                                        Tile Load                                                                 explicit scheduling information.
+      Conv.                                                              Node6-1
+                                            Node5     Node6           Tile Comp.        buffer  A buffer with variadic stages and ports and au-
+                                Task6-1                                                      Conv.       Conv.     Task5                Task6
+                                        Tile                              Comp.                 Lowering                                                                                       tomatic ping-pong buffering semantics. Carry      Conv.                  Conv.
+                                Task6-2                                    Node6-2                       explicit partition and layout information.
+           Task7                                   Node7
+                                        Tile Store                                                                                                   Tile Store         stream  A stream channel with variadic entries.           Add                                                                                                                                                    Dataﬂow          Add
+     Functional Dataﬂow                              Structural Dataﬂow                              Module Interface
+       Tensor or Memory Ref. Passing       Memory Accessing        Streaming       Memory       port  A memory or stream port with explicit type.
+                                                                   bundle  A named bundle of ports.
+             Figure 3. HIDA framework overview.                    pack    Pack an external memory block into a port.
+
+
+flow is defined as a Block and a control flow graph (CFG)      analysis and loop transformations efficient and reliable. The
+of blocks is organized into a Region in MLIR. Regions are,     affine dialect defines Affine Map as a mathematical func-
+in turn, contained by operations, enabling the description      tion that transforms a list of affine values into a list of re-
+of arbitrary design hierarchy. In MLIR, Function is defined       sults. Affine operations (e.g., affine.for and if) must take
+as a built-in callable operation always owning one region.      affine values as input operands, therefore the loop bounds of
+For instance, function @foo in Figure 2(iii) owns one region     affine.for operation and conditions of affine.if opera-
+containing four blocks, bb0 to bb3.                              tion must be the expression of affine values. The scf (struc-
+ A Dialect in MLIR defines a namespace for a group of     tured control flow) dialect defines control flow operations
+related operations, attributes, and types. MLIR not only pro-       (e.g., scf.for and if) whose loop bounds or conditions can
+vides multiple built-in dialects to represent common func-     be any SSA values. Therefore, scf operations are not con-
+tionalities, but also features an open infrastructure allowing      strained by the affine requirements and can represent a wider
+to define new dialects at different abstraction levels. Pass is     range of programs. MLIR also provides several fundamen-
+a key component of compiler which traverses the IR for the       tal built-in dialects to represent basic arithmetic operations
+purpose of optimization or analysis. Similar to LLVM [44],       (e.g., addf), unstructured control flow operations (e.g., br
+users can design Transform and Analysis passes in MLIR to     and cond_br), and memory-related operations (e.g., load
+perform the IR transformation and analysis. However, in the     and store). Taking Figure 2 as an example, the structured
+context of MLIR, Transform typically refers to the transforma-     control flows in Figure 2(i) and (ii) represented with affine
+tion within a dialect. The transformation between different     and scf operations are flattened to the unstructured br and
+dialects is typically referred as Conversion, while the transfor-    cond_br operations in Figure 2(iii).
+mation between MLIR and external representation is referred
+as Translation. Lowering is a terminology referring to the    4  HIDA Overview
+process of lowering the abstraction level of IR.                                                            Figure 3 shows the overall architecture of HIDA. HIDA is
+                                                                        built on top of the MLIR infrastructure [20, 45] and can take
+3.2  Relevant MLIR Dialects                            deep learning models written in PyTorch [57] or generic
+Many dialects in MLIR are immediately applicable for repre-    HLS C++ code as design entries and produce optimized HLS
+senting nested loop programs commonly used in HLS. The    C++ code. For the PyTorch and C++ inputs, we use Torch-
+linalg dialect provides a structured representation of linear    MLIR [22] and Polygeist [51] as front-ends to parse source
+algebra operations. The affine dialect provides a powerful      codes. After the optimizations are completed in HIDA, we
+abstraction for affine operations in order to make dependence     use an HLS C++ emitter [70] to generate synthesizable HLS
+
+                                                                             4
+ hida.buffer {depth = 3} : memref<64x64xi8, #hida.partition<[cyclic, block], [4, 4]>, #hida.layout<[8, 8], [1, 2]>, #hida.mem<bram_t2p>>
+
+          Number of Stages        Buffer Shape                 Partition Fashions   Partition Factors   Tiling Factors   Vectorization Factors   Buffer Placement
+
+ hida.stream : hida.stream<i1, 3>           hida.node(%buffer<2> : memref<...>, %stream : hida.stream<i1, 3>) -> ( ... ) [ ... ] { ... }
+
+            Stream Type  Number of Entries  RO Arg List (Arg1  Arg1 Buffer Port  Arg1 Type  Arg2       Arg2 Type )  RW Arg List  Param List  Operations
+
+ Figure 4. buffer, stream, and node operation syntax in Structural dataflow. RO and RW denote read-only and read-write.
+
+
+C++ code, which can then be mapped to RTL designs with      the dispatch and task operations are designed to be trans-
+downstream HLS tools [34–36]. HIDA proposes two new     parent and share the global context, simplifying the process
+techniques to handle the representation and optimization of      of the fusing and splitting of tasks. As a result, we can effi-
+dataflow compilation, which are the key enablers to tackle      ciently explore various dispatch strategies at the Functional
+the challenges discussed in Section 2:                               level. Meanwhile, thanks to the transparency, buffers and
+                                                             tensors defined in the global context can be accessed by• Hierarchical Dataflow IR (HIDA-IR). As shown in Figure 3,
+                                                               tasks at all hierarchies without indirection. Therefore, the  HIDA consists of Functional and Structural dataflow IR
+                                                              Functional dataflow can enable effective algorithmic opti-  carved for different purposes. Table 3 summarizes the key
+                                                             mizations for both PyTorch and C++ programs, which model  operations of HIDA-IR. Details can be found in Section 5.
+                                                              the computations at tensor and memory levels, respectively.• Hierarchical Dataflow Optimizer (HIDA-OPT). HIDA de-
+  couples the HLS optimization problems of Functional and                                                               5.2  Structural Dataflow
+  Structural dataflow to handle HLS designs at scale. Details
+                                           Memory-Mapped and Stream Buffer. In order to pre-  can be found in Section 6.
+                                                                   cisely capture the on-chip and off-chip memory accessing
+                                                              behaviors, we introduce two types of buffers at the Struc-
+5  HIDA-IR
+                                                                   tural dataflow level, the memory-mapped buffer and the
+Currently, HLS tools [70, 79, 80] employ call graphs to rep-     stream buffer, which are represented with the buffer and
+resent HLS structures using sequential IRs. However, due     stream operations, respectively. Figure 4 shows their syntax,
+to the lack of expressiveness for the parallel characteristics     where % denotes a single static assignment (SSA) value [23].
+and micro-architecture of dataflow, these IRs have limited    The embedded partition and data layout attributes of the
+capability when used in scalable dataflow optimization flows.    buffer operation are designed to be converted to semi-affine
+To address this problem, we propose a holistic HIDA-IR with    maps [18], enabling polyhedral-based dependency analysis
+two levels of representation, which we refer to as Functional     and transformation [5] in HIDA-OPT. Notably, to facilitate
+and Structural dataflow. The Functional dataflow is designed      dataflow optimizations, buffer operations inherently carry
+to capture the high-level characteristics and hierarchy of     ping-pong buffering semantics, allowing buffer instances to
+HLS designs, driving the algorithmic optimizations and task      interleave the accesses from producers and consumers to
+fusion. In contrast, the Structural dataflow is a low-level ab-     improve the communication efficiency. Figure 3 visualizes
+straction that captures the micro-architectural details and is     the combined usage of the two types of buffers, where the
+optimized to handle the scheduling and parallelization.         red boxes and blue arrows represent the memory-mapped
+                                                                   buffer and stream buffers. Dashed blue arrows denote single-
+5.1  Functional Dataflow                                         bit stream buffers. In addition to the buffers, we introduce
+Hierarchical Structure. In the Functional dataflow, we in-     the port operation to represent memory-mapped or stream
+troduce a dispatch operation that contains the computation      interfaces, capturing the interface characteristics, such as
+graph to be dispatched. Within the dispatch operation, all      latency, that can have a considerable impact on the dataflow
+graph nodes are partitioned into multiple task operations to       efficiency. For instance, in Figure 3, Node0, Node1, and Node2
+represent the dispatch strategy. As accelerators often have      are scheduled to communicate through external memory,
+multiple levels of dataflow to achieve higher parallelism,     where the AXI interfaces are modeled with port operations.
+HIDA-IR supports a hierarchical structure by allowing the        Isolated from Above. In the Structural dataflow, we in-
+recursive nesting of task and dispatch operations. Figure 3     troduce schedule and node operation as the counterparts
+visualizes a hierarchical Functional dataflow, where Task6      of dispatch and task operation. While Structural dataflow
+contains three sub-tasks that can be executed in a dataflow     has a hierarchical structure similar to Functional dataflow, an
+manner to hide the latency of loads and stores, allowing us     important distinction between the two is that the schedule
+to utilize the computational capability to a greater extent.      and node operations are isolated from the external context.
+  Transparent from Above. At the Functional level, tasks      Therefore, external values must be passed into schedule and
+often need to be manipulated as different dispatch strategies     node as arguments. In addition, the node operation carries
+can lead to different trade-offs. Based on this observation,      explicit memory effect information for each argument to
+
+                                                                             5
+    Structure IR       Data IR       Payload IR       Control IR                         Higher       AlgorithmRequire: 𝑚,1 topFunctionalmodule dataflowof the initialconstructioncomputation graph
+                     Tensor
+                                                        LinAlg                         Level       Ensure: Updated 𝑚, top module of the Functional dataflow     Functional                                                                                                1: for 𝑛in postorder_walk(𝑚, has_region()) do
+     Dataﬂow
+                                      Arithmetic                                           2:      if is_dispatchable(get_region(𝑛)) then
+                MemRef
+       Lowering                                                                              3:       𝑑←wrap_ops(get_ops(𝑛), new(dispatch))
+                                        Aﬃne                            4:        for 𝑜𝑝in get_ops(𝑑) do
+                                                                                                5:            wrap_ops({𝑜𝑝}, new(task))
+     Structural        Buffer +                                                                                                                                                                        Lower
+     Dataﬂow       Stream        Arithmetic      Aﬃne +
+                               + Primitive        Directive                                                                                                                                                                        Level
+                                                                   existing dialects, HIDA can carry out loop and directive-level
+      HIDA Functional Dialects      HIDA Structural Dialects        Existing Dialects    HLS optimizations in a hierarchical manner.
+
+        Figure 5. Integration with MLIR dialects.
+                                           6  HIDA-OPT
+                                                     Although previous works [26, 70] have enabled inter-task
+                                                                   parallelization through dataflow, they could not conduct
+avoid unnecessary inter-node effect analysis. Figure 4 shows      dataflow-oriented optimizations. Specifically, ScaleHLS [70]
+the syntax of node operation, where %buffer and %stream     could automatically legalize a computation graph into a
+are passed in as read-only arguments in this specific exam-     dataflow model and enable code generation but ignored the
+ple. For simplicity, we omit the read-write arguments and      inter-task design space coupling [41], resulting in subopti-
+constant parameters in Figure 4. The rationale behind this     mal dataflow designs. HPVM2FPGA [26] used an ML-driven
+design decision is driven by how the Structural dataflow car-     algorithm [53] for DSE, but it only introduced a boolean
+ries the architecture optimization. By isolating the context     parameter to enable/disable global dataflow, again, leading
+of schedule and node, the dataflow optimization problem      to the restricted search of the design space. In this section,
+can be cleanly partitioned into multiple local intra-node op-    we propose a HIDA-OPT solution consisting of five steps to
+timizations and global inter-node optimization, leading to      tackle the dataflow optimization problem.
+a decoupled scalable solution. Details of the optimization
+process is elaborated in Section 6.                              6.1  Functional Dataflow Construction
+                                        We leverage the transformations available in MLIR [20, 45]
+5.3  Integration with MLIR Dialects                        to generate a hierarchical computation graph at the level
+HIDA reuses a set of MLIR built-in dialects to represent the      of linear algebra [19] or loop [18]. Algorithm 1 shows the
+common program components in PyTorch or C/C++. Fig-     pseudo-code of converting the initial computation graph
+ure 5 illustrates the integration of HIDA with the built-in      to the Functional dataflow. From line 1 to 3, we wrap each
+MLIR dialects. The vertical axis of Figure 5 represents the      dispatchable region with a dispatch operation in a bottom-
+various abstraction levels of the dialects. Horizontally, all    up manner, where a region is defined as dispatchable if it
+dialects are categorized into four different types: structure,       is owned by an iterative operation, such as loop and func,
+data, payload, and control-flow. At every abstraction level,     while containing at least two iterative operations. For in-
+the corresponding four types of dialects are combined with      stance, a loop region containing two child loops is considered
+each other to represent the complete functionality of a pro-     to be dispatchable as the two child loops can be dataflowed.
+gram. The Functional dataflow is first combined with tensor,     Then, from line 4 to 5, each operation is wrapped with a
+arith, and linalg dialects to represent the tensor-level pro-     separate task operation to construct a legal dataflow model.
+grams compiled from PyTorch. Then, the tensor and linalg
+dialects are lowered to memref and affine dialects, respec-     6.2  Functional Dataflow Optimization
+tively, while the lowered IRs are still combined with the    Once the initial Functional dataflow is constructed, we can
+Functional dataflow due to its adaptability with both tensor      optionally fuse dataflow tasks to balance the task workloads
+and memory semantics. Once the optimizations at the Func-     while reducing the communication cost. Algorithm 2 shows
+tional dataflow level are completed, the Functional dataflow     the task fusion process, where the inputs are the initial
+is lowered to the Structural dataflow, while the memref op-     dataflow and a set of pre-defined profitable fusion patterns,
+erations are lowered to the Structural buffer and stream op-     such as element-wise operations fusion. From line 1 to 10, we
+erations. Note that the affine dialect is used in both the      recursively partition each dispatch operation in a top-down
+Functional and Structural dataflows for loop analyses and     manner. Specifically, we first fuse adjacent tasks into new
+transformations. HIDA reuses the Primitive and Directive IRs      tasks through a pattern-driven worklist algorithm (lines 2 to
+from ScaleHLS [70] to represent the HLS-specific structures,       6). The pre-defined task fusion patterns are recursively ap-
+such as the loop pipelining directive. By integrating with the      plied to the dataflow until no pattern can be matched. Then,
+
+                                                                             6
+Algorithm 2 Functional dataflow task fusion                                 Schedule       Opt. Schedule        Schedule    Opt. Schedule
+Require: 𝑚, top module of the Functional dataflow                           Node0          Node0            Node0        Node0
+Require: 𝑝𝑎𝑡𝑡𝑒𝑟𝑛𝑠, set of profitable task fusion patterns
+Ensure: Updated 𝑚, top module of the partitioned dataflow                    Buf0            Buf0              Buf0          Buf0
+  1: for 𝑑in preorder_walk(𝑚, is_instance(dispatch)) do
+                                                                                                                           Node1
+  2:    𝑤𝑜𝑟𝑘𝑙𝑖𝑠𝑡←queue(get_tasks(𝑑))                                      Node1          Node1            Node1          Logic
+  3:    while not is_empty(𝑤𝑜𝑟𝑘𝑙𝑖𝑠𝑡) do
+  4:       𝑡←pop(𝑤𝑜𝑟𝑘𝑙𝑖𝑠𝑡)                                                   Buf1        Buf1    Buf2           Buf1         Node0Buf1
+  5:          if 𝑡′ ←get_matched_task(𝑡, 𝑝𝑎𝑡𝑡𝑒𝑟𝑛𝑠) then
+                                                                                                                           Node2
+  6:            push(𝑤𝑜𝑟𝑘𝑙𝑖𝑠𝑡, wrap_ops({𝑡, 𝑡′}, new(task)))                   Node2          Node2            Node2          Logic
+  7:    repeat 𝑡0,𝑡1 ←get_least_critical_tasks(𝑑, 2)
+  8:        wrap_ops({𝑡0, 𝑡1}, new(task))                                        Buf2             Buf2’              Buf2          Buf2
+  9:     until not is_fusion_profitable(𝑡0,𝑡1)                                               (a)                (b)                    (c)              (d)
+ 10:     simplify_dispatch_hierarchy(𝑑)
+                                                      Figure 7. Eliminate multiple producers. Double arrows in-
+                                                                dicate both read and write on a buffer. For instance, in (a),
+                                                      Node1 may first read from Buf2 and then write results to it.
+    %tensor = hida.task() : tensor<64x64xi8> { ... }
+    hida.task() { ... %tensor ... }
+
+                               (a) Functional Dataﬂow                            in Figure 6(b). Correspondingly, the first node operation be-
+    %buffer = hida.buffer : memref<64x64xi8, ...>                comes a user of the %buffer object with read-write effect,
+    hida.node() -> (%buffer : memref<64x64xi8, ...>) { ... }         while the second node operation uses the %buffer object
+    hida.node(%buffer : memref<64x64xi8, ...>) -> () { ... }         with read-only effect, given the syntax defined in Figure 4.
+                              (b) Structural Dataﬂow                        Automation. For procedure (1) above, each tensor result
+                                                                of each task operation is converted to a buffer operation   Figure 6. Functional to Structural dataflow lowering.
+                                                        with default partition fashions, tiling, vectorization factors,
+                                                      and placement annotations. For procedures (2) and (3) above,
+                                                           because the Functional operations are transparent while the
+we continuously fuse the least critical two adjacent tasks
+                                                                  Structural operations are isolated from above context, the
+to re-balance the dataflow until the fusion begins to gener-
+                                                                        live-ins and memory effects are analyzed during the mapping.
+ate a new critical task (lines 7 to 9). Finally, in line 10, we
+                                                  As shown in Figure 4, the arguments of the node operations
+simplify the hierarchy by canonicalizing the dispatch and
+                                                              are explicitly grouped based on their memory effects. No-
+task operations. For instance, a task containing only one
+                                                                       tably, procedure (1) to (3) can generate a legal Structural
+sub-task should be canonicalized to a single task. Notably,
+                                                                dataflow, and the node and buffer operations will be opti-
+HIDA-IR’s systematic dataflow representation allows the
+                                                      mized later in the dataflow balancing and parallelization.
+task fusion process to be expanded with different heuristics
+or algorithms under varying scenarios.                                                               6.4  Structural Dataflow Optimization
+                                                   At the Structural dataflow level, we propose two optimiza-6.3  Structural Dataflow Construction
+                                                                   tions that are crucial for dataflow efficiency but have not been
+The Functional dataflow can be lowered to Structural dataflow
+                                                           thoroughly studied in existing tools: (1) Multi-producer elim-
+for low-level optimizations and code generation. The dataflow
+                                                                     ination, which can eliminate multiple nodes writing to the
+lowering is composed of three procedures: (1) buffer oper-
+                                                   same buffer and improve the dataflow parallelism; (2) Data
+ation generation; (2) dispatch to schedule operation map-
+                                                          path balancing, which can balance different data paths by
+ping; (3) task to node operation mapping. Figure 6 shows a
+                                                                  inserting on-chip or external buffers, balancing the pipeline
+simplified example of the Functional to Structural dataflow
+                                                            execution rate to achieve the best throughput.
+lowering, where the two task operations in Figure 6(a) are
+mapped to node operations in Figure 6(b) correspondingly.      6.4.1  Eliminate Multiple Producers. Dataflow architec-
+The distinction between tensor and memory semantics draws      tures often contain buffers written to by multiple producers,
+a line between the Functional and Structural dataflow: ten-     leading to inefficient dataflow execution. For example, in
+sors are immutable objects passed between producers and      Figure 7(a), correctly managing the memory access of Buf2
+consumers directly; buffers are mutable objects that can be       is challenging as Node1 and Node2 simultaneously write to it.
+instantiated in hardware and modified multiple times. There-    As a result, to preserve correctness, the dataflow structure
+fore, in Figure 6(a), the %tensor object is produced by the     must be executed sequentially.
+first task operation and directly consumed inside of the sec-       Solution. HIDA-OPT resolves this problem considering
+ond task operation. In contrast, we can observe that the     two cases: (1) Buffer duplication. In the case of Figure 7(a), we
+original %tensor object is lowered to a buffer operation      eliminate the multiple producers by duplicating Buf2 into the
+
+                                                                             7
+Algorithm 3 Multiple producers elimination                                   Schedule        Opt. Schedule (v1)    Opt. Schedule (v2)   External
+                                                                                                                      Memory
+Require: 𝑠, dataflow schedule                                             Node0             Node0             Node0
+Ensure: Updated 𝑠, transformed dataflow schedule
+  1: for 𝑏in get_internal_buffers(𝑠) do                                        Buf0    Buf3       Buf0    Buf3       Buf0   Token     Buf3
+  2:    𝑝_𝑙𝑖𝑠𝑡←topo_sort(get_producers(𝑏))                                                                                                   Buf3’
+                                                                                                                                                                       Buf3’’
+  3:    for 𝑝in drop_front(𝑝_𝑙𝑖𝑠𝑡) do ⊲exclude the 1st producer          Node1             Node1   Copy      Node1                  Soft
+  4:        𝑏′ ←clone(𝑏)                                                                                                              FIFO
+  5:          if read_effect(𝑝, 𝑏) then                                           Buf1               Buf1    Buf3’       Buf1    Token’
+  6:         𝑐𝑜𝑝𝑦←new(copy, 𝑏, 𝑏′)                                                                                             AXI
+                                                                            Node2             Node2             Node2          Bus  7:            insert_to_front(𝑐𝑜𝑝𝑦, get_region(𝑝))
+  8:        for 𝑢in get_users(𝑏) do
+                                                                                 Buf2               Buf2               Buf2
+  9:              if dominate(𝑝, 𝑢) then          ⊲include 𝑝itself
+                                                                                                           (a)                    (b)                           (c) 10:               replace_use_with(𝑏, 𝑏′, 𝑢)
+ 11: for 𝑏in get_external_buffers(𝑠) do                         Figure 8. Balance data paths. Dash line block represents a
+ 12:    𝑝_𝑙𝑖𝑠𝑡←get_producers(𝑏)                                     1-bit token buffer. Soft FIFO is allocated in external memory
+ 13:     wrap_ops(𝑝_𝑙𝑖𝑠𝑡, new(node))        ⊲merge producers     and interfaced with dataflow through AXI interconnect.
+
+
+Buf2’ as shown in Figure 7(b). As a result, Node1 and Node2                                                                     architectures, but it does not scale well. Many dataflow nodes
+no longer write to Buf2 simultaneously, allowing the struc-                                                                      at different hierarchies can access shared buffers; as a result,
+ture to be scheduled in a pipelined manner. This duplication                                                    an inter-node analysis has a complexity of 𝑂(𝑚𝑛2), where
+is possible due to the semantics of the Structural IR, where     𝑚denotes the number of shared buffers and 𝑛is the number
+Buf2 is allocated inside the context of its parent schedule,                                                                 of nodes accessing the same buffer.
+ensuring that no external side-effect operation can access
+Buf2. (2) Node fusion. For Figure 7(c), Node1 and Node2 write      6.4.2  Balance Data Path. A complicated dataflow struc-
+to Buf2 allocated outside of its parent schedule. In this case,     ture often has multiple data paths; some paths may have
+we cannot apply the same transformation as case (1) because    more dataflow nodes to execute. If left unoptimized, the
+there may exist an external node having write-effect on Buf2.     unbalanced paths can significantly degrade the overall per-
+Specifically, if we duplicate Buf2 into Buf2’, only the original     formance of the final design. For instance, in Figure 8(a),
+Buf2 can be updated by the external write-effect nodes, leav-     the Node0-Node1-Node2 path is longer than the Node0-Node2
+ing outdated data in Buf2’. Therefore, in the next iteration,     path. As a result, Node0 must wait until the longer path
+Buf2’ may hold incorrect data and eventually lead to in-     completes before it can process the next data frame. This
+correct functionality. Thus, to eliminate the multi-producer      situation is very common in real-world applications, such as
+violation, we fuse Node1 and Node2 into a new node and     ResNet [30], which has shortcut paths in the residual blocks.
+sequentially execute them as shown in Figure 7(d).            Note that there are two levels of balancing in HIDA: one
+  Automation. Lines 1 to 10 of Algorithm 3 show the       is the data path balancing we discuss in this section; the
+pseudo-code of case (1) above. For each internal buffer, we      other is node delay balancing that will be handled separately
+first collect all its producers and sort them based on SSA dom-     during the dataflow parallelization.
+inance to maintain the predetermined memory access order        Solution. HIDA-OPT resolves this issue using two meth-
+in the subsequent transformations. Then, for each producer      ods: (1) On-chip buffer duplication. We can duplicate buffers
+except the first one, we duplicate a new buffer b’ for it (line 4)     on the shorter data paths to balance the execution speed. For
+and create an explicit memory copy from the original buffer      instance, in Figure 8(b), Buf3 is duplicated to Buf3’, followed
+b to b’ (lines 5 to 7) if the current producer p reads from b.    by an automatic insertion of a copy node between Buf3 and
+Finally, we replace uses of b with b’ if the user is dominated      Buf3’. Through this approach, the Node0-Copy-Node2 data
+by the p (lines 8 to 10), leaving exactly one producer for the     path can execute in a pipelined manner at the same rate as
+original buffer b. Lines 11 to 13 of Algorithm 3 shows the     another data path, such that Node0 no longer needs to wait.
+pseudo-code of case (2) that merges all producers of each       (2) Soft FIFO in external memory. As shown in Figure 8(c), a
+external buffer into a single node to avoid data racing.           soft FIFO is allocated in the external memory to substitute
+  Complexity. One can observe that case (2) employs a      Buf3. The FIFO is soft because data is not really shifted in
+more conservative transformation and enables the dataflow     the FIFO. Instead, the memory access addresses of dataflow
+execution of the whole design by only enforcing the sequen-     nodes are rotated to access the correct data. For instance, in
+tial execution of Node1 and Node2. One may argue for a      Figure 8(c), Node0 is writing to Buf3, while Node1 and Node2
+more comprehensive inter-node analysis of Buf2 to deter-     are reading from Buf3’ and Buf3”, respectively. Then in the
+mine whether the external write-effect nodes will intervene if     next dataflow iteration, Node0 will write to Buf3”, and Node1
+we were to duplicate Buf2 - this could work on small dataflow     and Node2 will read from Buf3 and Buf3’, respectively.
+
+                                                                             8
+   Listing 1. A dataflow example in C++. We assume  Table 4. Node connections appearing in Listing 1. S and T denote the
+  each nested loop is a dataflow node.               source and target nodes of the connection. ∅denotes empty.
+
+ 1 float A[32][16];                                                      Permutation Map   Scaling Map
+ 2 NODE0_I: for (int i=0; i<32; i++)             Source  Target  Buffer
+                                                                                      S-to-T    T-to-S   S-to-T  T-to-S
+ 3   NODE0_K: for (int k=0; k<16; k++)
+ 4     A[i][k] = ...; // Load array A.          Node0  Node2   A      [0, ∅, 1]     [0, 2]     [0.5, 1]   [2, ∅, 1]
+ 5                                                   Node1  Node2    B     [∅, 1, 0]     [2, 1]      [1, 1]   [∅, 1, 1]
+ 6 float B[16][16];
+ 7 NODE1_K: for (int k=0; k<16; k++)       Table 5. Node parallelization results of Listing 1 assuming a maximum
+ 8   NODE1_J: for (int j=0; j<16; j++)      parallel factor of 32.
+ 9     B[k][j] = ...; // Load array B.
+10                                                                             Parallel Factor      Loop Unroll Factors
+11 float C[16][16];                           Node  Intensity
+12 NODE2_I: for (int i=0; i<16; i++)                         w/o IA  w/ IA IA+CA   IA   CA   Naive
+13   NODE2_J: for (int j=0; j<16; j++)                                              Node0    512       32      4       [4, 1]     [2, 2]     [8, 4]     [4, 8]
+14     NODE2_K: for (int k=0; k<16; k++)                                              Node1    256       32      2       [1, 2]     [1, 2]     [4, 8]     [4, 8]
+15       C[i][j] = A[i*2][k] * B[k][j];                                              Node2    4,096      32      32     [4, 8, 1]  [4, 8, 1]  [4, 8, 1]  [4, 8, 1]
+
+
+     Elastic Node Execution. For method (2) above, after the      6.5.1  Intensity and Connection-Aware Approach. The
+   soft FIFO is generated, the original Buf3 is substituted with      challenges discussed above are tightly coupled and need to
+   external memory interfaces, such as memory-mapped AXI     be handled holistically. In HIDA, we propose an intensity-
+   interfaces. Therefore, the dependencies between dataflow     aware (IA) and connection-aware (CA) approach to deter-
+  nodes associated with Buf3 are no longer explicit - they     mine the best parallelization strategies:
+   access external memories through assigned addresses instead       Step (1) Intensity and Connection Analysis. We first
+   of sharing Buf3. To maintain the correct execution order,     construct two maps to record the intensity and connections
+  HIDA can automatically construct a token flow between      of each dataflow node. For each connection, we record the
+   these dataflow nodes. For instance, in Figure 8(c), once Node0      source and target node, associated buffer, permutation maps
+  completes its computation, it will send a Token, and Node1     holding the loop level alignment, and scaling maps holding
+  and Node2 will not start until they receive the Token and     the stride alignment. For instance, in Listing 1, Node0 and
+   Token’ respectively. This way, the token flows elastically     Node2 are connected through array A. Because Node0 writes
+   maintain the execution order, and no static logic in the form      to array A with the first and second loops, while Node2 reads
+   of an FSM is needed to control the execution.                 with the first and third loops, the Node0-to-Node2 permuta-
+                                                                     tion map is [0, ∅, 1], where ∅denotes empty. Meanwhile, the
+                                                             Node0-to-Node2 scaling map is [0.5, 1] as Node2 reads array
+   6.5  Structural Dataflow Parallelization            A with a stride of 2. Table 4 shows the two connections in
+                                                                   Listing 1. The permutation maps and scaling maps will be   After dataflow optimization, HIDA will parallelize each node
+                                                          used to align the loop unroll factors of connected nodes in   to improve the overall throughput and latency. However, au-
+                                                                  step (4) below.   tomatic parallelization is often very challenging for several
+                                                           Step (2) Node Sorting. We then sort all dataflow nodes   reasons: (1) Memory data layout. Degradation of dataflow
+                                                                  into a worklist in descending order of the number of con-  performance may occur without proper alignment between
+                                                                 nections with the computation intensity as tie-breaker. This   the computation pattern and memory layouts. (2) Connected-
+                                                             determines the order in which we parallelize each node. In-   ness of nodes. We define two nodes as having a connection if
+                                                                            tuitively, the parallelization strategy of a node with more   they communicate through shared buffers. Due to reason (1),
+                                                             connections will affect more nodes, while higher-intensity  when two nodes are connected, the parallelism of each node
+                                                               nodes, being more computationally complex, are more sen-   should be aware of the shared memory layout. (3) Computa-
+                                                                          sitive to optimization. Therefore, following the results of   tion intensity of nodes. We define the number of operations
+                                                                   step (1), the order of nodes in Listing 1 in terms of criticality   contained by a node as its intensity. To maximize the overall
+                                                                                    is Node2, Node0, and then Node1.  throughput while minimizing resource utilization, the opti-
+                                                             Step (3) Parallel Factor Generation. Guided by resource  mal parallel factors should be proportional to the intensity
+                                                                     constraints, HIDA-OPT determines the maximum parallel   of dataflow nodes. Due to the coupling of local design spaces,
+                                                                    factor that can be applied to a dataflow node. Then, the   the local optimality of the scheduling of each node can no
+                                                                        parallel factor of each node will be set proportionally to its   longer automatically lead to the global optimal solution for
+   dataflow architectures.
+
+                                                                                 9
+Algorithm 4 Node parallelization                                  Table 6. Array partition results of Listing 1.
+Require: 𝑛, dataflow node
+                                                                Array Partition Factors     Bank NumberEnsure: Updated 𝑛, transformed dataflow node                                                        Array
+  1: 𝑐𝑜𝑛𝑠𝑡𝑟𝑎𝑖𝑛𝑡𝑠_𝑙𝑖𝑠𝑡←new([][])              ⊲list of constraints          IA+CA  IA  CA  Naive IA+CA IA CA Naive
+  2: 𝑐_𝑙𝑖𝑠𝑡←get_connected_nodes(𝑛)
+                                          A      [8, 1]   [8, 2]  [8, 4]   [8, 8]     8    16  32    64  3: for 𝑐in 𝑐_𝑙𝑖𝑠𝑡do
+                                               B      [1, 8]   [2, 8]  [4, 8]   [8, 8]     8    16  32    64  4:    𝑢𝑛𝑟𝑜𝑙𝑙_𝑓𝑎𝑐𝑡𝑜𝑟𝑠←get_unroll_factors(𝑐)
+                                            C      [4, 8]   [4, 8]  [4, 8]   [4, 8]    32    32  32    32  5:    𝑠_𝑚𝑎𝑝←get_scaling_map(𝑐)           ⊲from step (1)
+  6:    𝑝_𝑚𝑎𝑝←get_permutation_map(𝑐)      ⊲from step (1)
+  7:    𝑐𝑜𝑛𝑠𝑡𝑟𝑎𝑖𝑛𝑡𝑠←permute(𝑢𝑛𝑟𝑜𝑙𝑙_𝑓𝑎𝑐𝑡𝑜𝑟𝑠⊙𝑠_𝑚𝑎𝑝, 𝑝_𝑚𝑎𝑝)
+  8:     append(𝑐𝑜𝑛𝑠𝑡𝑟𝑎𝑖𝑛𝑡𝑠_𝑙𝑖𝑠𝑡, 𝑐𝑜𝑛𝑠𝑡𝑟𝑎𝑖𝑛𝑡𝑠)                                                         performance and resource utilization of the proposed factors
+  9: 𝑝𝑎𝑟𝑎𝑙𝑙𝑒𝑙_𝑓𝑎𝑐𝑡𝑜𝑟←get_parallel_factor(𝑛)     ⊲from step (3)      (line 20). Then, the evaluation results or failure message are
+ 10: 𝑑𝑠𝑒←init_dse(𝑛)                       ⊲initialize DSE engine                                                            passed to the DSE and evolve the exploration. Finally, in line
+ 11: repeat 𝑢𝑛𝑟𝑜𝑙𝑙_𝑓𝑎𝑐𝑡𝑜𝑟𝑠←propose_unroll_factors(𝑑𝑠𝑒)                                                                    23, we terminate the DSE if the results have converged or
+ 12:    𝑖𝑠_𝑣𝑎𝑙𝑖𝑑←true
+                                                   met the early termination criteria. The proposed algorithm 13:    for 𝑐𝑜𝑛𝑠𝑡𝑟𝑎𝑖𝑛𝑡𝑠in 𝑐𝑜𝑛𝑠𝑡𝑟𝑎𝑖𝑛𝑡𝑠_𝑙𝑖𝑠𝑡do
+                                                         can identify the Pareto frontier in the local design space and 14:        for 𝑐𝑜𝑛𝑠𝑡𝑟, 𝑢𝑓in zip(𝑐𝑜𝑛𝑠𝑡𝑟𝑎𝑖𝑛𝑡𝑠, 𝑢𝑛𝑟𝑜𝑙𝑙_𝑓𝑎𝑐𝑡𝑜𝑟𝑠) do
+                                                                     selects the best design point under the imposed constraints. 15:              if 𝑐𝑜𝑛𝑠𝑡𝑟% 𝑢𝑓!= 0 and 𝑢𝑓% 𝑐𝑜𝑛𝑠𝑡𝑟!= 0 then
+ 16:             𝑖𝑠_𝑣𝑎𝑙𝑖𝑑←false
+                                                                6.5.2  Discussion. We summarize the results of IA+CA,
+ 17:      if product(𝑢𝑛𝑟𝑜𝑙𝑙_𝑓𝑎𝑐𝑡𝑜𝑟𝑠) >= 𝑝𝑎𝑟𝑎𝑙𝑙𝑒𝑙_𝑓𝑎𝑐𝑡𝑜𝑟then
+                                                                  IA-only, CA-only, and naive parallelization in Table 5, where 18:       𝑖𝑠_𝑣𝑎𝑙𝑖𝑑←false
+                                                              the naive solution applies the maximum parallel factor 32 to
+ 19:      if 𝑖𝑠_𝑣𝑎𝑙𝑖𝑑then
+                                                                               all dataflow nodes. One can observe our IA+CA approach 20:        evaluate_and_evolve_dse(𝑢𝑛𝑟𝑜𝑙𝑙_𝑓𝑎𝑐𝑡𝑜𝑟𝑠, 𝑑𝑠𝑒)
+                                                            achieves the best unroll factors, eventually leading to the 21:     else
+ 22:        evolve_dse(𝑢𝑛𝑟𝑜𝑙𝑙_𝑓𝑎𝑐𝑡𝑜𝑟𝑠, 𝑑𝑠𝑒)                            least computation resource utilization. Meanwhile, IA and
+                                       CA can also reduce memory resource utilization. Table 6 23: until is_converged(𝑑𝑠𝑒) or is_early_terminated(𝑑𝑠𝑒)
+ 24: apply_unrolling(𝑛, get_final_unroll_factors(𝑑𝑠𝑒))              shows the array partition results. Array partitioning is an
+                                             HLS technique that divides a large array into smaller sub-
+                                                             arrays to enable parallel access. One can observe that our
+                                              IA+CA approach achieves the lowest number of banks for
+intensity. In Listing 1, assuming the maximum parallel factor                                                               arrays appearing in Listing 1, resulting in the lowest memory
+is 32, the parallel factor of each node is listed in Table 5.                                                                       utilization. For this small example, the margin can already
+  Step (4) Node Parallelization. Dataflow nodes are par-                                                            reach 8× on arrays A and B compared to the naive solution.
+allelized in the order determined by step (2). Algorithm 4                                                          For large-scale dataflow applications, the parallelization so-
+shows the pseudo-code of node parallelization. For each node                                                                   lution can determine whether the overall solution is scalable;
+n, we first query whether any nodes connected with it have                                                     an ablation study is conducted in Section 7.3.
+been parallelized (line 2). If so, each connected node’s un-
+roll factors are multiplied with the scaling map and then
+                                           7  Evaluation
+permutated with the permutation map generated in step (1)
+(lines 3 to 8). The processed unroll factors are recorded in a     To evaluate HIDA, we use FPGAs as the target platform and
+constraints_list to constrain the intra-node DSE. Meanwhile,     perform two sets of experiments using C++ and PyTorch in-
+in line 9, we also get the parallel factor of node n generated      puts and an ablation study on a ResNet-18 model. As depicted
+in step (3) to constrain the overall parallelism of n.               in Figure 3, AMD Vitis HLS 2022.1 [34] is used for generating
+  With all the constraints generated, lines 10 to 23 of Algo-    RTL code. All reported performances and resource utilization
+rithm 4 illustrate a simplified intra-node DSE for node n. In      are collected from the synthesis results of Vitis HLS.
+each iteration of exploration, the DSE engine will propose
+new unroll factors for evaluation. However, the proposed      7.1  C++ Kernels Evaluation
+factors could fail to meet the constraints in two cases: (1) If     Experiment Settings. We evaluate HIDA with a set of C++
+any of the unroll factors are mutually indivisible with the     benchmarks from PolyBench [58]. The benchmarks cover
+corresponding constraint (lines 13 to 16); or (2) the overall      multiple categories, including blas routines (gesummv, symm,
+parallelism exceeds the pre-calculated parallel factor (lines     and syr2k), linear algebra kernels (2mm, 3mm, atax, bicg, and
+17 to 18). Case (1) can cause unaligned inter-node mem-     mvt), data mining (correlation), and stencils (jacobi-2d and
+ory access behavior, while case (2) can cause imbalanced      seidel-2d). The target platform is AMD-Xilinx ZU3EG FPGA.
+dataflow execution, both leading to sub-optimal dataflow     Table 7 shows the evaluation results. Although Vitis HLS can
+efficiency. If all the constraints are fulfilled, HIDA employs a      automatically apply optimizations such as loop pipeline, it
+quality of results (QoR) estimator from [70] to evaluate the     cannot conduct complex dataflow analysis and optimizations.
+
+                                                                             10
+Table 7. Evaluation results for C++ kernels. ScaleHLS designs are automatically generated by [70]. SOFF results are ported
+from their paper [37], which compared with SDAccel (previous name of Vitis). Vitis designs are solely optimized by Vitis HLS.
+
+             HIDA                     LUT      FF     DSP                  Throughput (Samples/s)*
+      Kernel    Compile
+                     Number  Number  Number   HIDA    ScaleHLS [70]    SOFF [37]        Vitis [34]              Time (s)
+    2mm         0.65       38.8k      27.4k       269       239.22     122.39 (1.95×)     30.67 (7.80×)     1.23 (194.88×)
+    3mm         0.79       38.7k      27.8k       243       175.43      92.33 (1.90×)               -           1.04 (167.99×)
+       atax         2.06       44.6k      34.6k       260      1,021.39     932.26 (1.10×)    2,173.17 (0.47×)    103.18 (9.90×)
+        bicg         0.72       16.0k      15.1k       61       2,869.69    2,869.61 (1.00×)   2,295.75 (1.25×)   104.19 (27.54×)
+    correlation      0.91       14.5k      12.3k       66        67.33       59.77 (1.13×)      3.96 (16.99×)      1.32 (50.97×)
+    gesummv      0.60       34.2k      22.8k       232      31,685.68   31,685.68 (1.00×)   3,466.70 (9.14×)   266.65 (118.83×)
+     jacobi-2d       1.98       91.4k      56.6k       352       257.27     128.63 (2.00×)              -            2.71 (94.95×)
+      mvt          0.42       23.8k      16.5k       162      9,979.04    4,989.02 (2.00×)   870.01 (11.47×)   62.13 (160.62×)
+      seidel-2d       3.59        5.5k        2.5k        4         0.14        0.14 (1.00×)               -            0.11 (1.28×)
+    symm        1.05       14.9k       9.5k        74         2.62        2.62 (1.00×)               -            2.02 (1.29×)
+      syr2k         0.69       14.3k      12.8k       78        27.68       27.67 (1.00×)               -            1.44 (19.23×)
+
+    Geo. Mean     0.99                                                 1.29×           4.49×          31.08×
+
+     * Numbers in () show throughput improvements of HIDA over others.
+
+
+As a result, HIDA achieves 31.08× higher throughput on
+average over Vitis HLS.
+  Comparison with Previous Works. Compared with
+the state-of-the-art (SOTA) HLS optimization framework                            75.6X             41.5X             57.0X
+ScaleHLS [70], and another HLS framework SOFF [37], HIDA
+achieved 1.29× and 4.49× higher throughput, respectively.
+We observed that for single-loop kernels (bicg, gesummv,
+seidel-2d, symm, and syr2k), the performance of HIDA was
+on par with ScaleHLS due to these kernels not presenting
+                                                        Figure 9. Memory utilization compared with ScaleHLS [70].
+any dataflow optimization opportunities. For the multi-loop
+kernels, HIDA outperforms ScaleHLS due to dataflow opti-
+mizations. When only considering multi-loop kernels, HIDA
+achieves 1.57× higher throughput than ScaleHLS. We con-      Comparison with Previous Works. Again, we compare
+cluded that the dataflow scheduling and parallelization prob-    HIDA with ScaleHLS [70], where we observe an 8.54× higher
+lems are pervasive based on the evaluation results. Thus,     throughput. The throughput gains are much more significant
+HIDA-OPT can better optimize these kernels, ultimately lead-     than the C++ kernels due to large DNN models exposing
+ing to an increased performance.                        more opportunities for HIDA to optimize the dataflow ar-
+                                                                    chitecture. For ZFNet and YOLO, ScaleHLS cannot produce
+                                                                    results due to the DNNs having irregular convolution sizes
+                                                     and high-resolution inputs, respectively, demonstrating the7.2  PyTorch Models Evaluation
+                                                             superior flexibility and scalability of HIDA. For the four
+Experiment Settings. We evaluate HIDA with a set of deep
+                                                     benchmarks supported by ScaleHLS, we use DSP efficiency
+neural network (DNN) benchmarks written in PyTorch to
+                                                                 to compare the two frameworks, calculated as:
+understand its performance on large-scale dataflow appli-
+cations. The benchmarks cover multiple categories of DNN                          𝑇ℎ𝑟𝑜𝑢𝑔ℎ𝑝𝑢𝑡× 𝑂𝑃𝑠
+                                                            𝐸𝑓𝑓𝑖𝑐𝑖𝑒𝑛𝑐𝑦𝐷𝑆𝑃=                                     (1)models, including image classification (ResNet-18 [30], Mo-                      𝑁𝑢𝑚𝑏𝑒𝑟𝐷𝑆𝑃× 𝐹𝑟𝑒𝑞𝑢𝑒𝑛𝑐𝑦,
+bileNet [31], ZFNet [74], and VGG-16 [63]), object detec-
+tion (YOLO [60]), and fully-connected networks (MLP). The     where𝑂𝑃𝑠denotes the number of multiply-accumulate (MAC)
+optimization for these models exhibit significant variations     operations per sample of the DNN, Throughput is samples
+under dataflow setting, owing to the distinct layer types and     per second, and 𝐹𝑟𝑒𝑞𝑢𝑒𝑛𝑐𝑦denotes the clock frequency con-
+interconnections. The targeted platform is one super logic      stant at 200MHz for both ScaleHLS and HIDA. DSP efficiency
+region (SLR) of an AMD-Xilinx VU9P FPGA. Table 8 shows       is a common metric for comparing the efficiency of DNN
+the evaluation results. Even for these complicated DNN mod-     accelerators across different platforms or frameworks. A
+els, HIDA only takes 108.7 seconds on average to compile     100% of DSP efficiency indicates all instantiated DSPs in the
+them into dataflow implementations.                            accelerator continuously operating without stalling. HIDA
+
+                                                                             11
+Table 8. Evaluation results for PyTorch models. DNNBuilder results are directly from their paper [77]. To make fair comparison,
+we constrained the FPGA resources to the same with DNNBuilder. ScaleHLS designs are automatically generated by [70].
+
+            HIDA                         Throughput (Samples/s)*            DSP Efficiency*
+                    LUT     DSP
+     Model    Compile                                                               ScaleHLS                                                                            DNNBuilder                                                                                                ScaleHLS                    Number  Number  HIDA  DNNBuilder                                                           HIDA             Time (s)                                                             [77]                                                                           [70]                                                                                                  [77]                                                                                                                [70]
+
+   ResNet-18      83.1      142.1k      667       45.4             -          3.3 (13.88×)   73.8%            -        5.2% (14.24×)
+   MobileNet     110.8      132.9k      518      137.4            -          15.4 (8.90×)   75.5%            -         9.6% (7.88×)
+     ZFNet       116.2      103.8k      639       90.4    112.2 (0.81×)           -        82.8%   79.7% (1.04×)           -
+    VGG-16      199.9      266.2k      1118      48.3     27.7 (1.74×)     6.9 (6.99×)   102.1%   96.2% (1.06×)   18.6% (5.49×)
+    YOLO       188.2      202.8k      904       33.7     22.1 (1.52×)            -        94.3%   86.0% (1.10×)           -
+    MLP         40.9       21.0k       164      938.9            -         152.6 (6.15×)   90.0%            -        17.6% (5.10×)
+
+   Geo. Mean    108.7                                   1.29×        8.54×                1.07×         7.49×
+
+    * Numbers in () show throughput/DSP efficiency improvements of HIDA over others.
+
+
+achieves 7.49× higher DSP efficiency than ScaleHLS on aver-
+age and 14.24× for ResNet-18. We attribute the much higher
+efficiency for ResNet-18 to HIDA’s ability to optimize short-
+cut data paths. For VGG-16, we observe an over 100% DSP
+efficiency, attributing the excess percentage to the back-end
+RTL generator where MAC operations can be instantiated
+with LUTs when resources are abundant.
+  Apart from the throughput and efficiency improvements,
+we also observe substantial on-chip memory reduction by                                                                              (a)
+HIDA compared to ScaleHLS. As Figure 9 shows, HIDA can
+reduce memory utilization by 41.5× to 75.6× due to several
+factors: (1) HIDA can leverage loop tiling and local buffer cre-
+ation to only cache small tiles of intermediate results while
+enabling the dataflow execution. In comparison, ScaleHLS
+must keep all intermediate results on-chip due to the lack
+of external memory access support. (2) The IA+CA paral-
+lelization can drastically reduce the buffer sizes. In summary,
+HIDA can utilize computation and memory resources more                                                                            (b)
+efficiently and achieve substantial throughput improvements
+on DNN models compared to SOTA frameworks.
+  Comparison with Dedicated DNN Accelerator. In ad-
+dition to the comparison with HLS optimization frameworks,
+we further compare HIDA with a dedicated DNN acceleration
+framework, DNNBuilder [77]. DNNBuilder has RTL-based
+and human-designed DNN IPs and can enable the dataflow
+execution of all the instantiated IPs to achieve SOTA through-
+put and efficiency on FPGAs. As shown in Table 8, HIDA                                                                               (c)
+achieves 1.29× and 1.07× higher throughput and DSP effi-
+ciency compared to DNNBuilder, which already has an ex-     Figure 10. Parallel factor and tile size ablation on ResNet-18.
+tremely high DSP efficiency. Note that DNNBuilder doesn’t
+support ResNet-18 and MobileNet due to its lack of support
+                                                               7.3  Ablation Study on ResNet-18for shortcut paths and depthwise convolutions. Through this
+comparison, we demonstrate the productivity and perfor-     Parallel Factor and Tile Size Ablation. To understand
+mance of HIDA outperforming a dedicated DNN acceleration     the scalability of HIDA, we perform an ablation study on
+framework. Additionally, we demonstrate the flexibility of     ResNet-18 by sweeping the maximum parallel factor from 1
+HIDA, which can automatically adapt to a wide range of      to 256 and tile size from 2 to 32. Three metrics (DSP utiliza-
+computational patterns.                                              tion, memory utilization, and throughput) are measured for
+                                                        each combination of parallel factor and tile size. Figure 10
+
+                                                                             12
+shows the ablation study results. Overall, as the parallel fac-
+tor increases, all three metrics increase as expected, showing
+promising scalability of HIDA. Meanwhile, the overall trend
+predictably showed more memory instances being utilized as                              3.7X       4.5X
+we increased the tile size. However, we also observed some
+interesting findings summarized as follows:
+
+• Small tile can drastically increase DSP utilization. Counter-
+   intuitively, the number of DSPs increases when the tile size                                                                             (a)
+  decreases, highlighted by the data point with a parallel fac-
+  tor of 1 and a tile size of 2, instantiating 518 DSPs. Analysis
+  shows that due to small tiles needing fine-grained control
+  of memory accesses, a large number of DSPs are used for                                         4.7X
+  address calculations instead of actual computations.                                    1.2X
+• Smaller tile may not reduce memory utilization. For small
+   parallel factors (1 to 8) and small tile sizes (2 to 8), the mem-
+  ory utilization does not change noticeably within the range.
+  Analysis shows that as the minimum memory instance is                                                                           (b)
+ BRAM (block RAM) for FPGAs, increasing parallel factor
+  or tile size may not demand more BRAM instances as long
+  as the current BRAMs are large enough to hold the data
+   tiles and can provide enough bandwidth.                                                             1.0X
+• Throughput and tile size may positively correlate. Ideally,                            44.3X
+  different tile sizes should not affect the throughput. How-
+  ever, experimental results disagree: throughput increases
+  with tile size being larger, especially for large parallel fac-
+  tors (32 to 256). Analysis shows two main reasons for the                                                                                                                                                         (c)
+  observed behavior: (1) Small tile sizes cannot provide suf-
+   ficient bandwidth, resulting in a degradation of the level                                                        Figure 11. Intensity-aware (IA) and connection-aware (CA)
+  of parallelism.(2) Small tile sizes cannot provide sufficient                                                            dataflow parallelization ablation on ResNet-18.
+  burst length for consecutive external memory access, lead-
+  ing to poor external memory efficiency.
+
+                                              IA+CA shows substantially better resource utilization effi-
+  Node Parallelization Ablation. Section 6 introduces                                                             ciency than other groups. For instance, for the data samples
+IA and CA approaches to drive the dataflow parallelization.                                                          with a parallel factor of 32, compared with the other groups,
+To better understand the performance of the two methods                                               IA+CA performs on par in throughput but utilizes 4.5× less
+on large-scale applications, we conduct an ablation study                                               DSP and 4.7× less memory. Through these comparisons, we
+on ResNet-18. In this study, we set four groups of experi-                                                        demonstrate the superior scalability and efficiency of our
+ments (IA+CA, IA-only, CA-only, and Naive) for comparison,                                                        proposed IA+CA dataflow parallelization approach.
+and for each group, we sweep the maximum parallel factor
+from 1 to 256. As expected, the four groups show a similar
+                                           8  Related Works
+trend in DSP numbers - they increase proportionally with
+                                                               8.1  MLIR Infrastructurethe parallel factor. However, the IA+CA group shows a dras-
+tically different trend in memory and throughput compared    MLIR [20, 45] is a compiler infrastructure with multiple lev-
+with the other groups - only IA+CA scales well when we       els of representation, allowing users to tailor domain-specific
+increase the parallel factor. For instance, for the data sam-     compilers. MLIR also provides commonly used IRs and opti-
+ples with a parallel factor of 64, compared with the other      mizations for different domains, including tensor [21], linear
+groups, IA+CA utilizes 3.7× less DSP and 1.2× less memory,     algebra [19], and loop [18]. As MLIR is an infrastructure for
+yet achieves 44.3× better throughput. After studying the      compilers, it does not natively support hardware-oriented
+generated accelerators, we found for all the other groups      compilation; however, many related compilers have been
+except IC+CA, the compiler generates overly-complicated     developed on top of MLIR. IREE [17] provides compilation
+control logics due to the mismatch between node unroll fac-    and runtime support for hardware accelerators like GPU.
+tors and memory layouts, ultimately falling back to flawed    CIRCT [16] is a toolchain for circuit design and optimization,
+designs. Meanwhile, even when all groups can be scaled well,     supporting HLS, HDL-generation languages [3], and HDL.
+
+                                                                             13
+8.2  HLS Languages                                         the purpose of HLS. However, the dataflow optimizations are
+Different domain-specific languages (DSL) have been pro-     not compatible with these compilers due to the fundamen-
+posed to improve the productivity and performance of com-      tally different programming model and memory hierarchy
+mercial HLS tools. TAPA [10, 29] introduced specialized      of HLS-based dataflow accelerators.
+interfaces to enable dataflow and efficient external mem-      CIRCT. Handshake dialect [15] is a CIRCT dialect imple-
+ory access, but didn’t provide solution for dataflow DSE. As     menting the elastic circuit components and dynamic schedul-
+a result, TAPA requires users to make many design deci-     ing algorithms proposed in Dynamatic [39]. Coarse-grained
+sions, such as task parallelization and buffer implementation.     tasks are abstracted as functions in the handshake dialect,
+Spatial [42] abstracted interfaces for describing the control,    where scalar intermediate results are passed between dif-
+memory, and I/O structures, enabling auto-tuning-based DSE.      ferent functions through handshaking FIFOs. However, for
+Dahlia [54] proposed an affine-based approach to improve      tensor intermediate results, the handshake dialect adopts a
+the predictability of HLS designs. Aetherling [25] proposed a      load-store queue-based [38] shared memory model instead
+strong type system to tackle the fine-grained scheduling and      of the dataflow model for inter-function communication,
+DSE of hardware design. Another cluster of works extends     drawing a line between the two. Elastic silicon intercon-
+existing language syntax, such as Python, to further raise     nect (ESI) dialect [14] is another CIRCT dialect aiming to
+the abstraction level of HLS designs, including DaCe [4] and     provide type-safe and latency-insensitive interface abstrac-
+PyLog [32]. These languages are orthogonal to HIDA, which      tion for FPGA/ASIC design. In contrast, HIDA aims to tackle
+attempts to address the dataflow optimization problem with      the DSE problem of fine-grained and coarse-grained sched-
+compiler techniques. As future works, they can be integrated      uling, which is orthogonal to the mission of the ESI dialect.
+as front-ends to further improve the productivity of HIDA.
+  HeteroCL. HeteroCL [43] and HeteroFlow [68] decou-     8.4 DNN Compilers
+pled the algorithmic description and optimization of HLS   DNN layer fusion algorithms have been studied in recent
+designs by providing a versatile set of computation, data     years [2, 82] to reduce the layer-wise communication cost
+type, and data movement customization primitives. Hete-     of DNN training or inference. In contrast, HIDA’s task fu-
+roCL incorporated third-party frameworks for automated      sion is a general-purpose algorithm for dataflow applications
+HLS optimization, including PolySA [13] for systolic arrays      in different domains. The patterns proposed by [2, 82] can
+and SODA [9] for stencil applications. However, these au-     be implemented and plugged into HIDA. The scheduling
+tomated optimizations are intra-task and domain-specific.     problem of cache-based or scratchpad-based DNN accelera-
+For inter-task optimizations and computation patterns that      tors has also been thoroughly studied, such as in Eyeriss [7],
+are not covered by third-party frameworks, designers must     Diannao [6], and Timeloop [56], either from an architec-
+make every design decision empirically. Meanwhile, Hete-     ture or compiler perspective. However, the scheduling of
+roCL cannot directly take PyTorch as an input - designers     dataflow-based DNN accelerators is still under intensive
+must rewrite the PyTorch model in HeteroCL DSL.             study [61, 81, 85]. The intention to balance the dataflow
+                                                                  pipeline while enabling buffer sharing or streaming between
+                                                                  layer instances (either a single DNN layer, a fused layer, or a8.3  HLS Compilers
+                                                     decomposed layer) significantly complicates the scheduling
+Existing works have explored different approaches for the                                                           problem. The reason is, as we mentioned in Section 6.5, the
+fine-grained scheduling problem in HLS, including static                                                                    local optimality of each layer cannot lead to the global op-
+scheduling (Spatial [42], SOFF [37], and Calyx [55]), dynamic                                                               timal dataflow architecture. Although existing works, such
+scheduling (Dynamatic [39] and TAPAS [49]), and static-                                                             as FINN [65] and DNNBuilder [77], explored the problem
+dynamic hybrid scheduling (DASS [8] and Hector [69]). Fine-
+                                                                 to some extent, their framework can only target a subset of
+grained scheduling deals with operator-level parallelism,                                                 DNNs; for instance, DNNBuilder only supports CNNs.
+such as multipliers, instead of task-level and thus is very dif-
+ferent from the problems we addressed in HIDA. For instance,
+fine-grained scheduling does not consider the intra-task par-    9  Conclusion
+allelization. We have seen a large amount of HLS optimiza-     In this paper, we propose HIDA, an HLS framework that
+tion tools, including LLVM-based (Merlin [11], COMBA [79],     can systematically transform an algorithmic description into
+and HPVM2FPGA [26]) and MLIR-based (ScaleHLS [70],    an efficient dataflow implementation. We propose a two-
+POLSCA [80], and SODA-Opt [1]). However, as discussed      level dataflow representation, HIDA-IR, and a hierarchical
+in Section 1, these tools either did not consider dataflow     dataflow optimizer, HIDA-OPT, significantly improving the
+during the compilation or are limited in dataflow-oriented      productivity, performance, and scalability of HLS dataflow
+optimizations. Another alternative solution is leveraging      accelerators. To demonstrate the performance of HIDA, we
+existing multi-core CPU or CGRA compilers, such as Poly-     evaluate a set of DNN models and C++ kernels, where HIDA
+Mage [52], Tapir [62], Unified Buffer [48], and Revet [61], for     outperforms the existing SOTA hand-tuned RTL-based DNN
+
+                                                                             14
+accelerator and compilation-based HLS frameworks. We       [11] Jason Cong, Muhuan Huang, Peichen Pan, Yuxin Wang, and Peng
+hope that the HIDA framework will serve as a new open in-          Zhang. 2016. Source-to-source optimization for HLS. FPGAs for Soft-
+frastructure for future dataflow architectural research, allow-          ware Programmers (2016), 137–163.
+                                                                                 [12] Jason Cong, Bin Liu, Stephen Neuendorffer, Juanjo Noguera, Kees
+ing researchers to explore the vast design space effectively.                                                                                            Vissers, and Zhiru Zhang. 2011. High-level synthesis for FPGAs: From
+                                                                              prototyping to deployment. IEEE Transactions on Computer-Aided
+                                                                               Design of Integrated Circuits and Systems 30, 4 (2011), 473–491.
+Acknowledgments                                                  [13] Jason Cong and Jie Wang. 2018. PolySA: Polyhedral-based systolic
+                                                                                   array auto-compilation. In 2018 IEEE/ACM International Conference on
+We thank all anonymous reviewers and Adrian Sampson                                                                            Computer-Aided Design (ICCAD). IEEE, 1–8.
+of Cornell University for their valuable feedback and sug-       [14] CIRCT Contributors. 2023. CIRCT ESI Dialect.  https://circt.llvm.org/
+gestions. This work is supported in part by AMD Center of            docs/Dialects/ESI/
+Excellence at UIUC, AMD Heterogeneous Adaptive Compute       [15] CIRCT Contributors. 2023. CIRCT Handshake Dialect.  https://circt.
+Cluster (HACC) initiative, NSF 2117997 grant through the            llvm.org/docs/Dialects/Handshake/
+                                                                                 [16] CIRCT Contributors. 2023. The CIRCT Project.  https://github.com/
+A3D3 institute, and Semiconductor Research Corporation                                                                                           llvm/circt
+(SRC) 2023-CT-3175 grant.                                                [17] IREE Contributors. 2023. The IREE Project. https://github.com/openxla/
+                                                                                             iree
+                                                                                 [18] MLIR Contributors. 2023. MLIR Affine Dialect.  https://mlir.llvm.org/
+References                                                                    docs/Dialects/Affine/
+                                                                                 [19] MLIR Contributors. 2023. MLIR LinAlg Dialect.  https://mlir.llvm.org/
+ [1] Nicolas Bohm Agostini, Serena Curzel, Vinay Amatya, Cheng Tan,
+                                                                                     docs/Dialects/Linalg/
+    Marco Minutoli, Vito Giovanni Castellana, Joseph Manzano, David                                                                                 [20] MLIR Contributors. 2023. MLIR Project. https://github.com/llvm/llvm-
+      Kaeli, and Antonino Tumeo. 2022. An MLIR-based Compiler Flow for
+                                                                                    project/tree/main/mlir
+     System-Level Design and Hardware Acceleration. In Proceedings of                                                                                 [21] MLIR Contributors. 2023. MLIR Tensor Dialect.  https://mlir.llvm.org/
+     the 41st IEEE/ACM International Conference on Computer-Aided Design.
+                                                                                docs/Dialects/TensorOps/
+     1–9.
+                                                                                 [22] Torch-MLIR Contributors. 2023. Torch-MLIR Project.  https://github.
+ [2] Manoj Alwani, Han Chen, Michael Ferdman, and Peter Milder. 2016.
+                                                                                 com/llvm/torch-mlir/
+     Fused-layer CNN accelerators. In 2016 49th Annual IEEE/ACM Interna-                                                                                 [23] Ron Cytron, Jeanne Ferrante, Barry K Rosen, Mark N Wegman, and
+      tional Symposium on Microarchitecture (MICRO). IEEE, 1–12.                                                                       F Kenneth Zadeck. 1991. Efficiently computing static single assign-
+ [3] Jonathan Bachrach, Huy Vo, Brian Richards, Yunsup Lee, Andrew                                                                   ment form and the control dependence graph. ACM Transactions on
+    Waterman, Rimas Avižienis, John Wawrzynek, and Krste Asanović.
+                                                                        Programming Languages and Systems (TOPLAS) 13, 4 (1991), 451–490.
+     2012. Chisel: constructing hardware in a scala embedded language. In
+                                                                                 [24] Zidong Du, Robert Fasthuber, Tianshi Chen, Paolo Ienne, Ling Li, Tao
+     Proceedings of the 49th Annual Design Automation Conference. 1216–                                                                                 Luo, Xiaobing Feng, Yunji Chen, and Olivier Temam. 2015. ShiDianNao:
+     1225.                                                                                      Shifting vision processing closer to the sensor. In Proceedings of the
+ [4] Tal Ben-Nun, Johannes de Fine Licht, Alexandros N Ziogas, Timo                                                                          42nd Annual International Symposium on Computer Architecture. 92–
+     Schneider, and Torsten Hoefler. 2019. Stateful dataflow multigraphs:                                                                                       104.
+   A data-centric model for performance portability on heterogeneous                                                                                 [25] David Durst, Matthew Feldman, Dillon Huff, David Akeley, Ross Daly,
+     architectures. In Proceedings of the International Conference for High                                                                                        Gilbert Louis Bernstein, Marco Patrignani, Kayvon Fatahalian, and Pat
+     Performance Computing, Networking, Storage and Analysis. 1–14.                                                                          Hanrahan. 2020. Type-directed scheduling of streaming accelerators.
+ [5] Mohamed-Walid Benabderrahmane, Louis-Noël Pouchet, Albert Co-                                                                                    In Proceedings of the 41st ACM SIGPLAN Conference on Programming
+     hen, and Cédric Bastoul. 2010. The polyhedral model is more widely
+                                                                         Language Design and Implementation. 408–422.
+     applicable than you think. In Compiler Construction: 19th International
+                                                                                 [26] Adel Ejjeh, Leon Medvinsky, Aaron Councilman, Hemang Nehra, Suraj
+     Conference, CC 2010, Held as Part of the Joint European Conferences on
+                                                                            Sharma, Vikram Adve, Luigi Nardi, Eriko Nurvitadhi, and Rob A Ruten-
+     Theory and Practice of Software, ETAPS 2010, Paphos, Cyprus, March                                                                                                bar. 2022. HPVM2FPGA: Enabling true hardware-agnostic FPGA pro-
+      20-28, 2010. Proceedings 19. Springer, 283–303.                                                                       gramming. In 2022 IEEE 33rd International Conference on Application-
+ [6] Tianshi Chen, Zidong Du, Ninghui Sun, Jia Wang, Chengyong Wu,                                                                                                  specific Systems, Architectures and Processors (ASAP). IEEE, 1–10.
+     Yunji Chen, and Olivier Temam. 2014. Diannao: A small-footprint                                                                                 [27] Farah Fahim, Benjamin Hawks, Christian Herwig, James Hirschauer,
+     high-throughput accelerator for ubiquitous machine-learning. ACM                                                                             Sergo Jindariani, Nhan Tran, Luca P Carloni, Giuseppe Di Guglielmo,
+    SIGARCH Computer Architecture News 42, 1 (2014), 269–284.                                                                                         Philip Harris, Jeffrey Krupa, et al. 2021. hls4ml: An open-source code-
+ [7] Yu-Hsin Chen, Tushar Krishna, Joel S Emer, and Vivienne Sze. 2016.                                                                                 sign workflow to empower scientific low-power machine learning
+      Eyeriss: An energy-efficient reconfigurable accelerator for deep con-                                                                                        devices. arXiv preprint arXiv:2103.05579 (2021).
+     volutional neural networks. IEEE journal of solid-state circuits 52, 1                                                                                 [28] Hasan Genc, Seah Kim, Alon Amid, Ameer Haj-Ali, Vighnesh Iyer,
+      (2016), 127–138.                                                                        Pranav Prakash, Jerry Zhao, Daniel Grubb, Harrison Liew, Howard
+ [8] Jianyi Cheng, Lana Josipovic, George A Constantinides, Paolo Ienne,                                                                      Mao, et al. 2021. Gemmini: Enabling systematic deep-learning archi-
+    and John Wickerson. 2020. Combining dynamic & static scheduling                                                                                     tecture evaluation via full-stack integration. In 2021 58th ACM/IEEE
+      in high-level synthesis. In Proceedings of the 2020 ACM/SIGDA Interna-
+                                                                               Design Automation Conference (DAC). IEEE, 769–774.
+      tional Symposium on Field-Programmable Gate Arrays. 288–298.                                                                                 [29] Licheng Guo, Yuze Chi, Jason Lau, Linghao Song, Xingyu Tian, Moazin
+ [9] Yuze Chi, Jason Cong, Peng Wei, and Peipei Zhou. 2018. SODA: Stencil                                                                                         Khatti, Weikang Qiao, Jie Wang, Ecenur Ustun, Zhenman Fang, et al.
+     with optimized dataflow architecture. In 2018 IEEE/ACM International                                                                                     2022. TAPA: A Scalable Task-Parallel Dataflow Programming Frame-
+     Conference on Computer-Aided Design (ICCAD). IEEE, 1–8.                                                                  work for Modern FPGAs with Co-Optimization of HLS and Physical
+[10] Yuze Chi, Licheng Guo, Jason Lau, Young-kyu Choi, Jie Wang, and                                                                                 Design. arXiv preprint arXiv:2209.02663 (2022).
+     Jason Cong. 2021. Extending high-level synthesis for task-parallel                                                                                 [30] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. 2016. Deep
+     programs. In 2021 IEEE 29th Annual International Symposium on Field-                                                                                      residual learning for image recognition. In Proceedings of the IEEE
+     Programmable Custom Computing Machines (FCCM). IEEE, 204–213.
+
+                                                                             15
+     conference on computer vision and pattern recognition. 770–778.              [48] Qiaoyi Liu, JeffSetter, Dillon Huff, Maxwell Strange, Kathleen Feng,
+[31] Andrew G Howard, Menglong Zhu, Bo Chen, Dmitry Kalenichenko,         Mark Horowitz, Priyanka Raina, and Fredrik Kjolstad. 2023. Unified
+    Weijun Wang, Tobias Weyand, Marco Andreetto, and Hartwig Adam.             Buffer: Compiling Image Processing and Machine Learning Applica-
+     2017. Mobilenets: Efficient convolutional neural networks for mobile             tions to Push-Memory Accelerators. ACM Transactions on Architecture
+     vision applications. arXiv preprint arXiv:1704.04861 (2017).                   and Code Optimization 20, 2 (2023), 1–26.
+[32] Sitao Huang, Kun Wu, Hyunmin Jeong, Chengyue Wang, Deming       [49] Steven Margerm, Amirali Sharifian, Apala Guha, Arrvindh Shriraman,
+    Chen, and Wen-mei Hwu. 2021. Pylog: An algorithm-centric python-          and Gilles Pokam. 2018. TAPAS: Generating parallel accelerators
+     based FPGA programming and synthesis flow. IEEE Trans. Comput.          from parallel programs. In 2018 51st Annual IEEE/ACM International
+      70, 12 (2021), 2015–2028.                                             Symposium on Microarchitecture (MICRO). IEEE, 245–257.
+[33] Yuka Ikarashi, Gilbert Louis Bernstein, Alex Reinking, Hasan Genc,       [50] Thierry Moreau, Tianqi Chen, Ziheng Jiang, Luis Ceze, Carlos Guestrin,
+    and Jonathan Ragan-Kelley. 2022.  Exocompilation for productive          and Arvind Krishnamurthy. 2018. VTA: an open hardware-software
+    programming of hardware accelerators. In Proceedings of the 43rd ACM            stack for deep learning. arXiv preprint arXiv:1807.04188 (2018).
+    SIGPLAN International Conference on Programming Language Design       [51] William S Moses, Lorenzo Chelini, Ruizhe Zhao, and Oleksandr Zi-
+    and Implementation. 703–718.                                             nenko. 2021. Polygeist: Raising C to polyhedral MLIR. In 2021 30th
+[34] Advanced Micro Devices Inc. 2022.  Vitis High-Level Synthesis User             International Conference on Parallel Architectures and Compilation Tech-
+     Guide UG1399 (v2022.2).                                                       niques (PACT). IEEE, 45–59.
+[35] Intel Inc. 2022. Intel High Level Synthesis Compiler Pro Edition Reference       [52] Ravi Teja Mullapudi, Vinay Vasista, and Uday Bondhugula. 2015. Poly-
+    Manual (22.4).                                                        mage: Automatic optimization for image processing pipelines. ACM
+[36] Microchip Technology Inc. 2021. LegUp 2021.1 Documentation.              SIGARCH Computer Architecture News 43, 1 (2015), 429–443.
+[37] Gangwon Jo, Heehoon Kim, Jeesoo Lee, and Jaejin Lee. 2020. SOFF: An       [53] Luigi Nardi, David Koeplinger, and Kunle Olukotun. 2019. Practical
+    OpenCL high-level synthesis framework for FPGAs. In 2020 ACM/IEEE            design space exploration. In 2019 IEEE 27th International Symposium on
+     47th Annual International Symposium on Computer Architecture (ISCA).            Modeling, Analysis, and Simulation of Computer and Telecommunication
+     IEEE, 295–308.                                                            Systems (MASCOTS). IEEE, 347–358.
+[38] Lana Josipovic, Philip Brisk, and Paolo Ienne. 2017. An out-of-order       [54] Rachit Nigam, Sachille Atapattu, Samuel Thomas, Zhijing Li, Theodore
+     load-store queue for spatial computing. ACM Transactions on Embedded            Bauer, Yuwei Ye, Apurva Koti, Adrian Sampson, and Zhiru Zhang.
+    Computing Systems (TECS) 16, 5s (2017), 1–19.                                  2020. Predictable accelerator design with time-sensitive affine types.
+[39] Lana Josipović, Radhika Ghosal, and Paolo Ienne. 2018. Dynamically            In Proceedings of the 41st ACM SIGPLAN Conference on Programming
+     scheduled high-level synthesis. In Proceedings of the 2018 ACM/SIGDA           Language Design and Implementation. 393–407.
+     International Symposium on Field-Programmable Gate Arrays. 127–136.        [55] Rachit Nigam, Samuel Thomas, Zhijing Li, and Adrian Sampson. 2021.
+[40] Norman P Jouppi, CliffYoung, Nishant Patil, David Patterson, Gaurav       A compiler infrastructure for accelerator generators. In Proceedings
+    Agrawal, Raminder Bajwa, Sarah Bates, Suresh Bhatia, Nan Boden,             of the 26th ACM International Conference on Architectural Support for
+    Al Borchers, et al. 2017.  In-datacenter performance analysis of a          Programming Languages and Operating Systems. 804–817.
+     tensor processing unit. In Proceedings of the 44th annual international       [56] Angshuman Parashar, Priyanka Raina, Yakun Sophia Shao, Yu-Hsin
+    symposium on computer architecture. 1–12.                                Chen, Victor A Ying, Anurag Mukkara, Rangharajan Venkatesan,
+[41] HyeGang Jun, Hanchen Ye, Hyunmin Jeong, and Deming Chen. 2023.          Brucek Khailany, Stephen W Keckler, and Joel Emer. 2019. Timeloop:
+     AutoScaleDSE: A Scalable Design Space Exploration Engine for High-       A systematic approach to dnn accelerator evaluation. In 2019 IEEE in-
+     Level Synthesis. ACM Trans. Reconfigurable Technol. Syst. (2023).                  ternational symposium on performance analysis of systems and software
+[42] David Koeplinger, Matthew Feldman, Raghu Prabhakar, Yaqi Zhang,            (ISPASS). IEEE, 304–315.
+     Stefan Hadjis, Ruben Fiszel, Tian Zhao, Luigi Nardi, Ardavan Pedram,       [57] Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James
+     Christos Kozyrakis, et al. 2018.  Spatial: A language and compiler           Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia
+     for application accelerators. In Proceedings of the 39th ACM SIGPLAN           Gimelshein, Luca Antiga, et al. 2019. Pytorch: An imperative style,
+     Conference on Programming Language Design and Implementation. 296–           high-performance deep learning library. Advances in neural informa-
+     311.                                                                                 tion processing systems 32 (2019).
+[43] Yi-Hsiang Lai, Yuze Chi, Yuwei Hu, Jie Wang, Cody Hao Yu, Yuan Zhou,       [58] Louis-Noël Pouchet et al. 2012. Polybench: The polyhedral benchmark
+     Jason Cong, and Zhiru Zhang. 2019. HeteroCL: A multi-paradigm              suite. URL: http://www. cs. ucla. edu/pouchet/software/polybench 437
+    programming infrastructure for software-defined reconfigurable com-             (2012), 1–1.
+     puting. In Proceedings of the 2019 ACM/SIGDA International Symposium       [59] Raghu Prabhakar, Yaqi Zhang, David Koeplinger, Matt Feldman, Tian
+    on Field-Programmable Gate Arrays. 242–251.                                Zhao, Stefan Hadjis, Ardavan Pedram, Christos Kozyrakis, and Kunle
+[44] Chris Lattner and Vikram Adve. 2004. LLVM: A compilation frame-           Olukotun. 2017. Plasticine: A reconfigurable architecture for parallel
+    work for lifelong program analysis & transformation. In International            paterns. ACM SIGARCH Computer Architecture News 45, 2 (2017),
+    symposium on code generation and optimization, 2004. CGO 2004. IEEE,           389–402.
+     75–86.                                                                     [60] Joseph Redmon, Santosh Divvala, Ross Girshick, and Ali Farhadi. 2016.
+[45] Chris Lattner, Mehdi Amini, Uday Bondhugula, Albert Cohen, Andy          You only look once: Unified, real-time object detection. In Proceedings
+     Davis, Jacques Pienaar, River Riddle, Tatiana Shpeisman, Nicolas Vasi-             of the IEEE conference on computer vision and pattern recognition. 779–
+      lache, and Oleksandr Zinenko. 2021. MLIR: Scaling compiler infrastruc-            788.
+     ture for domain specific computation. In 2021 IEEE/ACM International       [61] Alexander Rucker, Shiv Sundram, Coleman Smith, Matthew Vilim,
+    Symposium on Code Generation and Optimization (CGO). IEEE, 2–14.          Raghu Prabhakar, Fredrik Kjolstad, and Kunle Olukotun. 2023. Revet:
+[46] Chris Lattner, Jacques Pienaar, Mehdi Amini, Uday Bondhugula, River       A Language and Compiler for Dataflow Threads.  arXiv preprint
+     Riddle, Albert Cohen, Tatiana Shpeisman, Andy Davis, Nicolas Vasi-            arXiv:2302.06124 (2023).
+      lache, and Oleksandr Zinenko. 2020. MLIR: A Compiler Infrastructure       [62] Tao B Schardl, William S Moses, and Charles E Leiserson. 2017. Tapir:
+     for the End of Moore’s Law. arXiv preprint arXiv:2002.11054 (2020).            Embedding fork-join parallelism into LLVM’s intermediate representa-
+[47] Yann LeCun, Léon Bottou, Yoshua Bengio, and Patrick Haffner. 1998.              tion. In Proceedings of the 22nd ACM SIGPLAN Symposium on Principles
+     Gradient-based learning applied to document recognition. Proc. IEEE          and Practice of Parallel Programming. 249–265.
+      86, 11 (1998), 2278–2324.
+
+
+                                                                             16
+[63] Karen Simonyan and Andrew Zisserman. 2014. Very deep convo-          FPGAs. In 2018 IEEE/ACM International Conference on Computer-Aided
+     lutional networks for large-scale image recognition. arXiv preprint           Design (ICCAD). ACM, 1–8.
+     arXiv:1409.1556 (2014).                                                     [78] Xiaofan Zhang, Hanchen Ye, Junsong Wang, Yonghua Lin, Jinjun
+[64] Atefeh Sohrabizadeh, Cody Hao Yu, Min Gao, and Jason Cong. 2022.           Xiong, Wen-mei Hwu, and Deming Chen. 2020. DNNExplorer: a frame-
+    AutoDSE: Enabling software programmers to design efficient FPGA         work for modeling and exploring a novel paradigm of FPGA-based
+     accelerators. ACM Transactions on Design Automation of Electronic       DNN accelerator. In Proceedings of the 39th International Conference
+     Systems (TODAES) 27, 4 (2022), 1–27.                                      on Computer-Aided Design. 1–9.
+[65] Yaman Umuroglu, Nicholas J Fraser, Giulio Gambardella, Michaela       [79] Jieru Zhao, Liang Feng, Sharad Sinha, Wei Zhang, Yun Liang, and
+      Blott, Philip Leong, Magnus Jahre, and Kees Vissers. 2017. Finn: A          Bingsheng He. 2017. COMBA: A comprehensive model-based anal-
+    framework for fast, scalable binarized neural network inference. In             ysis framework for high level synthesis of real applications. In 2017
+     Proceedings of the 2017 ACM/SIGDA international symposium on field-          IEEE/ACM International Conference on Computer-Aided Design (ICCAD).
+    programmable gate arrays. 65–74.                                             IEEE, 430–437.
+[66] Yuxin Wang, Peng Li, Peng Zhang, Chen Zhang, and Jason Cong. 2013.       [80] Ruizhe Zhao, Jianyi Cheng, Wayne Luk, and George A Constantinides.
+    Memory partitioning for multidimensional arrays in high-level syn-            2022. POLSCA: Polyhedral High-Level Synthesis with Compiler Trans-
+      thesis. In Proceedings of the 50th Annual Design Automation Conference.            formations. In 32nd International Conference on Field Programmable
+     1–8.                                                                           Logic and Applications (FPL’22).
+[67] Xuechao Wei, Yun Liang, Xiuhong Li, Cody Hao Yu, Peng Zhang, and       [81] Tian Zhao, Alexander Rucker, and Kunle Olukotun. 2023. Sigma: Com-
+     Jason Cong. 2018. TGPA: Tile-grained pipeline architecture for low             piling Einstein Summations to Locality-Aware Dataflow. In Proceedings
+     latency CNN inference. In 2018 IEEE/ACM International Conference on             of the 28th ACM International Conference on Architectural Support for
+     Computer-Aided Design (ICCAD). ACM, 1–8.                               Programming Languages and Operating Systems, Volume 2. 718–732.
+[68] Shaojie Xiang, Yi-Hsiang Lai, Yuan Zhou, Hongzheng Chen, Niansong       [82] Zhuoran Zhao, Kamyar Mirzazad Barijough, and Andreas Gerstlauer.
+     Zhang, Debjit Pal, and Zhiru Zhang. 2022. Heteroflow: An accelerator            2018. Deepthings: Distributed adaptive deep learning inference on
+    programming model with decoupled data placement for software-            resource-constrained iot edge clusters. IEEE Transactions on Computer-
+     defined fpgas. In Proceedings of the 2022 ACM/SIGDA International           Aided Design of Integrated Circuits and Systems 37, 11 (2018), 2348–
+    Symposium on Field-Programmable Gate Arrays. 78–88.                          2359.
+[69] Ruifan Xu, Youwei Xiao, Jin Luo, and Yun Liang. 2022. HECTOR:       [83] Guanwen Zhong, Alok Prakash, Yun Liang, Tulika Mitra, and Smail
+   A Multi-Level Intermediate Representation for Hardware Synthesis             Niar. 2016. Lin-analyzer: A high-level performance analysis tool for
+     Methodologies. In Proceedings of the 41st IEEE/ACM International Con-          FPGA-based accelerators. In Proceedings of the 53rd Annual Design
+     ference on Computer-Aided Design. 1–9.                                    Automation Conference. 1–6.
+[70] Hanchen Ye, Cong Hao, Jianyi Cheng, Hyunmin Jeong, Jack Huang,       [84] Peipei Zhou, Jiayi Sheng, Cody Hao Yu, Peng Wei, Jie Wang, Di Wu,
+     Stephen Neuendorffer, and Deming Chen. 2022. Scalehls: A new scal-          and Jason Cong. 2021. Mocha: Multinode cost optimization in heteroge-
+     able high-level synthesis framework on multi-level intermediate repre-          neous clouds with accelerators. In The 2021 ACM/SIGDA International
+     sentation. In 2022 IEEE International Symposium on High-Performance          Symposium on Field-Programmable Gate Arrays. 273–279.
+    Computer Architecture (HPCA). IEEE, 741–755.                              [85] Jinming Zhuang, Jason Lau, Hanchen Ye, Zhuoping Yang, Yubo Du,
+[71] Hanchen Ye, HyeGang Jun, Hyunmin Jeong, Stephen Neuendorffer,           Jack Lo, Kristof Denolf, Stephen Neuendorffer, Alex Jones, Jingtong
+    and Deming Chen. 2022. ScaleHLS: a scalable high-level synthesis          Hu, et al. 2023. CHARM: Composing Heterogeneous AcceleRators
+    framework with multi-level transformations and optimizations. In             for Matrix Multiply on Versal ACAP Architecture.  arXiv preprint
+     Proceedings of the 59th ACM/IEEE Design Automation Conference. 1355–            arXiv:2301.02359 (2023).
+     1358.                                                                      [86] Wei Zuo, Warren Kemmerer, Jong Bin Lim, Louis-Noël Pouchet, An-
+[72] Hanchen Ye, Xiaofan Zhang, Zhize Huang, Gengsheng Chen, and           drey Ayupov, Taemin Kim, Kyungtae Han, and Deming Chen. 2015.
+    Deming Chen. 2020. HybridDNN: A framework for high-performance       A polyhedral-based systemc modeling and generation framework for
+     hybrid DNN accelerator design and implementation. In 2020 57th             effective low-power design space exploration. In 2015 IEEE/ACM In-
+    ACM/IEEE Design Automation Conference (DAC). IEEE, 1–6.                       ternational Conference on Computer-Aided Design (ICCAD). IEEE, 357–
+[73] Mang Yu, Sitao Huang, and Deming Chen. 2021. Chimera: A hybrid             364.
+    machine learning-driven multi-objective design space exploration       [87] Wei Zuo, Louis-Noel Pouchet, Andrey Ayupov, Taemin Kim, Chung-
+     tool for fpga high-level synthesis. In Intelligent Data Engineering and         Wei Lin, Shinichi Shiraishi, and Deming Chen. 2017. Accurate high-
+    Automated Learning–IDEAL 2021: 22nd International Conference, IDEAL              level modeling and automated hardware/software co-design for effec-
+     2021, Manchester, UK, November 25–27, 2021, Proceedings 22. Springer,             tive SoC design space exploration. In Proceedings of the 54th Annual
+     524–536.                                                                  Design Automation Conference 2017. 1–6.
+[74] Matthew D Zeiler and Rob Fergus. 2014. Visualizing and understanding
+     convolutional networks. In Computer Vision–ECCV 2014: 13th European
+     Conference, Zurich, Switzerland, September 6-12, 2014, Proceedings, Part
+        I 13. Springer, 818–833.
+[75] Bingyi Zhang, Rajgopal Kannan, and Viktor Prasanna. 2021. Boost-
+     gcn: A framework for optimizing gcn inference on fpga. In 2021 IEEE
+     29th Annual International Symposium on Field-Programmable Custom
+    Computing Machines (FCCM). IEEE, 29–39.
+[76] Chen Zhang, Peng Li, Guangyu Sun, Yijin Guan, Bingjun Xiao, and
+     Jason Cong. 2015. Optimizing FPGA-based accelerator design for deep
+     convolutional neural networks. In Proceedings of the 2015 ACM/SIGDA
+     international symposium on field-programmable gate arrays. 161–170.
+[77] Xiaofan Zhang, Junsong Wang, Chao Zhu, Yonghua Lin, Jinjun Xiong,
+    Wen-mei Hwu, and Deming Chen. 2018. DNNBuilder: An automated
+     tool for building high-performance DNN hardware accelerators for
+
+
+                                                                             17

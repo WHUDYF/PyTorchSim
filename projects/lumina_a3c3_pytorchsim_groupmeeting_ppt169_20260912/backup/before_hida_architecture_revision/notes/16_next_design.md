@@ -1,0 +1,1 @@
+下一步不建议直接对所有 workload 和配置做全量 sweep。我们应该先建立 compiler knob 到 TOGSim 指标的 influence map，再用 GEMM、Conv、attention 和 KV motif 做 sensitivity probes，训练一个便宜的 surrogate，最后只把最有信息量的组合送进 TOGSim 做 measured gate。这样才能把 A3C3 的设计空间、Lumina 的搜索策略和 PyTorchSim 的跨层观测真正合在一起。

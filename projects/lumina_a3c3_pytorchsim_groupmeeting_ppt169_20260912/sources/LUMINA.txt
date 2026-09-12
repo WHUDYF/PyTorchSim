@@ -1,0 +1,465 @@
+       LUMINA: LLM-Guided GPU Architecture Exploration via
+                          Bottleneck Analysis
+
+                           Tao Zhang∗, Rui Ma∗, Shuotao Xu, Yongqiang Xiong, Peng Cheng
+                                                                   Microsoft Research
+                                                                 China
+                                                 {zhangt,mrui,shuotaoxu,yqx,pengc}@microsoft.com
+
+        Abstract
+
+        GPU design space exploration (DSE) for modern AI workloads, such
+           as Large-Language Model (LLM) inference, is challenging because
+            of GPUs’ vast, multi-modal design spaces, high simulation costs, and
+          complex design optimization objectives (e.g., performance, power
+         and area trade-offs). Existing automated DSE methods are often
+            prohibitively expensive, either requiring an excessive number of                 (a) TTFT (s)                 (b) TPOT (s)                 (c) Area (mm2)2026    exploration samples or depending on intricate, manually crafted
+           analyses of interdependent critical paths guided by human heuris-     Figure 1. Design space visulizatin for a GPT3-175B [6] inference
+               tics.                                                                      workload via roofline model [34]. Each sampled architecture is
+         We present Lumina, an LLM-driven GPU architecture explo-Mar                                                             embedded via Principal Component Analysis [11] into two dimen-
+            ration framework that leverage AI to enhance the DSE efficiency                                                                                        sions; distributions are capped for visual contrast.
+         and efficacy for GPUs. Lumina extracts architectural knowledge18          from simulator code and performs sensitivity studies to automatically
+         compose DSE rules,which are auto-corrected during exploration.
+       A core component of Lumina is a DSE Benchmark that compre-
+           hensively evaluates and enhances LLMs’ capabilities across three      performance, power, and area interact non-linearly, producing com-
+          fundamental skills required for architecture optimization, which      plex Pareto fronts that complicate trade-off decisions. Figure 1
+           provides a principled and reproducible basis for model selection       illustrates these inherent challenges of the GPU DSE problem for
+                                                     LLM inference workloads. The design space comprises approxi-[cs.AR]    and ensuring consistent architectural reasoning.
+              In the design space with 4.7 million possible samples, Lumina      mately 4.7 million candidate architectures, each associated with
+             identifies 6 designs of better performance and area than an A100       distinct design objectives—including Time-to-First-Token (TTFT),
+       GPU efficiently, using only 20 steps via LLM-assisted bottleneck     Time-Per-Output-Token (TPOT) [26], and chip area. These objec-
+             analysis. In comparison, Lumina achieves 17.5× higher than design       tives frequently conflict with one another, resulting in intricate
+           space exploration efficiency, and 32.9% better designs (i.e. Pareto       trade-offs that further complicate the identification of an optimal
+          Hypervolume) than Machine-Learning baselines, showcasing its      design.
+             ability to deliver high-quality design guidance with minimal search         Existing DSE methods often suffer from low exploration effi-
+             cost.                                                                    ciency, typically requiring hundreds to thousands of samples to
+                                                                                    find high-quality designs. They fall into two broad categories:
+        1  Introduction                                               expert-driven heuristics [17, 27, 31] and algorithmic ML-based
+                                                                                        tools [21, 36, 38]. Expert-based approaches use rules such as critical-
+          Graphics Processing Units (GPUs) have become the cornerstone      path analysis and stall-component mapping to identify bottlenecks,
+            of modern computing infrastructure in the age of artificial intelli-      achieving reasonable Pareto hyper-volume (PHV) with a few hun-
+          gence (AI). With global data center spending projected to exceed      dred simulations. However, their heuristic nature requires substan-
+          $1 trillion by 2029 [12], largely driven by AI compute, optimiz-       tial human domain expertise, limits generalization to new archi-
+           ing GPU architecture for major workloads—especially AI training       tectures, and makes it difficult to capture complex interactionsarXiv:2603.05904v2
+          and inference—is critical to reducing total cost of AI infrastructure      across multiple critical paths [9]. ML-based methods aim to ad-
+          ownership and improving sustainability.                               dress these limitations by learning the non-linear structure of the
+            However, optimizing GPUs via design space exploration (DSE)      design space and can reveal insights beyond static heuristics. Yet,
+               is often complex and time-consuming. For example, exploring 1000      they require large numbers of high-fidelity simulation samples for
+       GPU designs for one GPT-3 inference workload trace takes 6000       training, making them expensive to deploy.
+        CPU hours via state-of-the-art GPU analytical modelling [37]. GPU        Recent explosion in AGI capabilities offers a silver lining for
+        DSE is difficult for three reasons. First, the design space is intrinsi-     advancing DSE. Emerging studies show that LLMs can enhance
+             cally high-dimensional—spanning compute units, cache hierarchy,     ML-based DSE by leveraging their pretrained domain knowledge
+            interconnects, and memory bandwidth—resulting in multi-modal       to guide sample selection [8, 18, 30]. This potential builds on LLMs’
+           parameter distributions that hinder efficient search. Second, evalua-     demonstrated strengths in coding [8], reasoning [33], and applying
+            tion is costly, as each candidate typically requires hours of detailed      domain-specific knowledge [19]. However, LLM performance varies
+           simulation. Finally, the objective landscape is also multi-modal:     widely across models [20], and issues such as hallucination [32]
+                                                                   and incomplete domain understanding [19] limit their reliability.
+              ∗Both authors contributed equally to this research.                            These challenges underscore the need for a systematic and rigorous
+                                                                                            Tao Zhang∗, Rui Ma∗, Shuotao Xu, Yongqiang Xiong, Peng Cheng
+
+                                                                   Table 1. Example Design Space of a 8 GPU Nodemethodology to assess LLMs’ effectiveness for DSE, rather than
+relying on ad-hoc or anecdotal evaluations.
+   In this paper we propose Lumina, an LLM-driven GPU archi-      Parameter                   Value Range          #
+tecture exploration framework that delivers reliable and sample-       Interconnect Link Count             6, 12, 18, 24             4
+efficient architectural reasoning, addressing both the generality       Core Count                            1, 2, 4, 8, 16, 32, 64, 96,  14
+limits of human-crafted heuristics and the instability of vanilla                                           108, 128, 132, 136, 140,
+LLM agents. Lumina acquires architectural knowledge directly                                      256
+from simulator code and sensitivity studies, and then uses this       Sublane Count                         1, 2, 4, 8                4
+knowledge to construct exploration rules that are subsequently        Systolic Array Height and Width   4, 8, 16, 32, 64, 128       6
+auto-corrected as new samples are observed.                           Vector Width                           4, 8, 16, 32, 64, 128       6
+  At the core of Lumina is a DSE Benchmark that evaluates three     SRAM Size (KB)                     32, 64, 128, 192, 256, 512,   7
+fundamental LLM capabilities essential for architecture optimiza-                                      1024
+tion: bottleneck attribution, performance/area prediction, and pa-       Total Global Buffer (MB)            32, 64, 128, 256, 320, 512,   7
+rameter tuning. This benchmark systematically exposes LLM weak-                                      1024
+nesses in DSE and provides a principled, reproducible basis for select-     Memory Channel Count         1–12                   12
+ing LLMs capable of consistent architectural reasoning—moving       Total Design Points              Approximately 4.7 × 106
+beyond ad-hoc, model-dependent usage.
+  We make the following contributions in this paper:
+    • Lumina Framework: An LLM-guided GPU DSE framework
+       that is both reliable and sample-efficient. Using NVIDIA
+      A100 as reference, Lumina achieves 32.9% higher PHV than      with respect to a given reference point. A larger PHV indicates a
+    ML baselines, improves sample efficiency by up to 17.5×,      better Pareto frontier.
+      and is the only method to find superior designs within 20       Problem Formulation: Given a GPU node design space X, the
+      samples across a 4.7M-point search space.                      goal of DSE is to identify the pareto-optimal configurations x ∈X
+    • DSE Benchmark: The first benchmark for LLM-driven GPU     upon multiple objectives, such as performance, power, and area
+      DSE, assessing three essential capabilities for chip architec-     and maximize PHV in a given time, measured by sample numbers.
+       tural reasoning: bottleneck attribution, performance/area
+       prediction, and parameter tuning. It exposes systematic fail-                                                                      2.2  Existing DSE Methods
+      ure cases in LLM-based analysis and offers a reproducible
+      mechanism for selecting LLMs that reason consistently within     Existing DSE methods can be broadly categorized into black-box
+      Lumina.                                                   approaches (including heuristic and machine-learning-based meth-
+    • New DSE Strategy: Lumina uncovers a counter-intuitive      ods) and white-box approaches (driven by expert knowledge), as
+     DSE strategy: reallocating area from core counts to tensor-     summarized in Table 2.
+      compute units and memory bandwidth improves overall         Heuristic methods such as Grid Search [5] and Random Walker [35]
+      PPA. Via this strategy, Lumina uncovers two superior de-     do not exploit prior samples or exploration knowledge, leading
+       signs than A100: one achieves 1.805× TTFT/Area and 1.770×      to uncontrolled variance and random sampling efficiency in de-
+      TPOT/Area, while another prioritizes TTFT with 0.592×      sign quality [15]. In contrast, machine learning-based approaches
+     TTFT and 0.948× TPOT than the baseline, both with reduced      such as Bayesian Optimization (BO), Genetic Algorithms (GA), and
+       area.                                                Ant Colony Optimization (ACO) aim to identify promising design
+                                                                     points through model-based or policy-driven feedback [2, 15, 18],Paper Organization: Section 2 reviews existing DSE methods.
+                                                                a process we refer to as sample learning. However, these methods
+Section 3 presents the Lumina framework, and Section 4 describes
+                                                                     generally suffer from low sample efficiency and limited scalability
+the DSE Benchmark. Section 5 details our implementation and
+                                                                       in high-dimensional DSE tasks [7, 13, 18, 22]. The low sample ef-
+evaluation results, and Section 6 concludes the paper.
+                                                                         ficiency arises from the sparsity of high-quality design points in
+2  Background                                                 the search space, necessitating more effective strategies to provide
+                                                                                        initial samples. The scalability issue, on the other hand, stems from
+2.1  DSE Problem Formulation
+                                                                     the computational and memory costs that can grow cubically with
+A typical DSE task over a multi-objective design space can be      the number of samples [23, 28].
+formulated as follows:                                                         Specifically, BO relies on surrogate models to understand the
+   Definition 1 (Design Space): The design space of a GPU node is      PPA-resource mapping and utilizes acquisition function to improve
+detailed in Table 1 and denoted by X, where each design point is      toward optimization goal. However, its cubic time complexity leads
+represented as x ∈X.                                                  to poor scalability with large design spaces [22].
+  Definition 2 (Pareto Optimality): A design point x∗is Pareto-     GA performs evolutionary search through mutation and crossover
+optimal if Iimproving any objective requires sacrificing at least      but converges slowly, requiring over 10k samples in DNN DSE eval-
+one other objective. The set of all Pareto-optimal points forms the      uations [14]. ACO explores via pheromone-guided probabilistic
+Pareto frontier.                                                 sampling [10], exhibiting lower sample efficiency than BO and
+  Definition 3 (Pareto Hypervolume, PHV): The Pareto Hyper-    GA under various benchmarks [15]. While distributed or adap-
+volume measures the quality of a Pareto frontier by computing the       tive variants have been proposed to improve scalability, large-scale
+𝑚-dimensional volume dominated by a set of Pareto-optimal points      evaluations still report limited improvement [23, 28].
+LUMINA: LLM-Guided GPU Architecture Exploration via Bottleneck Analysis
+
+                                   Table 2. Comparison of representative DSE methods.
+
+    Category      Representative Method                    Sample Learning  Sample Efficiency  Sample Scalibity
+
+                    Grid Search [5]                         No             Random           High
+      Heuristic
+                Random Walker [35]                      No             Random           High
+                    Bayesian Optimization (BO) [18]                  Yes             Low [15]           Low[22]
+                    Genetic Algorithms (GA) [14]                     Yes             Low [15]           Low[23]
+ Machine Learning
+                  Ant Colony Optimization (ACO) [10]              Yes             Low [15]           Low[28]
+                    Bottleneck-Removal via Critical Path Analysis [1]  No               High            Low
+  Expertise-Driven                Lumina (Our work)                          Yes             High           Medium
+
+
+  Beyond black-box search, Critical Path Analysis[16] offers a      simulation environment to extract preliminary Architectural Heuris-
+white-box alternative that leverages expert knowledge of archi-        tic Knowledge (AHK). This process is handled by the Qualitative
+tectural bottlenecks. As a representative, Archexplorer [1] per-     Engine (QualE), which parses the simulator codebase to attribute
+forms bottleneck-removal-driven DSE by reallocating resources      resources to metrics, and the Quantitative Engine (QuanE), which
+along critical paths, achieving superior sample efficiency and the       quantifies each resource’s impact on PPA.
+highest PHV under equal sampling budgets compared with black-       The core of Lumina’s optimization lies in its iterative process.
+box approaches. However, the bottleneck-to-resource mapping in       Starting from an initial design, the framework evaluates the design
+such white-box approaches is heuristically defined, which prevents     and sends the results (e.g., PPA and critical-path data) to the Strategy
+refinement through sampling and limits generality across architec-     Engine (SE). Utilizing the knowledge from AHK, SE performs bot-
+tures [3].                                                             tleneck analysis on the results and generates a mitigation strategy
+  LLMs offer a mechanism to achieve the strengths of both meth-      for the Exploration Engine (EE), which proposes a new, informed
+ods, the sample learning capability and the high sample efficiency,      design point. Meanwhile, the simulation results are stored in the
+by reflecting on exploration trajectories and conducting human-      Trajectory Memory (TM), which is used to refine AHK in subse-
+like architectural reasoning to explore. However, their capabilities      quent iterations. This process repeats until the sampling budget is
+have not been systematically evaluated on DSE tasks. To address      met, ultimately outputting a set of Pareto-optimal designs.
+this gap, we design the Lumina framework with a comprehensive       The subsequent subsections detail Lumina’s core components:
+DSE Benchmark, forming a principled framework to assess model       §3.2 focuses on the automatic acquisition of AHK through the
+performance and enforce consistent architectural reasoning.            Qualitative and Quantitative Engines; §3.3 describes the utilization
+                                                                       of AHK to guide DSE via the Strategy and Exploration Engines;
+3  Lumina Framework                                 and §3.4 elucidates the refinement loop that enables continuous
+3.1  Overview of Lumina                                          learning and cross-architecture scalability.
+
+                                                                      3.2  Architectural Heuristic Knowledge (AHK) Acquisition
+
+                                                         The initial step in the Lumina framework is the automated acquisi-
+                                                                        tion of AHK, a critical capability that distinguishes our approach
+                                                            from conventional black-box and white-box methods. AHK serves
+                                                                       as a structural and quantitative understanding of how architectural
+                                                                      resources are attributed to PPA metrics. The acquisition is handled
+                                                          by two complementary modules: the QualE and the QuanE.
+
+                                                                          3.2.1  Qualitative Engine (QualE). The primary role of the QualE
+                                                                                         is to establish the structural boundaries of the AHK. It achieves
+                                                                             this by leveraging the semantic understanding capabilities of
+                                                         a LLM to parse and interpret the simulator’s complex codebase.
+                                                                               Specifically, the QualE performs static code analysis, utilizing the
+                                                           LLM’s interpretative strength to explicitly map the causal influence
+                                                                         of each resource hyper-parameters onto specific PPA metrics. This
+                                                                  process generates an Influence Map, which structurally defines
+                                                                   the exact dependencies between a performance specification and
+                                                                     the concrete architectural parameters within the design space. For
+                                                                          instance, the map identifies that peak vector compute throughput is
+            Figure 2. Lumina Framework Design                   influenced by core count, sublane count, and vector unit, but has
+                                                       no direct structural dependency on the tensor unit. This derived,
+                                                                          structurally constrained knowledge drastically reduces the search
+Figure 2 presents the overall design of the Lumina Framework,      space for subsequent quantitative analysis, providing a level of
+which is structured around an iterative knowledge acquisition and      informed pruning analogous to the initial heuristics employed in
+refinement loop. Lumina begins by interacting with the external       traditional white-box methods.
+                                                                                            Tao Zhang∗, Rui Ma∗, Shuotao Xu, Yongqiang Xiong, Peng Cheng
+
+3.2.2  Quantitative Engine (QuanE). Building upon the struc-    4  DSE Benchmark
+tural dependencies defined by the QualE’s Influence Map, the QuanE     Being the backbone of Lumina framework, the LLM reasoning
+is responsible for assigning quantitative influence values to the     model needs to be carefully chosen or finetuned to ensure its abil-
+AHK relationships. The QuanE achieves this by executing an au-       ity to analyze the performance metrics and tune the parameters
+tomated preliminary sensitivity analysis against the simulator,       intelligently. Additionally, the model needs to properly follow the
+leveraging the LLM’s code generation and orchestration ca-      instructions from system prompts to (i) respect the design con-
+pability to script and manage the necessary micro-benchmarks.      straints and (ii) avoid circular reasoning. Therefore, we design a
+By systematically observing the impact of granular changes (e.g.,    Q&A based benchmark to evaluate a model’s ability for architecture
+a ±1 unit perturbation in the Core Count) on the attributed PPA      exploration purpose.
+metrics (e.g., Area), the QuanE quantifies the local influence of each
+resource. This comprehensive quantification enables Lumina to
+initialize its exploration with robust, informed priors, providing
+a significant and measurable advantage over conventional black-
+box methods that must learn the entire PPA-resource mapping
+from scratch. Under complex performance models where measur-
+ing performance perturbations is costly, the QuanE can focus on
+estimating only power and area, which are faster to evaluate, while
+still providing informative priors for exploration.
+
+3.3  Strategy and Exploration Engine
+
+The Strategy and Exploration Engines are responsible for leveraging
+the acquired AHK to guide the DSE toward Pareto-optimal fronts
+efficiently.
+3.3.1  Strategy Engine (SE). The SE defines the bottleneck mit-
+igation strategy based on critical-path feedback provided by the
+simulator. Upon identifying the most dominant performance stall
+(e.g., interconnect congestion or memory latency), the SE uses the
+AHK to propose a constrained set of design parameter adjustments
+aimed at alleviating that specific bottleneck. Crucially, the SE de-
+termines the aggressiveness of the search by deciding how many
+design parameters to modify simultaneously in the next iteration.
+For instance, if interconnect is the bottleneck, the SE suggests
+maximizing interconnect link count while simultaneously seek-
+ing a resource trade-off(e.g., reducing Core Count) based on the
+quantitative influence factors. This guided approach ensures that
+exploration is always purposeful and locally optimal.
+3.3.2  Exploration Engine (EE). The EE serves as the integration
+layer between the Simulation Environment and Lumina ’s internal
+modules. It serializes the SE’s design directives into the simulator’s
+                                                              Figure 3. Examples of three task in DSE benchmark. For each task,
+required format, issues the evaluation request, and retrieves the re-
+                                                 we show the associated evidences from human system prompt,
+sulting performance and critical-path metrics. The EE then records
+                                                                   question on the left and LLM’s correct answer on the right.
+this feedback in the TM and returns the structured sample to the
+SE, enabling informed selection of subsequent design points.
+                                                                        Inspired by Longbench [4], we formulate each data sample as
+3.4  Refinement Loop                                         a multiple choice question. Each question starts with a system
+                                                          prompt and a description of the application target, ranging fromThe Refinement Loop enables Lumina to iteratively refine its
+                                                                        primitive operators (e.g., matmul, layernorm, etc.) to full workload.
+heuristics and overcome the static limitations of conventional white-
+                                          A problem is then presented along with multiple-choice answers,
+box methods.
+                                                                        of which only one is correct. The data samples can be categorized   In each iteration, it reflects on the trajectory history stored
+                                                                        into three major tasks. Figure 3 shows example data for each task.
+in the TM to identify past design attempts that failed to meet PPA
+targets and conclude the patterns to prevent their repetition.             Bottleneck analysis. These questions evaluates the model’s
+   This reflection drives the core refinement: observed performance      fundamental capability to infer the relationship between perfor-
+data are used to update the quantitative influence factors in the     mance counters and their corresponding architectural parameters.
+AHK, calibrating the model’s understanding of the PPA-resource     Each question prompt specifies the architectural configuration, the
+mapping. Through these data-driven corrections, Lumina dynam-      optimization objective, and the observed performance counter val-
+ically adapts to non-linear and complex behaviors in the design      ues for the target application. The model is required to determine
+space, maintaining high sample efficiency and scalability across     which parameters should be adjusted and in which direction to
+diverse architectural configurations.                                 achieve improvement toward the stated optimization goal.
+LUMINA: LLM-Guided GPU Architecture Exploration via Bottleneck Analysis
+
+                                                                Table 3. Accuracy across tasks and open-source LLMs  Performance/area prediction. These questions aim to assess
+the model’s capability to predict performance and area based on
+historical design trajectories and analytical models derived from         Benchmark Task     Model     Accuracy (Original)  Accuracy (Enhanced)
+source code. Each prompt provides several example architecture                                Phi-4               0.70                   0.76
+specifications along with their corresponding performance and area           Bottleneck Analysis  Qwen-3           0.73                 0.80
+                                                                                                              Llama-3.1          0.47                   0.53
+results, as well as the source code of the area model. The model is
+                                                                                                                Phi-4                                                                                                                                            0.42                                                                                                                                                                   0.61required to infer and select the correct performance or area value                                                                                                                                                   0.82                                                                                         Perf/Area Prediction                                                                                          Qwen-3           0.59
+for a new architecture specification.                                                                   Llama-3.1          0.23                   0.39
+
+                                                                                                                Phi-4               0.30                   0.48
+  Parameter tuning. These questions are intended to evaluate          Parameter Tuning   Qwen-3           0.40                 0.63
+the model’s comprehensive capability in GPU architecture design                                Llama-3.1          0.26                   0.46
+space exploration. In addition to historical design trajectories and
+source code, each question specifies an initial design point, design
+constraints, and an optimization objective. The model is required       this gap requires enabling the model to reason from prior experi-
+to identify and select the design that best achieves the optimization      ence or fine-tuning it on datasets that capture such design pitfalls.
+goal while adhering to the stated constraints.                           For performance and area prediction, models frequently computed
+                                                                         deltas against a zero baseline rather than the defined sensitivity
+5  Evaluation                                                       reference. To ensure consistency, the Strategy Engine was required
+                                                                         to always compute deltas relative to the sensitivity reference.5.1  Experimental Setup
+                                                                     For parameter tuning, models often attempt to compensate for an
+We evaluated various DSE methods on both the roofline model and      unresolved dominant bottleneck by adjusting multiple non-critical
+the LLMCompass model [37]. LLMCompass is a GPU simulator spe-      resources, increasing reasoning complexity beyond the model’s ca-
+cialized for LLM inference workloads; it models software-hardware       pability. To address this, we instructed the Strategy Engine to adjust
+co-optimizations and achieves performance and area estimations     only the least critical resource when mitigating the dominant
+within 10% relative error compared to real hardware. We extended        stall.
+LLMCompass to include critical path analysis, enabling identifi-
+cation of dominant stalls for both TTFT and TPOT metrics, with      5.3  Lumina Framework
+negligible overhead.                                            We evaluate the DSE methods under a GPT-3 inference workload
+                                                                   using the full 4.7-million design space. We use the NVIDIA A100 as
+5.2  DSE Benchmark
+                                                                    the reference design (Table 4) and adopt 8-way tensor parallelism
+We evaluate several state-of-the-art open-source LLMs, includ-      as the deployment strategy. TTFT latency is measured by executing
+ing Qwen3-Next-80B-A3B-Instruct (Qwen-3) [29], Phi-4-reasoning      a single GPT-3 layer with a batch size of 8 and an input sequence
+(Phi-4) [25] and Llama-3.1-8B-Instruct (Llama-3.1) [24]. For brevity,      length of 2048. TPOT latency is defined as the time to generate the
+we refer to the models using the shortened names shown in paren-     1024th output token under the same configuration. All operators
+theses throughout the paper.                                          are executed in FP16 precision. This setup ensures that both TTFT
+  The benchmark comprises 308 questions for bottleneck analysis,     and TPOT characteristics are faithfully captured, providing a real-
+127 for performance/area prediction, and 30 for parameter tun-       istic basis for DSE evaluation. The comparison metrics are Pareto
+ing. We measure LLMs’ DSE capability using the accuracy metrics,     Hyper Volume (PHV)[1] and Sample Efficiency, defined as number
+which is computed as the proportion of correctly solved problems      of points that are better than the reference point in all objectives
+across the dataset.                                                     divides the total exploration samples. Sample efficiency measures
+  As shown in Table 3, Qwen-3 achieved the highest accuracy      the fraction of evaluated designs that improve over the reference
+among the evaluated models under the default system prompt,      point; higher values indicate a more efficient exploration of the
+which already provides the necessary architectural context. How-      design space.
+ever, the substantial variability across tasks indicates that additional      We begin by comparing the PHV, associated variance, and sam-
+error-handling mechanisms are required. To understand these gaps,      ple efficiency of each method across 1,000 samples and multiple
+we analyzed the model’s systematic failure patterns and translated      independent trials under roofline model evaluation. As shown in
+them into explicit corrective rules. With this additional human-      Figure 4, Lumina achieves the highest mean PHV and sample
+crafted guidance, Qwen-3 achieved noticeably higher accuracy, as       efficiency, outperforming all other methods by 32.9% in PHV and
+reported in the Accuracy (Enhanced) column. In Lumina, these      17.5× in sample efficiency. Among the black-box baselines, ACO
+rules are integrated into the Strategy Engine, enabling the system     and RW exhibit comparable PHV and sample efficiency, primarily
+to enforce consistent and reliable architectural reasoning during      due to their chance sampling behavior, as illustrated in Figure 5. No-
+design-space exploration.                                                    tably, ACO’s best-to-worst normalized PHV ratio reaches up
+   For bottleneck analysis, models often selected multi-resource con-      to 1.82x, indicating its high variability across runs. BO delivers con-
+figurations containing irrelevant parameters instead of targeting the       sistently strong performance, ranking fourth overall, whereas GA
+resource most correlated with the stall. We therefore constrained     and GS consistently fail to discover high-quality designs. Further-
+the Strategy Engine to focus solely on the dominant bottleneck.     more, Lumina maintains superior sample efficiency across
+A further limitation is that it fails to recognize the adverse effects     multiple runs, highlighting its stability and robustness.
+of enlarging resources such as the systolic array height and width,         Next, we analyze the DSE pattern to show why Lumina outper-
+which may cause significant compute under-utilization. Mitigating      forms other methods. As shown in Figure 6, Lumina explores the
+                                                                                            Tao Zhang∗, Rui Ma∗, Shuotao Xu, Yongqiang Xiong, Peng Cheng
+
+
+
+
+
+                                                             Figure 6. Search Pattern Comparison between ACO and Lumina
+Figure 4. Mean PHV vs. Sample Efficiency among DSE Methods.
+                                                           Table 4. Top-2 designs identified by Lumina Compared with
+                                                     NVIDIA A100
+
+
+                                                                                             Specifications               Design A   Design B   A100
+                                                                                                Interconnect Link Count           24         18        12
+                                                                                    Core Count                     64         96        108
+                                                                                          Sublane Count                     4           4         4
+                                                                                              Vector Width                    16         16        32
+                                                                                                        Systolic Array Height×Weight    32×32     32×32    16×16
+                                                               SRAM Size (KB)                   128         128       128
+                                                                                             Global Buffer (MB)                 40          40        40
+                                                                       Memory Channel Count           6          6         5
+                                                                                       Normalized TTFT                  0.717       0.592      1.000
+                                                                                       Normalized TPOT                0.947        0.948      1.000
+                                                                                       Normalized Area                   0.772        0.952      1.000
+                                                                                 TTFT/Area                      1.805        1.366      1.000
+Figure 5. Distribution of PHV vs. Sample Efficiency among DSE             TPOT/Area                      1.770        1.107      1.000
+Methods.
+
+                                                                      resources to address the dominant performance limits, demonstrat-
+                                                                     ing that co-optimizing compute hierarchy, memory bandwidth, and
+design space far more efficiently by leveraging its understanding
+                                                                     interconnect bandwidth yields substantial gains.
+of the simulator’s internal mechanisms. In contrast, the state-of-
+                                                                       Concretely, it increases the interconnect link count (12 →the-art black-box baseline, ACO, adopts a far-to-near exploration
+                                                                        18/24) to boost communication capability, while offsetting the area
+strategy, consuming numerous samples merely to map the objec-
+                                                                       cost through a moderate reduction in core count (108 →64/96).
+tive space before reaching promising regions. As a result, Lumina
+                                                             Both optimized designs retain a wide systolic array (32 × 32) and
+identifies substantially more high-quality design points within the
+                                                             add one additional memory channel (5 →6), thereby improving
+same sample budget—specifically, 421 superior designs within 1,000
+samples, compared to only 24 for ACO—demonstrating its sig-    memory bandwidth and sustaining compute throughput.
+                                                          Design A delivers the best overall trade-off, achieving 1.805×nificant advantage in sample efficiency.
+  Then, we evaluated all methods on the LLMCompass model.     TTFT/Area efficiency and 1.77× TPOT/Area efficiency relative to
+                                                                 A100, while using only 77% of its area. Design B attains comparable
+Owing to the high simulation cost of end-to-end inference evalu-
+                                                TPOT and reduces normalized TTFT to 0.592, making it suitable
+ation, we imposed a strict sample budget of only 20 evaluations,
+                                                                           for strict TTFT-oriented SLAs. These outcomes show that Lumina
+which requires approximately one week to complete. Under this
+                                                                           effectively identifies balanced design points where compute and
+constraint, none of the black-box algorithms succeeded in iden-
+                                                             communication resources are jointly optimized to maximize utiliza-
+tifying any design that surpassed the reference point of NVIDIA
+                                                                                tion.
+A100 [37]. This failure primarily stems from the insufficient number
+of samples, which prevents these methods from effectively map-    6  Conclusion
+ping the high-dimensional design space. In contrast, Lumina was
+the only methodology that successfully discovered six de-      In this paper, we introduced Lumina, a novel LLM-Guided GPU
+signs surpassing the reference point, demonstrating its unique      architecture exploration framework; a DSE benchmark that sys-
+effectiveness under extreme sample constraints.                        tematically evalutes LLM’s capability on DSE tasks and ensures
+   Finally, we analyze the rationale behind the top-performing de-      consistent architectural reasoning; and two Lumina-discovered
+signs identified by Lumina relative to the NVIDIA A100 baseline,      designs and their insights.
+as shown in Table 4. Lumina consistently reallocates architectural
+LUMINA: LLM-Guided GPU Architecture Exploration via Bottleneck Analysis
+
+References                                                                         [18]  Jingyuan Li, Jianrong Zhang, Ye Li, Wenbo Yin, and Lingli Wang. 2025. LEMOE:
+ [1] Chen Bai, Jiayi Huang, Xuechao Wei, Yuzhe Ma, Sicheng Li, Hongzhong Zheng,           LLM-Enhanced Multi-Objective Bayesian Optimization for Microarchitecture
+     Bei Yu, and Yuan Xie. 2023. ArchExplorer: Microarchitecture Exploration Via              Exploration. In 2025 62nd ACM/IEEE Design Automation Conference (DAC). 1–7.
+     Bottleneck Analysis. In Proceedings of the 56th Annual IEEE/ACM International             doi:10.1109/DAC63849.2025.11132704
+     Symposium on Microarchitecture (Toronto, ON, Canada) (MICRO ’23). Association        [19] Yang Liu, Jiahuan Cao, Chongyu Liu, Kai Ding, and Lianwen Jin. 2025. Datasets
+      for Computing Machinery, New York, NY, USA, 268–282. doi:10.1145/3613424.               for large language models: A comprehensive survey. Artificial Intelligence Review
+     3614289                                                                                          58, 12 (2025), 403.
+ [2] Chen Bai, Qi Sun, Jianwang Zhai, Yuzhe Ma, Bei Yu, and Martin D.F. Wong. 2021.        [20] LMArena. 2025. Overview Leaderboard & Model Rankings. https://lmarena.ai/
+     BOOM-Explorer: RISC-V BOOM Microarchitecture Design Space Exploration              leaderboard. Accessed: 2025-11-05.
+     Framework. In 2021 IEEE/ACM International Conference On Computer Aided        [21] Donger Luo, Qi Sun, Xinheng Li, Chen Bai, Bei Yu, and Hao Geng. 2024. Knowing
+     Design (ICCAD). 1–9. doi:10.1109/ICCAD51958.2021.9643455                        The Spec to Explore The Design via Transformed Bayesian Optimization. In
+ [3] Chen Bai, Jianwang Zhai, Yuzhe Ma, Bei Yu, and Martin D.F. Wong. 2024. To-             Proceedings of the 61st ACM/IEEE Design Automation Conference (San Francisco,
+     wards automated RISC-V microarchitecture design with reinforcement learning.           CA, USA) (DAC ’24). Association for Computing Machinery, New York, NY, USA,
+      In Proceedings of the Thirty-Eighth AAAI Conference on Artificial Intelligence              Article 138, 6 pages. doi:10.1145/3649329.3658262
+     and Thirty-Sixth Conference on Innovative Applications of Artificial Intelligence        [22] Wesley J. Maddox, Maximilian Balandat, Andrew Gordon Wilson, and Eytan
+     and Fourteenth Symposium on Educational Advances in Artificial Intelligence             Bakshy. 2021. Bayesian optimization with high-dimensional outputs (NIPS ’21).
+     (AAAI’24/IAAI’24/EAAI’24). AAAI Press, Article 2, 9 pages.  doi:10.1609/aaai.            Curran Associates Inc., Red Hook, NY, USA, Article 1474, 14 pages.
+      v38i1.27750                                                                           [23] María Martínez-Ballesteros, Jaume Bacardit, Alicia Troncoso, and José C.
+ [4]  Yushi Bai, Shangqing Tu, Jiajie Zhang, Hao Peng, Xiaozhi Wang, Xin Lv, Shulin             Riquelme. 2015. Enhancing the scalability of a genetic algorithm to discover
+     Cao, Jiazheng Xu, Lei Hou, Yuxiao Dong, Jie Tang, and Juanzi Li. 2025. LongBench              quantitative association rules in large-scale datasets. Integr. Comput.-Aided Eng.
+      v2: Towards Deeper Understanding and Reasoning on Realistic Long-context               22, 1 (Jan. 2015), 21–39. doi:10.3233/ICA-140479
+      Multitasks. arXiv:2412.15204 [cs.CL] https://arxiv.org/abs/2412.15204                 [24]  Meta. 2024. Meta-Llama-3.1-8B-Instruct. https://huggingface.co/metaâĂŚllama/
+ [5] James Bergstra and Yoshua Bengio. 2012. Random search for hyper-parameter            LlamaâĂŚ3.1âĂŚ8BâĂŚInstruct. Accessed: 2025-11-15.
+      optimization. J. Mach. Learn. Res. 13, null (Feb. 2012), 281–305.                        [25]  microsoft. 2024.   phi4-reasoning.   https://huggingface.co/microsoft/Phi-4-
+ [6] Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan,             reasoning. Accessed: 2025-11-15.
+      Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda        [26] MLCommons Association. 2025. MLPerf Inference v5.0 Advances Language
+      Askell, Sandhini Agarwal, Ariel Herbert-Voss, Gretchen Krueger, Tom Henighan,           Model Capabilities for GenAI. https://mlcommons.org/2025/04/llm-inference-v5/.
+    Rewon Child, Aditya Ramesh, Daniel M. Ziegler, Jeffrey Wu, Clemens Winter,             Accessed: 2025-11-05.
+     Christopher Hesse, Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin        [27] Veynu Narasiman, Michael Shebanow, Chang Joo Lee, Rustam Miftakhutdinov,
+     Chess, Jack Clark, Christopher Berner, Sam McCandlish, Alec Radford, Ilya           Onur Mutlu, and Yale N. Patt. 2011. Improving GPU performance via large warps
+      Sutskever, and Dario Amodei. 2020. Language Models are Few-Shot Learners.           and two-level warp scheduling. In 2011 44th Annual IEEE/ACM International
+    CoRR abs/2005.14165 (2020). arXiv:2005.14165 https://arxiv.org/abs/2005.14165           Symposium on Microarchitecture (MICRO). 308–317.
+ [7]  Jacob Buckman, Danijar Hafner, George Tucker, Eugene Brevdo, and Honglak        [28]  Joshua Peake, Martyn Amos, Paraskevas Yiapanis, and Huw Lloyd. 2019. Scaling
+      Lee. 2018. Sample-Efficient Reinforcement Learning with Stochastic Ensemble            Techniques for Parallel Ant Colony Optimization on Large Problem Instances.
+     Value Expansion. In Advances in Neural Information Processing Systems, S. Bengio,              In Proceedings of the Genetic and Evolutionary Computation Conference (GECCO
+     H. Wallach, H. Larochelle, K. Grauman, N. Cesa-Bianchi, and R. Garnett (Eds.),                ’19). ACM, United States, 47–54.  doi:10.1145/3321707.3321832 The Genetic
+      Vol. 31. Curran Associates, Inc. https://proceedings.neurips.cc/paper_files/paper/           and Evolutionary Computation Conference 2019, GECCO’19 ; Conference date:
+     2018/file/f02208a057804ee16ac72ff4d3cec53b-Paper.pdf                                   13-07-2019 Through 17-07-2019.
+ [8]  Angelica Chen, David M. Dohan, and David R. So. 2023. EvoPrompting: language        [29] Qwen. 2025. Qwen3-Next-80B-A3B-Instruct.  https://huggingface.co/Qwen/
+     models for code-level neural architecture search. In Proceedings of the 37th            Qwen3-Next-80B-A3B-Instruct. Accessed: 2025-11-15.
+      International Conference on Neural Information Processing Systems (New Orleans,        [30] Mayk Caldas Ramos, Shane S. Michtavy, Marc D. Porosoff, and Andrew D.
+     LA, USA) (NIPS ’23). Curran Associates Inc., Red Hook, NY, USA, Article 342,            White. 2025. Bayesian Optimization of Catalysis With In-Context Learning.
+     31 pages.                                                                               arXiv:2304.05341 [physics.chem-ph] https://arxiv.org/abs/2304.05341
+ [9]  Brian A. Fields, Rastislav Bodík, Mark D. Hill, and Chris J. Newburn. 2003. Using        [31] Timothy G. Rogers, Mike O’Connor, and Tor M. Aamodt. 2012. Cache-Conscious
+      Interaction Costs for Microarchitectural Bottleneck Analysis. In Proceedings of            Wavefront Scheduling. In 2012 45th Annual IEEE/ACM International Symposium
+      the 36th Annual IEEE/ACM International Symposium on Microarchitecture (MICRO            on Microarchitecture. 72–83. doi:10.1109/MICRO.2012.16
+       36). IEEE Computer Society, USA, 228.                                                 [32]  S. M Towhidul Islam Tonmoy, S M Mehedi Zaman, Vinija Jain, Anku Rani,
+[10]  Yiheng Gao and Benjamin Carrion Schafer. 2021. Effective High-Level Synthesis             Vipula Rawte, Aman Chadha, and Amitava Das. 2024. A Comprehensive
+     Design Space Exploration through a Novel Cost Function Formulation. In 2021            Survey of Hallucination Mitigation Techniques in Large Language Models.
+     IEEE International Symposium on Circuits and Systems (ISCAS). 1–5. doi:10.1109/             arXiv:2401.01313 [cs.CL] https://arxiv.org/abs/2401.01313
+     ISCAS51556.2021.9401684                                                             [33]  Chaojie Wang, Yanchen Deng, Zhiyi Lyu, Liang Zeng, Jujie He, Shuicheng Yan,
+[11]  Felipe L. Gewers, Gustavo R. Ferreira, Henrique Ferraz de Arruda, Filipi Nasci-           and Bo An. 2024. Q*: Improving multi-step reasoning for llms with deliberative
+     mento Silva, Cesar H. Comin, Diego R. Amancio, and Luciano da F. Costa. 2018.             planning. arXiv preprint arXiv:2406.14283 (2024).
+      Principal Component Analysis: A Natural Approach to Data Exploration. CoRR        [34] Samuel Williams, Andrew Waterman, and David Patterson. 2009. Roofline: an
+     abs/1804.02502 (2018). arXiv:1804.02502 http://arxiv.org/abs/1804.02502                      insightful visual performance model for multicore architectures. Commun. ACM
+[12]  Dell’Oro Group. 2025. Data Center Capex to Surpass $1 Trillion by 2029, Accord-               52, 4 (April 2009), 65–76. doi:10.1145/1498765.1498785
+     ing to Dell’Oro Group. https://www.delloro.com/news/data-center-capex-to-        [35] Feng Xia, Jiaying Liu, Hansong Nie, Yonghao Fu, Liangtian Wan, and Xiangjie
+      surpass-1-trillion-by-2029/. Accessed: Nov. 7, 2025.                                  Kong. 2020. Random Walks: A Review of Algorithms and Applications. IEEE
+[13] Hadi S. Jomaa, Josif Grabocka, and Lars Schmidt-Thieme. 2019. Hyp-RL : Hyper-              Transactions on Emerging Topics in Computational Intelligence 4, 2 (2020), 95–107.
+     parameter Optimization by Reinforcement Learning. arXiv:1906.11527 [cs.LG]             doi:10.1109/TETCI.2019.2952908
+      https://arxiv.org/abs/1906.11527                                                       [36]  Xiaoling Yi, Jialin Lu, Xiankui Xiong, Dong Xu, Li Shang, and Fan Yang. 2023.
+[14] Sheng-Chun Kao and Tushar Krishna. 2020. GAMMA: Automating the HW Map-           Graph Representation Learning for Microarchitecture Design Space Exploration.
+     ping of DNN Models on Accelerators via Genetic Algorithm. In 2020 IEEE/ACM              In 2023 60th ACM/IEEE Design Automation Conference (DAC). 1–6. doi:10.1109/
+      International Conference On Computer Aided Design (ICCAD). 1–9.                        DAC56929.2023.10247687
+[15]  Srivatsan Krishnan, Amir Yazdanbakhsh, Shvetank Prakash, Jason Jabbour,        [37] Hengrui Zhang, August Ning, Rohan Baskar Prabhakar, and David Wentzlaff.
+     Ikechukwu Uchendu, Susobhan Ghosh, Behzad Boroujerdian, Daniel Richins,             2025. LLMCompass: Enabling Efficient Hardware Design for Large Language
+     Devashree Tripathy, Aleksandra Faust, and Vijay Janapa Reddi. 2023. ArchGym:           Model Inference. In Proceedings of the 51st Annual International Symposium
+    An Open-Source Gymnasium for Machine Learning Assisted Architecture De-           on Computer Architecture (Buenos Aires, Argentina) (ISCA ’24). IEEE Press,
+     sign (ISCA ’23). Association for Computing Machinery, New York, NY, USA,             1080–1096. doi:10.1109/ISCA59077.2024.00082
+      Article 14, 16 pages. doi:10.1145/3579371.3589049                                     [38] Xin Zheng, Mingjun Cheng, Jiasong Chen, Huaien Gao, Xiaoming Xiong, and
+[16] Jaewon Lee, Hanhwi Jang, and Jangwoo Kim. 2014. RpStacks: Fast and Accurate            Shuting Cai. 2024. BSSE: Design Space Exploration on the BOOM With Semi-
+     Processor Design Space Exploration Using Representative Stall-Event Stacks. In             Supervised Learning. IEEE Transactions on Very Large Scale Integration (VLSI)
+      Proceedings of the 47th Annual IEEE/ACM International Symposium on Microar-             Systems 32, 5 (2024), 860–869. doi:10.1109/TVLSI.2024.3368075
+      chitecture (Cambridge, United Kingdom) (MICRO-47). IEEE Computer Society,
+     USA, 255–267. doi:10.1109/MICRO.2014.26
+[17] Dong Li, Minsoo Rhu, Daniel R. Johnson, Mike O’Connor, Mattan Erez, Doug
+     Burger, Donald S. Fussell, and Stephen W. Redder. 2015. Priority-based cache
+      allocation in throughput processors. In 2015 IEEE 21st International Symposium
+     on High Performance Computer Architecture (HPCA). 89–100. doi:10.1109/HPCA.
+     2015.7056024

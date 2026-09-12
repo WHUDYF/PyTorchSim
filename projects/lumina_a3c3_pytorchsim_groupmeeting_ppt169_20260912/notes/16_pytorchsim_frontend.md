@@ -1,0 +1,1 @@
+torch_openreg 注册 npu 并接入 TorchInductor。fusion、tile、vector lane 和 scratchpad 是关键入口。

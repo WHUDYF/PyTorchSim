@@ -1,0 +1,1 @@
+HIDA 代表另一条非常接近我们的路线：程序逻辑相对固定，重点优化 tiling、并行、buffer、streaming 和 dataflow。它通过功能层和结构层的 IR 管理跨层耦合。PyTorchSim 的 FX、MLIR 和 TOG 链路已经提供了类似的观察层。

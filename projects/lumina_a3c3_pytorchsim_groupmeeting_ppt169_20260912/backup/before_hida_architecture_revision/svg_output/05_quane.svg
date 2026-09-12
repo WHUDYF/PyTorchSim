@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#0B1220"/>
+<text x="56" y="72" fill="#36D6B5" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2">02.2 · QUANTITATIVE ENGINE</text>
+<text x="56" y="116" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="38" font-weight="700">QuanE：用小实验把“可能相关”变成“影响强度”</text>
+<text x="56" y="158" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">QualE 给出边界，QuanE 用局部 sensitivity 把下一步搜索初始化在更有希望的方向。</text>
+<rect x="60" y="220" width="320" height="330" rx="14" fill="#162235" stroke="#2A3A52"/>
+<text x="92" y="270" fill="#AAB8CC" font-family="Consolas, 'Courier New', monospace" font-size="15">microbenchmark</text>
+<text x="92" y="332" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="27" font-weight="700">只动一个旋钮</text>
+<text x="92" y="380" fill="#4DA3FF" font-family="Consolas, 'Courier New', monospace" font-size="24">x₀ → x₀ + Δ</text>
+<text x="92" y="430" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16"><tspan x="92" dy="0">例如 core count ±1，</tspan><tspan x="92" dy="27">或者 memory channel +1。</tspan></text>
+<path d="M408 388 L522 388" stroke="#4DA3FF" stroke-width="3"/><polygon points="522,388 506,379 506,397" fill="#4DA3FF"/>
+<rect x="532" y="220" width="370" height="330" rx="14" fill="#162235" stroke="#2A3A52"/>
+<use data-icon="chunk-filled/chart-line" x="568" y="250" width="36" height="36" fill="#A78BFA"/>
+<text x="568" y="326" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="26" font-weight="700">观察局部斜率</text>
+<line x1="580" y1="460" x2="840" y2="460" stroke="#2A3A52" stroke-width="2"/><line x1="580" y1="360" x2="580" y2="460" stroke="#2A3A52" stroke-width="2"/>
+<polyline points="590,440 650,414 715,420 782,374 835,330" fill="none" stroke="#36D6B5" stroke-width="4"/>
+<circle cx="650" cy="414" r="6" fill="#36D6B5"/><circle cx="715" cy="420" r="6" fill="#36D6B5"/><circle cx="782" cy="374" r="6" fill="#36D6B5"/>
+<text x="590" y="500" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">cycle / area / bandwidth response</text>
+<path d="M930 388 L1040 388" stroke="#36D6B5" stroke-width="3"/><polygon points="1040,388 1024,379 1024,397" fill="#36D6B5"/>
+<rect x="1050" y="220" width="170" height="330" rx="14" fill="#162235" stroke="#36D6B5" stroke-width="2"/>
+<use data-icon="chunk-filled/bolt" x="1100" y="250" width="36" height="36" fill="#36D6B5"/>
+<text x="1082" y="326" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="24" font-weight="700">Prior</text>
+<text x="1082" y="374" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16"><tspan x="1082" dy="0">影响方向</tspan><tspan x="1082" dy="27">影响强度</tspan><tspan x="1082" dy="27">候选排序</tspan></text>
+<rect x="60" y="590" width="1160" height="50" rx="10" fill="#1B2B40"/>
+<text x="86" y="622" fill="#FFB454" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18" font-weight="700">关键学习：</text><text x="214" y="622" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">昂贵 simulator 只验证“最有信息量”的点，而不是每个点都同等对待。</text>
+<text x="1168" y="672" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="12">05 / 16</text>
+</svg>

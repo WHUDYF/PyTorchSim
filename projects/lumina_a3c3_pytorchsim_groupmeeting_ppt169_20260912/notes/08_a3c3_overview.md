@@ -1,0 +1,1 @@
+SkyNet、EDD、Medusa、SnapKV 分别代表结构搜索、连续松弛、解码组织和 KV 压缩。HIDA 最贴近固定算法的实现问题。

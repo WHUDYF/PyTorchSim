@@ -1,0 +1,1 @@
+今天的讨论从 Lumina 开始，但目标不是简单复述一篇论文。我们想借 Lumina 和 A3C3 重新思考一个具体问题：在 PyTorchSim 中，怎样把昂贵的硬件 DSE 推进成可验证的 compiler–accelerator co-design。整场汇报会先拆解已有工作的机制，再落到我们下一步可以真正测量的实验闭环。

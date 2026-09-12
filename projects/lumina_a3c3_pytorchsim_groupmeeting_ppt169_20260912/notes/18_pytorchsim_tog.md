@@ -1,0 +1,1 @@
+TOG 节点表达 MOVIN、COMP、MOVOUT 和 BAR，并携带循环、地址和 cycle 属性。

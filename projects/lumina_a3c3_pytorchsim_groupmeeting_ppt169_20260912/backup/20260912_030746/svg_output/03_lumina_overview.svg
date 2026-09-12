@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#0B1220"/>
+<text x="56" y="72" fill="#36D6B5" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2">02 · LUMINA</text>
+<text x="56" y="116" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="38" font-weight="700">Lumina：用瓶颈分析决定下一次模拟</text>
+<text x="56" y="158" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">它的核心不是发明一个新的硬件，而是让每一次昂贵的 simulation 都带来下一步的方向。</text>
+<circle cx="640" cy="392" r="112" fill="#162235" stroke="#4DA3FF" stroke-width="2"/>
+<use data-icon="chunk-filled/compass" x="602" y="350" width="44" height="44" fill="#36D6B5"/>
+<text x="640" y="432" text-anchor="middle" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="24" font-weight="700">Simulator</text>
+<text x="640" y="462" text-anchor="middle" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">PPA · critical path · trace</text>
+<rect x="120" y="226" width="230" height="104" rx="12" fill="#162235" stroke="#2A3A52"/>
+<use data-icon="chunk-filled/code" x="145" y="250" width="30" height="30" fill="#4DA3FF"/>
+<text x="190" y="276" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">QualE</text><text x="145" y="307" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">源码 → 结构因果图</text>
+<rect x="930" y="226" width="230" height="104" rx="12" fill="#162235" stroke="#2A3A52"/>
+<use data-icon="chunk-filled/chart-line" x="955" y="250" width="30" height="30" fill="#A78BFA"/>
+<text x="1000" y="276" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">QuanE</text><text x="955" y="307" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">微扰 → 影响强度</text>
+<rect x="110" y="504" width="242" height="104" rx="12" fill="#162235" stroke="#2A3A52"/>
+<use data-icon="chunk-filled/target" x="136" y="528" width="30" height="30" fill="#FFB454"/>
+<text x="180" y="554" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">SE</text><text x="136" y="585" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">瓶颈 → 受限策略</text>
+<rect x="928" y="504" width="242" height="104" rx="12" fill="#162235" stroke="#2A3A52"/>
+<use data-icon="chunk-filled/arrow-right" x="954" y="528" width="30" height="30" fill="#36D6B5"/>
+<text x="998" y="554" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">EE</text><text x="954" y="585" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">候选 → 执行 → 记录</text>
+<path d="M350 278 L528 350" fill="none" stroke="#4DA3FF" stroke-width="2"/><path d="M930 278 L752 350" fill="none" stroke="#A78BFA" stroke-width="2"/><path d="M352 555 L528 438" fill="none" stroke="#FFB454" stroke-width="2"/><path d="M928 555 L752 438" fill="none" stroke="#36D6B5" stroke-width="2"/>
+<path d="M640 504 C440 650 250 610 210 330" fill="none" stroke="#2A3A52" stroke-width="2" stroke-dasharray="8 8"/>
+<text x="440" y="653" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="14">Trajectory Memory → refine the next move</text>
+<text x="1168" y="672" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="12">03 / 16</text>
+</svg>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#0B1220" />
+<text x="56" y="72" fill="#36D6B5" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2">02.4 · WHAT LUMINA DOES NOT DO</text>
+<text x="56" y="116" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="38" font-weight="700">Lumina 的强项是样本效率，边界是搜索对象较窄</text>
+<text x="56" y="158" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">理解边界，才能决定哪些思想应该迁移，哪些思想必须由我们补上。</text>
+<path fill="#162235" stroke="#36D6B5" stroke-width="2" d="M86,220 H568 A14,14 0 0 1 582,234 V536 A14,14 0 0 1 568,550 H86 A14,14 0 0 1 72,536 V234 A14,14 0 0 1 86,220 Z" />
+
+  <g transform="translate(108.0, 254.0) scale(2.375)" fill="#36D6B5">
+    <path d="M15.4141 4.91424L5.99991 14.3285L0.585693 8.91424L3.41412 6.08582L5.99991 8.6716L12.5857 2.08582L15.4141 4.91424Z" />
+  </g>
+<text x="160" y="286" fill="#36D6B5" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="28" font-weight="700">Lumina 擅长</text>
+<text font-size="19" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#F4F7FB" x="110" y="350">• 从源码提取参数—指标关系</text><text font-size="19" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#F4F7FB" x="110" y="388">• 用 sensitivity 形成先验</text><text font-size="19" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#F4F7FB" x="110" y="426">• 根据瓶颈选择下一次模拟</text><text font-size="19" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#F4F7FB" x="110" y="464">• 在极少样本下探索硬件空间</text><path fill="#162235" stroke="#F26D85" stroke-width="2" d="M712,220 H1194 A14,14 0 0 1 1208,234 V536 A14,14 0 0 1 1194,550 H712 A14,14 0 0 1 698,536 V234 A14,14 0 0 1 712,220 Z" />
+
+  <g transform="translate(734.0, 254.0) scale(2.375)" fill="#F26D85">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M16 15H0V12L7 0H9L16 12V15ZM7 4H9V9H7V4ZM7 11H9V13H7V11Z" />
+  </g>
+<text x="786" y="286" fill="#F26D85" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="28" font-weight="700">Lumina 没有自动解决</text>
+<text font-size="19" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#F4F7FB" x="736" y="350">• 新网络拓扑和模型准确率</text><text font-size="19" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#F4F7FB" x="736" y="388">• compiler mapping 的生成逻辑</text><text font-size="19" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#F4F7FB" x="736" y="426">• 多层 TOG 结构如何改变</text><text font-size="19" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#F4F7FB" x="736" y="464">• 算法级的执行方式重构</text><line x1="72" y1="605" x2="1208" y2="605" stroke="#2A3A52" />
+<text x="72" y="640" fill="#FFB454" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="20" font-weight="700">研究定位：</text><text x="194" y="640" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="20">Lumina 是搜索策略，不是完整的算法—实现—硬件共同生成框架。</text>
+<text x="1168" y="672" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="12">07 / 16</text>
+</svg>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#0B1220"/>
+<text x="56" y="72" fill="#A78BFA" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2">03.1 · SKYNET</text>
+<text x="56" y="116" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="38" font-weight="700">SkyNet：搜索“什么网络适合硬件”</text>
+<text x="56" y="158" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">它先预评估局部 Bundle，再用 PSO 搜索通道数和池化位置，避免直接搜索所有网络。</text>
+<rect x="60" y="236" width="250" height="242" rx="14" fill="#162235" stroke="#A78BFA" stroke-width="2"/>
+<text x="88" y="280" fill="#A78BFA" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="21" font-weight="700">① Bundle library</text>
+<rect x="88" y="316" width="185" height="34" rx="7" fill="#243653"/><text x="101" y="339" fill="#F4F7FB" font-family="Consolas, 'Courier New', monospace" font-size="14">DW-Conv → PW-Conv</text><rect x="88" y="362" width="185" height="34" rx="7" fill="#243653"/><text x="101" y="385" fill="#F4F7FB" font-family="Consolas, 'Courier New', monospace" font-size="14">BN → ReLU6</text><text x="88" y="438" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">延迟、资源、准确率</text>
+<path d="M320 357 L424 357" stroke="#A78BFA" stroke-width="3"/><polygon points="424,357 408,348 408,366" fill="#A78BFA"/>
+<rect x="440" y="236" width="330" height="242" rx="14" fill="#162235" stroke="#4DA3FF" stroke-width="2"/>
+<text x="470" y="280" fill="#4DA3FF" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="21" font-weight="700">② Group-based PSO</text>
+<circle cx="500" cy="356" r="28" fill="#4DA3FF" fill-opacity="0.25" stroke="#4DA3FF"/><circle cx="570" cy="330" r="28" fill="#4DA3FF" fill-opacity="0.25" stroke="#4DA3FF"/><circle cx="640" cy="388" r="28" fill="#4DA3FF" fill-opacity="0.25" stroke="#4DA3FF"/><line x1="500" y1="356" x2="570" y2="330" stroke="#AAB8CC"/><line x1="570" y1="330" x2="640" y2="388" stroke="#AAB8CC"/><text x="470" y="438" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">粒子 = 候选 DNN</text><text x="470" y="460" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">fv1 = channels · fv2 = pooling spots</text>
+<path d="M780 357 L884 357" stroke="#4DA3FF" stroke-width="3"/><polygon points="884,357 868,348 868,366" fill="#4DA3FF"/>
+<rect x="900" y="236" width="320" height="242" rx="14" fill="#162235" stroke="#36D6B5" stroke-width="2"/>
+<text x="930" y="280" fill="#36D6B5" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="21" font-weight="700">③ Hardware-friendly DNN</text>
+<text x="930" y="336" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18"><tspan x="930" dy="0">准确率不掉出目标</tspan><tspan x="930" dy="34">延迟满足约束</tspan><tspan x="930" dy="34">资源占用可部署</tspan></text>
+<rect x="60" y="550" width="1160" height="72" rx="12" fill="#1B2B40"/><text x="86" y="582" fill="#FFB454" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18" font-weight="700">对我们的启发：</text><text x="254" y="582" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">先把重复出现的 TOG 子图做成“可标定 Bundle”，再进入大模型或大 block 搜索。</text><text x="254" y="608" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">借鉴的是分层搜索，不是必须复用 PSO。</text>
+<text x="1168" y="672" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="12">09 / 16</text>
+</svg>

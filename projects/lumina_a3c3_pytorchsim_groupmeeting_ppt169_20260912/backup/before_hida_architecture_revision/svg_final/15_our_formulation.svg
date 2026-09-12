@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#0B1220" />
+<text x="56" y="72" fill="#36D6B5" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2">04 · OUR SLICE OF A3C3</text>
+<text x="56" y="116" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="38" font-weight="700">我们的切入点：固定算法拓扑，联合搜索 I × H</text>
+<text x="56" y="158" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">目标不是一开始覆盖全部 A3C3，而是先把可控、可测、可解释的子问题做实。</text>
+<path fill="#162235" stroke="#A78BFA" stroke-width="2" d="M76,214 H308 A14,14 0 0 1 322,228 V486 A14,14 0 0 1 308,500 H76 A14,14 0 0 1 62,486 V228 A14,14 0 0 1 76,214 Z" />
+<text x="94" y="260" fill="#A78BFA" font-family="Consolas, 'Courier New', monospace" font-size="28" font-weight="700">A = A₀</text><text x="94" y="318" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">固定算法拓扑</text><text font-size="17" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#AAB8CC" x="94" y="364">GPT-2 block</text><text font-size="17" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#AAB8CC" x="94" y="393">ResNet block</text><text font-size="17" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#AAB8CC" x="94" y="422">Conv / GEMM motif</text><path d="M338 356 L460 356" stroke="#A78BFA" stroke-width="3" /><polygon points="460,356 444,347 444,365" fill="#A78BFA" />
+<path fill="#162235" stroke="#4DA3FF" stroke-width="2" d="M488,214 H790 A14,14 0 0 1 804,228 V486 A14,14 0 0 1 790,500 H488 A14,14 0 0 1 474,486 V228 A14,14 0 0 1 488,214 Z" />
+<text x="508" y="260" fill="#4DA3FF" font-family="Consolas, 'Courier New', monospace" font-size="28" font-weight="700">I</text><text x="548" y="260" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">Implementation</text><text font-size="17" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#AAB8CC" x="508" y="322">tiling / mapping</text><text font-size="17" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#AAB8CC" x="508" y="351">fusion / dataflow</text><text font-size="17" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#AAB8CC" x="508" y="380">DMA / schedule</text><g transform="translate(700.0, 404.0) scale(3.0)" fill="#4DA3FF">
+    <path d="M1 5V3L8 0L15 3V5L8 8L1 5Z" />
+    <path d="M8 16L1 13V11L8 14L15 11V13L8 16Z" />
+    <path d="M1 9L8 12L15 9V7L8 10L1 7V9Z" />
+  </g>
+<path d="M820 356 L942 356" stroke="#4DA3FF" stroke-width="3" /><polygon points="942,356 926,347 926,365" fill="#4DA3FF" />
+<path fill="#162235" stroke="#36D6B5" stroke-width="2" d="M970,214 H1204 A14,14 0 0 1 1218,228 V486 A14,14 0 0 1 1204,500 H970 A14,14 0 0 1 956,486 V228 A14,14 0 0 1 970,214 Z" />
+<text x="990" y="260" fill="#36D6B5" font-family="Consolas, 'Courier New', monospace" font-size="28" font-weight="700">H</text><text x="1030" y="260" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">Hardware</text><text font-size="17" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#AAB8CC" x="990" y="322">SPAD / DRAM</text><text font-size="17" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#AAB8CC" x="990" y="351">NoC / PE</text><text font-size="17" font-family="'Microsoft YaHei', Arial, sans-serif" fill="#AAB8CC" x="990" y="380">bandwidth / capacity</text><g transform="translate(1124.0, 404.0) scale(3.0)" fill="#36D6B5">
+    <path d="M9 7L10 0H8L2 7V9H7L6 16H8L14 9L14 7H9Z" />
+  </g>
+<path fill="#1B2B40" d="M74,552 H1206 A12,12 0 0 1 1218,564 V614 A12,12 0 0 1 1206,626 H74 A12,12 0 0 1 62,614 V564 A12,12 0 0 1 74,552 Z" /><text x="90" y="586" fill="#F4F7FB" font-family="Consolas, 'Courier New', monospace" font-size="20">min  Cost(A₀, I, H)</text><text x="410" y="586" fill="#36D6B5" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18" font-weight="700">TOG structure + cycles + memory + critical path</text><text x="90" y="614" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="15">核心判据：换硬件，最优 mapping 是否迁移？mapping 排名是否重排？</text>
+<text x="1168" y="672" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="12">15 / 16</text>
+</svg>

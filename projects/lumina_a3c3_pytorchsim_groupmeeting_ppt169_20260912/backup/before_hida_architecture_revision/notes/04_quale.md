@@ -1,0 +1,1 @@
+QualE 先回答一个结构问题：哪些硬件参数可能影响哪些性能指标。它从 simulator 源码中抽取 influence map，先排除没有直接因果边的参数，再进入量化阶段。对 PyTorchSim，我们需要把这条边延伸到 compiler knob、MLIR、TOG 属性和 TOGSim 指标。

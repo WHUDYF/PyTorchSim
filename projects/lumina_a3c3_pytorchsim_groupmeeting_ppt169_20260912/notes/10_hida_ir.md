@@ -1,0 +1,1 @@
+Functional 层表示任务层级，Structural 层表示存储、接口和调度细节。lowering 把上层选择变成约束。

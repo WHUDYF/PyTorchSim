@@ -1,0 +1,1 @@
+当 simulator 告诉我们当前瓶颈是 memory latency 或 interconnect congestion，Strategy Engine 就不应该让搜索器随意改所有参数。它只提出与当前瓶颈相关的受限候选，执行后把结果写进轨迹记忆。这个闭环是 Lumina 比静态规则更有价值的地方。

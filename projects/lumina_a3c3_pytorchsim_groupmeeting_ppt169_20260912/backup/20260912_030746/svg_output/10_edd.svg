@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#0B1220"/>
+<text x="56" y="72" fill="#A78BFA" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2">03.2 · EDD</text>
+<text x="56" y="116" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="38" font-weight="700">EDD：把网络变量和实现变量联合连续化</text>
+<text x="56" y="158" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">EDD 的贡献不是某个具体硬件参数，而是让 architecture 和 implementation 在同一个目标函数里被优化。</text>
+<rect x="60" y="224" width="340" height="330" rx="14" fill="#162235" stroke="#A78BFA" stroke-width="2"/>
+<text x="92" y="272" fill="#A78BFA" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">Architecture space</text>
+<text x="92" y="332" fill="#F4F7FB" font-family="Consolas, 'Courier New', monospace" font-size="20"><tspan x="92" dy="0">θ : op candidates</tspan><tspan x="92" dy="38">kernel size</tspan><tspan x="92" dy="38">channel expansion</tspan></text>
+<path d="M412 389 L526 389" stroke="#A78BFA" stroke-width="3"/><polygon points="526,389 510,380 510,398" fill="#A78BFA"/>
+<rect x="540" y="224" width="340" height="330" rx="14" fill="#162235" stroke="#4DA3FF" stroke-width="2"/>
+<text x="572" y="272" fill="#4DA3FF" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">Implementation space</text>
+<text x="572" y="332" fill="#F4F7FB" font-family="Consolas, 'Courier New', monospace" font-size="20"><tspan x="572" dy="0">φ : parallel factors</tspan><tspan x="572" dy="38">loop tiling</tspan><tspan x="572" dy="38">platform mapping</tspan></text>
+<path d="M892 389 L1006 389" stroke="#4DA3FF" stroke-width="3"/><polygon points="1006,389 990,380 990,398" fill="#4DA3FF"/>
+<rect x="1020" y="224" width="200" height="330" rx="14" fill="#162235" stroke="#36D6B5" stroke-width="2"/>
+<text x="1050" y="272" fill="#36D6B5" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">Joint loss</text>
+<text x="1050" y="332" fill="#F4F7FB" font-family="Consolas, 'Courier New', monospace" font-size="19"><tspan x="1050" dy="0">accuracy</tspan><tspan x="1050" dy="34">latency</tspan><tspan x="1050" dy="34">resource</tspan></text>
+<rect x="60" y="594" width="1160" height="48" rx="10" fill="#1B2B40"/><text x="86" y="625" fill="#36D6B5" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="19" font-weight="700">迁移到我们的 fixed-topology 路线：</text><text x="415" y="625" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="19">令 A=A₀，只保留 I × H，并用真实 TOGSim 结果校准 cost model。</text>
+<text x="1168" y="672" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="12">10 / 16</text>
+</svg>

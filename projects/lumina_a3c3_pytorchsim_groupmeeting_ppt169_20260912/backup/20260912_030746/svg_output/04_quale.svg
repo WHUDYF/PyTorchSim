@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#0B1220"/>
+<text x="56" y="72" fill="#36D6B5" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2">02.1 · QUALITATIVE ENGINE</text>
+<text x="56" y="116" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="38" font-weight="700">QualE：先从 simulator 源码建立因果边界</text>
+<text x="56" y="158" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">先问“谁可能影响谁”，再决定“测哪些组合”。这一步是在搜索前做结构化剪枝。</text>
+<rect x="60" y="226" width="308" height="292" rx="14" fill="#162235" stroke="#2A3A52"/>
+<use data-icon="chunk-filled/code" x="90" y="258" width="40" height="40" fill="#4DA3FF"/>
+<text x="90" y="344" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="24" font-weight="700">Simulator code</text>
+<text x="90" y="388" fill="#AAB8CC" font-family="Consolas, 'Courier New', monospace" font-size="16"><tspan x="90" dy="0">core_count</tspan><tspan x="90" dy="28">systolic_width</tspan><tspan x="90" dy="28">memory_channels</tspan><tspan x="90" dy="28">interconnect_links</tspan></text>
+<path d="M388 372 L520 372" stroke="#4DA3FF" stroke-width="3"/><polygon points="520,372 504,363 504,381" fill="#4DA3FF"/>
+<rect x="526" y="226" width="348" height="292" rx="14" fill="#162235" stroke="#4DA3FF" stroke-width="2"/>
+<use data-icon="chunk-filled/git-branch" x="560" y="258" width="40" height="40" fill="#A78BFA"/>
+<text x="560" y="344" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="24" font-weight="700">Influence Map</text>
+<text x="560" y="388" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16"><tspan x="560" dy="0">vector throughput ← core, sublane, vector unit</tspan><tspan x="560" dy="30">tensor unit ─────── no direct edge</tspan><tspan x="560" dy="30">memory stall ← channels, latency, links</tspan></text>
+<path d="M894 372 L1025 372" stroke="#A78BFA" stroke-width="3"/><polygon points="1025,372 1009,363 1009,381" fill="#A78BFA"/>
+<rect x="1032" y="226" width="188" height="292" rx="14" fill="#162235" stroke="#2A3A52"/>
+<use data-icon="chunk-filled/target" x="1070" y="258" width="40" height="40" fill="#36D6B5"/>
+<text x="1070" y="344" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="24" font-weight="700">Prune</text>
+<text x="1070" y="388" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16"><tspan x="1070" dy="0">减少无关</tspan><tspan x="1070" dy="27">参数组合</tspan><tspan x="1070" dy="27">保留因果边</tspan></text>
+<rect x="60" y="576" width="1160" height="64" rx="12" fill="#1B2B40"/>
+<text x="86" y="617" fill="#36D6B5" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="20" font-weight="700">迁移到 PyTorchSim：</text><text x="310" y="617" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="19">把 compiler knob → MLIR/TOG 属性 → TOGSim 指标的关系画出来。</text>
+<text x="1168" y="672" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="12">04 / 16</text>
+</svg>

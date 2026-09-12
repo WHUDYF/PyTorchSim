@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#0B1220"/>
+<text x="56" y="72" fill="#36D6B5" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2">02.3 · CLOSED LOOP</text>
+<text x="56" y="116" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="38" font-weight="700">SE–EE–TM：每一次模拟都应该改变下一次选择</text>
+<text x="56" y="158" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">Lumina 把搜索变成一个瓶颈驱动的闭环，而不是一次性的候选排序。</text>
+<rect x="70" y="260" width="240" height="170" rx="14" fill="#162235" stroke="#FFB454" stroke-width="2"/>
+<use data-icon="chunk-filled/target" x="100" y="290" width="38" height="38" fill="#FFB454"/>
+<text x="100" y="360" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="26" font-weight="700">SE</text><text x="100" y="395" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16">识别 dominant stall</text>
+<path d="M310 345 L400 345" stroke="#FFB454" stroke-width="3"/><polygon points="400,345 384,336 384,354" fill="#FFB454"/>
+<rect x="412" y="260" width="240" height="170" rx="14" fill="#162235" stroke="#4DA3FF" stroke-width="2"/>
+<use data-icon="chunk-filled/arrow-right" x="442" y="290" width="38" height="38" fill="#4DA3FF"/>
+<text x="442" y="360" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="26" font-weight="700">EE</text><text x="442" y="395" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16">提出受限候选</text>
+<path d="M652 345 L742 345" stroke="#4DA3FF" stroke-width="3"/><polygon points="742,345 726,336 726,354" fill="#4DA3FF"/>
+<rect x="754" y="260" width="240" height="170" rx="14" fill="#162235" stroke="#36D6B5" stroke-width="2"/>
+<use data-icon="chunk-filled/bolt" x="784" y="290" width="38" height="38" fill="#36D6B5"/>
+<text x="784" y="360" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="26" font-weight="700">Simulate</text><text x="784" y="395" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16">拿到真实 PPA / path</text>
+<path d="M994 345 L1084 345" stroke="#36D6B5" stroke-width="3"/><polygon points="1084,345 1068,336 1068,354" fill="#36D6B5"/>
+<rect x="1096" y="260" width="130" height="170" rx="14" fill="#162235" stroke="#A78BFA" stroke-width="2"/>
+<use data-icon="chunk-filled/database" x="1139" y="290" width="38" height="38" fill="#A78BFA"/>
+<text x="1121" y="360" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">TM</text><text x="1120" y="395" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="14">trajectory</text>
+<path d="M1158 432 C1158 550 190 560 190 432" fill="none" stroke="#A78BFA" stroke-width="2" stroke-dasharray="8 8"/>
+<text x="490" y="536" fill="#A78BFA" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="21" font-weight="700">历史结果反过来修正影响图</text>
+<rect x="70" y="600" width="1156" height="46" rx="10" fill="#1B2B40"/>
+<text x="90" y="630" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">对 PyTorchSim 的对应物：TOGSim log → bottleneck → 下一组 HW × mapping，而不是重新完整扫一遍。</text>
+<text x="1168" y="672" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="12">06 / 16</text>
+</svg>

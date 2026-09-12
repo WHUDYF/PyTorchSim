@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#0B1220" />
+<text x="56" y="72" fill="#36D6B5" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2">02.3 · CLOSED LOOP</text>
+<text x="56" y="116" fill="#F4F7FB" font-family="Georgia, 'Microsoft YaHei', serif" font-size="38" font-weight="700">SE–EE–TM：每一次模拟都应该改变下一次选择</text>
+<text x="56" y="158" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">Lumina 把搜索变成一个瓶颈驱动的闭环，而不是一次性的候选排序。</text>
+<path fill="#162235" stroke="#FFB454" stroke-width="2" d="M84,260 H296 A14,14 0 0 1 310,274 V416 A14,14 0 0 1 296,430 H84 A14,14 0 0 1 70,416 V274 A14,14 0 0 1 84,260 Z" />
+
+  <g transform="translate(100.0, 290.0) scale(2.375)" fill="#FFB454">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M8 4C5.79086 4 4 5.79086 4 8C4 10.2091 5.79086 12 8 12C10.2091 12 12 10.2091 12 8C12 5.79086 10.2091 4 8 4ZM6 8C6 6.89543 6.89543 6 8 6C9.10457 6 10 6.89543 10 8C10 9.10457 9.10457 10 8 10C6.89543 10 6 9.10457 6 8Z" />
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58172 0 0 3.58172 0 8C0 12.4183 3.58172 16 8 16C12.4183 16 16 12.4183 16 8C16 3.58172 12.4183 0 8 0ZM2 8C2 4.68629 4.68629 2 8 2C11.3137 2 14 4.68629 14 8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8Z" />
+  </g>
+<text x="100" y="360" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="26" font-weight="700">SE</text><text x="100" y="395" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16">识别 dominant stall</text>
+<path d="M310 345 L400 345" stroke="#FFB454" stroke-width="3" /><polygon points="400,345 384,336 384,354" fill="#FFB454" />
+<path fill="#162235" stroke="#4DA3FF" stroke-width="2" d="M426,260 H638 A14,14 0 0 1 652,274 V416 A14,14 0 0 1 638,430 H426 A14,14 0 0 1 412,416 V274 A14,14 0 0 1 426,260 Z" />
+
+  <g transform="translate(442.0, 290.0) scale(2.375)" fill="#4DA3FF">
+    <path d="M8 6L8 2L10 2L16 8L10 14L8 14L8 10L-1.74845e-07 10L-3.01991e-07 6L8 6Z" />
+  </g>
+<text x="442" y="360" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="26" font-weight="700">EE</text><text x="442" y="395" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16">提出受限候选</text>
+<path d="M652 345 L742 345" stroke="#4DA3FF" stroke-width="3" /><polygon points="742,345 726,336 726,354" fill="#4DA3FF" />
+<path fill="#162235" stroke="#36D6B5" stroke-width="2" d="M768,260 H980 A14,14 0 0 1 994,274 V416 A14,14 0 0 1 980,430 H768 A14,14 0 0 1 754,416 V274 A14,14 0 0 1 768,260 Z" />
+
+  <g transform="translate(784.0, 290.0) scale(2.375)" fill="#36D6B5">
+    <path d="M9 7L10 0H8L2 7V9H7L6 16H8L14 9L14 7H9Z" />
+  </g>
+<text x="784" y="360" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="26" font-weight="700">Simulate</text><text x="784" y="395" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="16">拿到真实 PPA / path</text>
+<path d="M994 345 L1084 345" stroke="#36D6B5" stroke-width="3" /><polygon points="1084,345 1068,336 1068,354" fill="#36D6B5" />
+<path fill="#162235" stroke="#A78BFA" stroke-width="2" d="M1110,260 H1212 A14,14 0 0 1 1226,274 V416 A14,14 0 0 1 1212,430 H1110 A14,14 0 0 1 1096,416 V274 A14,14 0 0 1 1110,260 Z" />
+
+  <g transform="translate(1139.0, 290.0) scale(2.375)" fill="#A78BFA">
+    <path d="M13.1371 6.91018C13.4184 6.7695 13.7123 6.59981 14 6.40001V8C14 9.65685 11.3137 11 8 11C4.68629 11 2 9.65685 2 8V6.40001C2.28772 6.59981 2.58158 6.7695 2.86293 6.91018C4.28096 7.61919 6.09998 8 8 8C9.90002 8 11.719 7.61919 13.1371 6.91018Z" />
+    <path d="M2 11.4V13C2 14.6569 4.68629 16 8 16C11.3137 16 14 14.6569 14 13V11.4C13.7123 11.5998 13.4184 11.7695 13.1371 11.9102C11.719 12.6192 9.90002 13 8 13C6.09998 13 4.28096 12.6192 2.86293 11.9102C2.58158 11.7695 2.28772 11.5998 2 11.4Z" />
+    <path d="M8 0C11.3137 0 14 1.34315 14 3C14 4.65685 11.3137 6 8 6C4.68629 6 2 4.65685 2 3C2 1.34315 4.68629 0 8 0Z" />
+  </g>
+<text x="1121" y="360" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="22" font-weight="700">TM</text><text x="1120" y="395" fill="#AAB8CC" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="14">trajectory</text>
+<path d="M1158 432 C1158 550 190 560 190 432" fill="none" stroke="#A78BFA" stroke-width="2" stroke-dasharray="8 8" />
+<text x="490" y="536" fill="#A78BFA" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="21" font-weight="700">历史结果反过来修正影响图</text>
+<path fill="#1B2B40" d="M80,600 H1216 A10,10 0 0 1 1226,610 V636 A10,10 0 0 1 1216,646 H80 A10,10 0 0 1 70,636 V610 A10,10 0 0 1 80,600 Z" />
+<text x="90" y="630" fill="#F4F7FB" font-family="'Microsoft YaHei', Arial, sans-serif" font-size="18">对 PyTorchSim 的对应物：TOGSim log → bottleneck → 下一组 HW × mapping，而不是重新完整扫一遍。</text>
+<text x="1168" y="672" fill="#718096" font-family="Consolas, 'Courier New', monospace" font-size="12">06 / 16</text>
+</svg>

@@ -1,0 +1,1 @@
+HIDA 从 PyTorch 或 C++ 进入 MLIR，依次处理 Functional、Structural dataflow，最后生成 HLS C++ 和 RTL。
